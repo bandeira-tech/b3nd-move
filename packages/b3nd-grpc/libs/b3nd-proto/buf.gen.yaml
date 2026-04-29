@@ -1,0 +1,16 @@
+# Buf codegen configuration for b3nd proto definitions.
+#
+# Generate with:
+#   npx buf generate libs/b3nd-proto
+#
+# Output lands in libs/b3nd-proto/gen/
+version: v2
+plugins:
+  - remote: buf.build/connectrpc/es
+    out: gen
+    opt:
+      - target=ts
+  - remote: buf.build/bufbuild/es
+    out: gen
+    opt:
+      - target=ts

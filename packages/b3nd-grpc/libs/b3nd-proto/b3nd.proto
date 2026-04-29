@@ -1,0 +1,79 @@
+syntax = "proto3";
+
+package b3nd.v1;
+
+// B3ndService — the four ProtocolInterfaceNode primitives over gRPC.
+//
+// `data` fields use `bytes` (JSON-encoded) to avoid protobuf Struct
+// impedance mismatch. Arbitrary TS types pass through as UTF-8 JSON.
+// Binary Uint8Array payloads pass through as raw bytes.
+
+service B3ndService {
+  // Receive a single message — all state changes go through here.
+  rpc Receive(ReceiveRequest) returns (ReceiveResponse);
+
+  // Read from one or more URIs.
+  rpc Read(ReadRequest) returns (ReadResponse);
+
+  // Observe changes matching a URI pattern — server-streaming.
+  rpc Observe(ObserveRequest) returns (stream ReadResultProto);
+
+  // Health + capabilities.
+  rpc Status(StatusRequest) returns (StatusResponse);
+}
+
+// ── Messages ────────────────────────────────────────────────────────
+
+message ReceiveRequest {
+  // The message URI.
+  string uri = 1;
+  // Payload as JSON-encoded bytes. Binary payloads are raw bytes.
+  bytes data = 2;
+  // True if `data` is raw binary (not JSON-encoded).
+  bool data_is_binary = 3;
+}
+
+message ReceiveResponse {
+  bool accepted = 1;
+  string error = 2;
+}
+
+message ReadRequest {
+  // One or more URIs to read.
+  repeated string uris = 1;
+}
+
+message ReadResponse {
+  repeated ReadResultProto results = 1;
+}
+
+message ReadResultProto {
+  bool success = 1;
+  string uri = 2;
+  string error = 3;
+  // Record — present when success=true.
+  RecordProto record = 4;
+}
+
+message RecordProto {
+  // Data as JSON-encoded bytes.
+  bytes data = 1;
+  // True if `data` is raw binary (not JSON-encoded).
+  bool data_is_binary = 2;
+}
+
+message ObserveRequest {
+  // URI pattern to observe (e.g. "mutable://app/users/*").
+  string pattern = 1;
+}
+
+message StatusRequest {}
+
+message StatusResponse {
+  string status = 1;  // "healthy", "degraded", "unhealthy"
+  string message = 2;
+  // Schema as JSON array string.
+  string schema_json = 3;
+  // Extra details as JSON string.
+  string details_json = 4;
+}

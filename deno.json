@@ -1,0 +1,19 @@
+{
+  "workspace": [
+    "./packages/b3nd-grpc",
+    "./packages/b3nd-server-http"
+  ],
+  "tasks": {
+    "test-all": "deno task -r test",
+    "check-all": "deno task -r check"
+  },
+  "compilerOptions": {
+    "strict": true,
+    "lib": [
+      "ES2020",
+      "DOM",
+      "DOM.Iterable",
+      "deno.ns"
+    ]
+  }
+}
