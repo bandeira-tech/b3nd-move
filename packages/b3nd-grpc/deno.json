@@ -1,6 +1,6 @@
 {
   "name": "@bandeira-tech/b3nd-grpc",
-  "version": "0.10.0",
+  "version": "0.11.0",
   "description": "B3nd gRPC — Connect-protocol client + server + wire schema for the B3nd framework",
   "exports": {
     ".": "./mod.ts",
@@ -9,7 +9,7 @@
     "./proto": "./proto.ts"
   },
   "imports": {
-    "@bandeira-tech/b3nd-core": "jsr:@bandeira-tech/b3nd-core@^0.10.0",
+    "@bandeira-tech/b3nd-core": "jsr:@bandeira-tech/b3nd-core@^0.11.0",
     "@std/assert": "jsr:@std/assert@^1.0.15"
   },
   "tasks": {
