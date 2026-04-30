@@ -5,7 +5,7 @@ import {
   Rig,
   SimpleClient,
 } from "@bandeira-tech/b3nd-core";
-import { createGrpcHandler } from "../b3nd-server-grpc/service.ts";
+import { grpcApi } from "../b3nd-server-grpc/service.ts";
 import { GrpcClient } from "./mod.ts";
 
 // Use a random high port to avoid conflicts in parallel test runs
@@ -26,7 +26,7 @@ async function withServer(
   fn: (url: string) => Promise<void>,
 ): Promise<void> {
   const rig = createTestRig();
-  const handler = createGrpcHandler(rig);
+  const handler = grpcApi(rig);
   const port = nextPort++;
 
   const server = Deno.serve({ port, hostname: "127.0.0.1" }, handler);

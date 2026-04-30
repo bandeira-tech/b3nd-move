@@ -2,17 +2,19 @@
  * @module
  * HTTP transport as a ServerResolver.
  *
- * Wraps the existing `httpApi()` with Hono for CORS, port binding,
- * and lifecycle management.
+ * Wraps `httpApi()` from b3nd-core with `withCors()` + `Deno.serve`.
+ * No framework dependency. CORS can be set per-server (`httpServer({ cors })`)
+ * or once at the composition level (`createServers(rig, [...], { cors })`),
+ * with per-server taking precedence.
  *
  * @example
  * ```typescript
  * import { Rig, createServers } from "@bandeira-tech/b3nd-core";
  * import { httpServer } from "@bandeira-tech/b3nd-server-http";
  *
- * const servers = createServers(rig, [
- *   httpServer({ port: 3000, cors: "*" }),
- * ]);
+ * const servers = createServers(rig, [httpServer({ port: 3000 })], {
+ *   cors: "*",
+ * });
  * await Promise.all(servers.map((s) => s.start()));
  * ```
  */
@@ -21,16 +23,20 @@ import {
   httpApi,
   type HttpApiOptions,
   type Rig,
-  type ServerResolver,
-  type TransportServer,
 } from "@bandeira-tech/b3nd-core";
+import { withCors } from "../b3nd-cors/mod.ts";
+import type {
+  ServerComposition,
+  ServerResolver,
+  TransportServer,
+} from "../b3nd-server-factory/mod.ts";
 
 export interface HttpServerOptions extends HttpApiOptions {
   /** Port to listen on. Default: 3000. */
   port?: number;
   /** Hostname to bind. Default: "0.0.0.0". */
   hostname?: string;
-  /** CORS origin. Falsy = no CORS middleware. */
+  /** CORS origin. Overrides composition `cors`. Falsy = no CORS. */
   cors?: string;
 }
 
@@ -43,15 +49,18 @@ export interface HttpServerOptions extends HttpApiOptions {
 export function httpServer(options?: HttpServerOptions): ServerResolver {
   return {
     transport: "http",
-    create(rig: Rig): TransportServer {
+    create(rig: Rig, composition?: ServerComposition): TransportServer {
       const port = options?.port ?? 3000;
       const hostname = options?.hostname ?? "0.0.0.0";
-      const corsOrigin = options?.cors;
+      const corsOrigin = options?.cors ?? composition?.cors;
       const apiOptions: HttpApiOptions = {
         statusMeta: options?.statusMeta,
       };
 
-      const handler = httpApi(rig, apiOptions);
+      const baseHandler = httpApi(rig, apiOptions);
+      const handler = corsOrigin
+        ? withCors(baseHandler, { origin: corsOrigin })
+        : baseHandler;
 
       let server: Deno.HttpServer | null = null;
 
@@ -59,20 +68,9 @@ export function httpServer(options?: HttpServerOptions): ServerResolver {
         transport: "http",
         address: `http://${hostname}:${port}`,
 
-        async start() {
-          // Dynamic import — keeps Hono as a lazy dependency
-          const { Hono } = await import("hono");
-          const app = new Hono();
-
-          if (corsOrigin) {
-            const { cors } = await import("hono/cors");
-            app.use("*", cors({ origin: corsOrigin }));
-          }
-
-          // deno-lint-ignore no-explicit-any
-          app.all("/api/*", (c: any) => handler(c.req.raw));
-
-          server = Deno.serve({ port, hostname }, app.fetch);
+        start() {
+          server = Deno.serve({ port, hostname }, handler);
+          return Promise.resolve();
         },
 
         async stop() {

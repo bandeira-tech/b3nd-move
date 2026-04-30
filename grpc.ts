@@ -1,18 +1,20 @@
 /**
  * @module
- * B3nd gRPC — Connect-protocol client + server bundle.
+ * gRPC subpath — server resolver, pure handler, client, and wire schema.
  *
- * Re-exports the gRPC client (ProtocolInterfaceNode), server resolver,
- * and the wire schema/converters used by both ends.
+ * For finer-grained imports (smaller bundles), use:
+ *   • `@bandeira-tech/b3nd-servers/grpc/server`  — server-only
+ *   • `@bandeira-tech/b3nd-servers/grpc/client`  — client-only (browser-safe)
+ *   • `@bandeira-tech/b3nd-servers/grpc/proto`   — wire schema + converters
  */
+
+// ── Server ──
+export { grpcApi, grpcServer } from "./libs/b3nd-server-grpc/mod.ts";
+export type { GrpcServerOptions } from "./libs/b3nd-server-grpc/mod.ts";
 
 // ── Client ──
 export { GrpcClient } from "./libs/b3nd-client-grpc/mod.ts";
 export type { GrpcClientConfig } from "./libs/b3nd-client-grpc/mod.ts";
-
-// ── Server ──
-export { createGrpcHandler, grpcServer } from "./libs/b3nd-server-grpc/mod.ts";
-export type { GrpcServerOptions } from "./libs/b3nd-server-grpc/mod.ts";
 
 // ── Proto wire types & converters ──
 export type {

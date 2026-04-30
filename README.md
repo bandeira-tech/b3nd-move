@@ -1,38 +1,54 @@
 # B3nd Servers
 
-Optional transport packages for the B3nd framework. Both packages live in this
-repo as independent JSR packages — install only the one you need.
+Server-side composition for the B3nd framework. Single package
+(`@bandeira-tech/b3nd-servers`) with subpaths for each transport.
 
 [GitHub](https://github.com/bandeira-tech/b3nd-servers)
 
-| Package                                                          | What it ships                                                                               |
-| ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
-| [`@bandeira-tech/b3nd-server-http`](./packages/b3nd-server-http) | Hono-backed HTTP `ServerResolver` for serving a B3nd Rig over HTTP.                         |
-| [`@bandeira-tech/b3nd-grpc`](./packages/b3nd-grpc)               | Connect-protocol gRPC client + server + wire schema. JSON over HTTP/2, no protobuf codegen. |
+Depends only on
+[`@bandeira-tech/b3nd-core`](https://github.com/bandeira-tech/b3nd-core) for
+`Rig`, `httpApi`, and shared types. **No web framework.**
 
-Both depend on
-[@bandeira-tech/b3nd-core](https://github.com/bandeira-tech/b3nd-core) for
-`Rig`, `httpApi`, and the `ServerResolver` contract.
+## Subpaths
 
-## Why a separate repo
+The package is split so you only pay for what you use, and so non-Deno
+runtimes (Node, browsers, Cloudflare Workers, Bun) can pull in the
+universal pieces without dragging `Deno.serve` along.
 
-Server transports drag in either Hono (HTTP) or HTTP/2 streaming code (gRPC).
-Most consumers of `b3nd-core` only need the framework foundation — types,
-encoding, clients, the rig, network primitives. Keeping the server side here
-means `b3nd-core` stays small and dependency-free.
+### Universal — published to **JSR + npm**
 
-## Usage
+Runs in browsers, Node, Bun, Deno, Cloudflare Workers — anywhere with
+standard `fetch` / `Request` / `Response`.
+
+| Import                                     | Exports                                                                          |
+| ------------------------------------------ | -------------------------------------------------------------------------------- |
+| `@bandeira-tech/b3nd-servers`              | `createServers`, `ServerResolver`, `TransportServer`, `ServerComposition`, `withCors`, `CorsOptions` |
+| `@bandeira-tech/b3nd-servers/grpc/api`     | `grpcApi(rig)` — pure `(Request) => Promise<Response>` handler                    |
+| `@bandeira-tech/b3nd-servers/grpc/client`  | `GrpcClient` (Connect-protocol over `fetch`)                                      |
+| `@bandeira-tech/b3nd-servers/grpc/proto`   | Wire schema types + JSON converters                                               |
+
+### Deno-only — **JSR only**
+
+These slices call `Deno.serve`. Use them when running on Deno.
+
+| Import                                     | Exports                                                                          |
+| ------------------------------------------ | -------------------------------------------------------------------------------- |
+| `@bandeira-tech/b3nd-servers/http`         | `httpServer` — wraps `httpApi(rig)` from core with `Deno.serve` + native CORS     |
+| `@bandeira-tech/b3nd-servers/grpc/server`  | `grpcServer` (resolver) + `grpcApi` re-exported                                   |
+| `@bandeira-tech/b3nd-servers/grpc`         | Bundle: server + client + proto (convenience for Deno apps)                       |
+
+## Usage on Deno
 
 ```typescript
 import {
   connection,
-  createServers,
   MemoryStore,
   Rig,
   SimpleClient,
 } from "@bandeira-tech/b3nd-core";
-import { httpServer } from "@bandeira-tech/b3nd-server-http";
-import { grpcServer } from "@bandeira-tech/b3nd-grpc/server";
+import { createServers } from "@bandeira-tech/b3nd-servers";
+import { httpServer } from "@bandeira-tech/b3nd-servers/http";
+import { grpcServer } from "@bandeira-tech/b3nd-servers/grpc/server";
 
 const client = new SimpleClient(new MemoryStore());
 const rig = new Rig({
@@ -43,40 +59,106 @@ const rig = new Rig({
 });
 
 const servers = createServers(rig, [
-  httpServer({ port: 3000, cors: "*" }),
+  httpServer({ port: 3000 }),
   grpcServer({ port: 50051 }),
-]);
+], { cors: "*" }); // applies to every transport in this composition
+
 await Promise.all(servers.map((s) => s.start()));
+```
+
+CORS can be set per-server (`httpServer({ cors })`, `grpcServer({ cors })`)
+or once at the composition level (`createServers(rig, [...], { cors })`).
+Per-server wins.
+
+## Usage on Node / browsers
+
+The `httpServer` / `grpcServer` resolvers are Deno-only because `Deno.serve`
+doesn't shim. On Node, browsers, Cloudflare Workers, etc., pull the **pure
+handlers** from core / this package and feed them to your own HTTP runtime.
+
+### HTTP (handler from core)
+
+```typescript
+import { httpApi } from "@bandeira-tech/b3nd-core";
+import { withCors } from "@bandeira-tech/b3nd-servers";
+import { Hono } from "hono";
+
+const handler = withCors(httpApi(rig), { origin: "*" });
+
+// Node — feed it to Hono / Express / raw node:http
+const app = new Hono();
+app.all("/api/*", (c) => handler(c.req.raw));
+
+// or in a Cloudflare Worker:
+export default { fetch: handler };
+```
+
+### gRPC (handler from this package)
+
+```typescript
+import { grpcApi } from "@bandeira-tech/b3nd-servers/grpc/api";
+import { withCors } from "@bandeira-tech/b3nd-servers";
+
+const handler = withCors(grpcApi(rig), { origin: "*" });
+// Same shape — plug into any HTTP runtime.
+```
+
+### gRPC client (browser-safe)
+
+```typescript
+import { GrpcClient } from "@bandeira-tech/b3nd-servers/grpc/client";
+
+const client = new GrpcClient({ url: "http://localhost:50051" });
+const results = await client.read("mutable://app/data");
+```
+
+## Wire format (gRPC)
+
+The gRPC subpath speaks the [Connect protocol](https://connectrpc.com/) —
+JSON over HTTP/2. Each RPC is a `POST` to `/b3nd.v1.B3ndService/{Method}`
+with a JSON body. `Observe` returns newline-delimited JSON. `bytes` fields
+are base64-encoded for JSON transport.
+
+| Method  | Path                                         |
+| ------- | -------------------------------------------- |
+| Receive | `POST /b3nd.v1.B3ndService/Receive`          |
+| Read    | `POST /b3nd.v1.B3ndService/Read`             |
+| Observe | `POST /b3nd.v1.B3ndService/Observe` (NDJSON) |
+| Status  | `POST /b3nd.v1.B3ndService/Status`           |
+
+`b3nd.proto` is shipped on JSR as the canonical schema for external tooling
+(`grpcurl`, `buf`, etc.) but no protobuf codegen is required at runtime.
+
+## Project Structure
+
+```
+mod.ts                       # ./
+grpc.ts                      # ./grpc (Deno-only bundle)
+libs/
+  b3nd-server-factory/       # createServers + types
+  b3nd-cors/                 # withCors
+  b3nd-server-http/          # ./http (Deno-only)
+  b3nd-server-grpc/
+    service.ts               # ./grpc/api (universal)
+    mod.ts                   # ./grpc/server (Deno-only)
+  b3nd-client-grpc/          # ./grpc/client (universal)
+  b3nd-proto/                # ./grpc/proto (universal)
+scripts/
+  build-npm.ts               # dnt build (universal slice → npm)
 ```
 
 ## Development
 
 ```bash
-deno task test-all     # Run all package tests
-deno task check-all    # Type-check all package entry points
-deno lint packages/
-deno fmt --check packages/
-```
-
-Or run a single package's task by `cd`-ing into it:
-
-```bash
-cd packages/b3nd-grpc && deno task test
-```
-
-## Project Structure
-
-```
-packages/
-  b3nd-server-http/   # @bandeira-tech/b3nd-server-http
-  b3nd-grpc/          # @bandeira-tech/b3nd-grpc
+deno task check
+deno task test
+deno task build:npm   # produces ./npm/ for the universal slice
 ```
 
 ## Related
 
 - [b3nd-core](https://github.com/bandeira-tech/b3nd-core) — framework foundation
-- [b3nd-canon](https://github.com/bandeira-tech/b3nd-canon) — protocol-building
-  toolkit
+- [b3nd-canon](https://github.com/bandeira-tech/b3nd-canon) — protocol-building toolkit
 
 ## License
 

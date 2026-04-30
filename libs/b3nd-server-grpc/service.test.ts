@@ -5,7 +5,7 @@ import {
   Rig,
   SimpleClient,
 } from "@bandeira-tech/b3nd-core";
-import { createGrpcHandler } from "./service.ts";
+import { grpcApi } from "./service.ts";
 
 function createTestRig(): Rig {
   const client = new SimpleClient(new MemoryStore());
@@ -34,7 +34,7 @@ function makeRequest(
 
 Deno.test("Receive — write and read back via gRPC handler", async () => {
   const rig = createTestRig();
-  const handler = createGrpcHandler(rig);
+  const handler = grpcApi(rig);
 
   // Write
   const receiveResp = await makeRequest(handler, "Receive", {
@@ -63,7 +63,7 @@ Deno.test("Receive — write and read back via gRPC handler", async () => {
 
 Deno.test("Status — returns healthy", async () => {
   const rig = createTestRig();
-  const handler = createGrpcHandler(rig);
+  const handler = grpcApi(rig);
 
   const resp = await makeRequest(handler, "Status", {});
   assertEquals(resp.status, 200);
@@ -73,7 +73,7 @@ Deno.test("Status — returns healthy", async () => {
 
 Deno.test("Receive — missing URI returns error", async () => {
   const rig = createTestRig();
-  const handler = createGrpcHandler(rig);
+  const handler = grpcApi(rig);
 
   const resp = await makeRequest(handler, "Receive", {
     uri: "",
@@ -85,7 +85,7 @@ Deno.test("Receive — missing URI returns error", async () => {
 
 Deno.test("Read — missing URIs returns error", async () => {
   const rig = createTestRig();
-  const handler = createGrpcHandler(rig);
+  const handler = grpcApi(rig);
 
   const resp = await makeRequest(handler, "Read", { uris: [] });
   assertEquals(resp.status, 400);
@@ -93,7 +93,7 @@ Deno.test("Read — missing URIs returns error", async () => {
 
 Deno.test("Unknown method returns 404", async () => {
   const rig = createTestRig();
-  const handler = createGrpcHandler(rig);
+  const handler = grpcApi(rig);
 
   const resp = await makeRequest(handler, "Unknown", {});
   assertEquals(resp.status, 404);
@@ -101,7 +101,7 @@ Deno.test("Unknown method returns 404", async () => {
 
 Deno.test("Non-POST returns 404", async () => {
   const rig = createTestRig();
-  const handler = createGrpcHandler(rig);
+  const handler = grpcApi(rig);
 
   const resp = await handler(
     new Request("http://localhost/b3nd.v1.B3ndService/Status", {

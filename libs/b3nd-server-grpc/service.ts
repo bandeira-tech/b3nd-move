@@ -41,7 +41,10 @@ function errorResponse(message: string, status = 400): Response {
 }
 
 /**
- * Create an HTTP request handler that serves gRPC-like RPCs for a rig.
+ * Create a gRPC request handler — the gRPC counterpart to `httpApi(rig)`.
+ *
+ * Returns a standard `(Request) => Promise<Response>`. Plug it into
+ * `Deno.serve`, `withCors()`, or any HTTP runtime.
  *
  * Routes:
  *   POST /b3nd.v1.B3ndService/Receive  → rig.receive()
@@ -49,7 +52,7 @@ function errorResponse(message: string, status = 400): Response {
  *   POST /b3nd.v1.B3ndService/Observe  → rig.observe() (NDJSON stream)
  *   POST /b3nd.v1.B3ndService/Status   → rig.status()
  */
-export function createGrpcHandler(
+export function grpcApi(
   rig: Rig,
 ): (req: Request) => Promise<Response> {
   return (req: Request): Promise<Response> => {
