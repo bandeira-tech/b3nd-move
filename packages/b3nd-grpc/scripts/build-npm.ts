@@ -48,6 +48,9 @@ await build({
     homepage: "https://github.com/bandeira-tech/b3nd-servers#readme",
     engines: { node: ">=20" },
     sideEffects: false,
+    publishConfig: {
+      access: "public",
+    },
   },
   postBuild() {
     Deno.copyFileSync("../../LICENSE", "npm/LICENSE");
