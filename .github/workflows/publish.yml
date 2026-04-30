@@ -1,0 +1,48 @@
+name: Publish
+
+on:
+  workflow_dispatch:
+    inputs:
+      package:
+        description: "Which package to publish (server-http or grpc)"
+        required: true
+        type: choice
+        options:
+          - server-http
+          - grpc
+
+jobs:
+  jsr:
+    name: Publish to JSR
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: denoland/setup-deno@v2
+        with: { deno-version: v2.x }
+      - working-directory: packages/b3nd-${{ inputs.package }}
+        run: deno publish
+
+  npm:
+    name: Publish to NPM
+    runs-on: ubuntu-latest
+    needs: jsr
+    # b3nd-server-http is JSR-only (uses Deno.serve). b3nd-grpc dual-
+    # publishes its universal slice (client + proto) to NPM.
+    if: ${{ inputs.package == 'grpc' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: denoland/setup-deno@v2
+        with: { deno-version: v2.x }
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          registry-url: "https://registry.npmjs.org"
+      - working-directory: packages/b3nd-${{ inputs.package }}
+        run: deno task build:npm
+      - working-directory: packages/b3nd-${{ inputs.package }}/npm
+        run: npm publish --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

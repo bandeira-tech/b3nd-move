@@ -7,12 +7,12 @@
  */
 
 // ── Client ──
-export { GrpcClient } from "../libs/b3nd-client-grpc/mod.ts";
-export type { GrpcClientConfig } from "../libs/b3nd-client-grpc/mod.ts";
+export { GrpcClient } from "./libs/b3nd-client-grpc/mod.ts";
+export type { GrpcClientConfig } from "./libs/b3nd-client-grpc/mod.ts";
 
 // ── Server ──
-export { createGrpcHandler, grpcServer } from "../libs/b3nd-server-grpc/mod.ts";
-export type { GrpcServerOptions } from "../libs/b3nd-server-grpc/mod.ts";
+export { createGrpcHandler, grpcServer } from "./libs/b3nd-server-grpc/mod.ts";
+export type { GrpcServerOptions } from "./libs/b3nd-server-grpc/mod.ts";
 
 // ── Proto wire types & converters ──
 export type {
@@ -25,7 +25,7 @@ export type {
   RecordProto,
   StatusRequest,
   StatusResponse,
-} from "../libs/b3nd-proto/schema.ts";
+} from "./libs/b3nd-proto/schema.ts";
 export {
   messageToReceiveRequest,
   readResultFromProto,
@@ -35,4 +35,4 @@ export {
   receiveResultToResponse,
   statusResponseToResult,
   statusResultToResponse,
-} from "../libs/b3nd-proto/convert.ts";
+} from "./libs/b3nd-proto/convert.ts";

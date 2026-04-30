@@ -16,7 +16,7 @@ export type {
   RecordProto,
   StatusRequest,
   StatusResponse,
-} from "../libs/b3nd-proto/schema.ts";
+} from "./libs/b3nd-proto/schema.ts";
 export {
   messageToReceiveRequest,
   readResultFromProto,
@@ -26,4 +26,4 @@ export {
   receiveResultToResponse,
   statusResponseToResult,
   statusResultToResponse,
-} from "../libs/b3nd-proto/convert.ts";
+} from "./libs/b3nd-proto/convert.ts";
