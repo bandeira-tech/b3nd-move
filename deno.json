@@ -1,6 +1,6 @@
 {
   "name": "@bandeira-tech/b3nd-servers",
-  "version": "0.1.0",
+  "version": "0.11.0",
   "description": "B3nd Servers — server-side composition (createServers, withCors) and transports (HTTP, gRPC-HTTP) for the B3nd framework",
   "exports": {
     ".": "./mod.ts",
