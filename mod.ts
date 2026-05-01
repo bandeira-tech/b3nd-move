@@ -8,8 +8,8 @@
  *   • `withCors(handler, opts)` — shared CORS middleware
  *
  * Concrete transports live in subpaths:
- *   • `./http`  — `httpServer` (Deno.serve + native CORS)
- *   • `./grpc`  — `grpcServer`, `grpcApi`, `GrpcClient`, proto schema
+ *   • `./http`           — `httpServer` (Deno.serve + native CORS)
+ *   • `./grpc/http`      — `grpcHttpServer`, `grpcHttpApi`, `GrpcHttpClient`, proto schema
  *
  * `httpApi(rig)` (the pure HTTP request handler) lives in
  * `@bandeira-tech/b3nd-core` — pull it from there if you want to embed

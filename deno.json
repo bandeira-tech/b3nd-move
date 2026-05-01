@@ -1,22 +1,24 @@
 {
   "name": "@bandeira-tech/b3nd-servers",
   "version": "0.1.0",
-  "description": "B3nd Servers — server-side composition (createServers, withCors) and transports (HTTP, gRPC) for the B3nd framework",
+  "description": "B3nd Servers — server-side composition (createServers, withCors) and transports (HTTP, gRPC-HTTP) for the B3nd framework",
   "exports": {
     ".": "./mod.ts",
     "./http": "./libs/b3nd-server-http/mod.ts",
-    "./grpc": "./grpc.ts",
-    "./grpc/api": "./libs/b3nd-server-grpc/service.ts",
-    "./grpc/server": "./libs/b3nd-server-grpc/mod.ts",
-    "./grpc/client": "./libs/b3nd-client-grpc/mod.ts",
+    "./grpc/http": "./grpc-http.ts",
+    "./grpc/http/api": "./libs/b3nd-server-grpchttp/service.ts",
+    "./grpc/http/server": "./libs/b3nd-server-grpchttp/mod.ts",
+    "./grpc/http/client": "./libs/b3nd-client-grpchttp/mod.ts",
     "./grpc/proto": "./libs/b3nd-proto/mod.ts"
   },
   "imports": {
     "@bandeira-tech/b3nd-core": "jsr:@bandeira-tech/b3nd-core@^0.12.0",
-    "@std/assert": "jsr:@std/assert@^1.0.15"
+    "@std/assert": "jsr:@std/assert@^1.0.15",
+    "@bufbuild/protobuf": "npm:@bufbuild/protobuf@^2.2.0",
+    "@bufbuild/protobuf/codegenv2": "npm:@bufbuild/protobuf@^2.2.0/codegenv2"
   },
   "tasks": {
-    "check": "deno check mod.ts grpc.ts libs/b3nd-server-http/mod.ts libs/b3nd-server-grpc/mod.ts libs/b3nd-server-grpc/service.ts libs/b3nd-client-grpc/mod.ts libs/b3nd-proto/mod.ts",
+    "check": "deno check mod.ts grpc-http.ts libs/b3nd-server-http/mod.ts libs/b3nd-server-grpchttp/mod.ts libs/b3nd-server-grpchttp/service.ts libs/b3nd-client-grpchttp/mod.ts libs/b3nd-proto/mod.ts",
     "test": "deno test --allow-all libs/",
     "build:npm": "deno run -A scripts/build-npm.ts"
   },
@@ -32,6 +34,7 @@
   "publish": {
     "exclude": [
       "libs/b3nd-proto/buf.gen.yaml",
+      "libs/b3nd-proto/buf.yaml",
       "libs/b3nd-proto/b3nd.proto",
       "libs/**/*.test.ts",
       "libs/**/*_test.ts",

@@ -1,9 +1,13 @@
 /**
  * @module
- * b3nd proto — wire types and converters for gRPC transport.
+ * b3nd proto — buf-generated wire types, schemas, and converters.
  *
- * Re-exports schema types and conversion functions used by
- * both `@b3nd/server-grpc` and `@b3nd/client-grpc`.
+ * Types in `gen/` are generated from `b3nd.proto`:
+ *   npx buf generate libs/b3nd-proto
+ *
+ * `B3ndService` is the GenService descriptor — pass it to
+ * `createClient(B3ndService, createConnectTransport({...}))` from
+ * @connectrpc/connect-web for typed unary access in web apps.
  */
 
 export type {
@@ -16,7 +20,20 @@ export type {
   RecordProto,
   StatusRequest,
   StatusResponse,
-} from "./schema.ts";
+} from "./gen/b3nd_pb.ts";
+
+export {
+  B3ndService,
+  ObserveRequestSchema,
+  ReadRequestSchema,
+  ReadResponseSchema,
+  ReadResultProtoSchema,
+  ReceiveRequestSchema,
+  ReceiveResponseSchema,
+  RecordProtoSchema,
+  StatusRequestSchema,
+  StatusResponseSchema,
+} from "./gen/b3nd_pb.ts";
 
 export {
   messageToReceiveRequest,

@@ -8,13 +8,13 @@
  * The npm build ships ONLY the universal slices that run on Node and in
  * browsers:
  *
- *   • `.`              — composition primitives + `withCors`
- *   • `./grpc/api`     — `grpcApi(rig)` (pure (Request) => Response handler)
- *   • `./grpc/client`  — `GrpcClient`
- *   • `./grpc/proto`   — wire types + converters
+ *   • `.`                  — composition primitives + `withCors`
+ *   • `./grpc/http/api`    — `grpcHttpApi(rig)` (pure (Request) => Response handler)
+ *   • `./grpc/http/client` — `GrpcHttpClient`
+ *   • `./grpc/proto`       — wire types + converters
  *
- * The Deno-only slices (`./http`, `./grpc`, `./grpc/server`) call
- * `Deno.serve` and stay JSR-only. Node consumers feed `grpcApi(rig)` (or
+ * The Deno-only slices (`./http`, `./grpc/http`, `./grpc/http/server`) call
+ * `Deno.serve` and stay JSR-only. Node consumers feed `grpcHttpApi(rig)` (or
  * `httpApi(rig)` from `@bandeira-tech/b3nd-core`) to their own HTTP
  * runtime — Hono, Express, raw `node:http`, Cloudflare Workers, …
  */
@@ -29,8 +29,8 @@ await emptyDir("./npm");
 await build({
   entryPoints: [
     { name: ".", path: "./mod.ts" },
-    { name: "./grpc/api", path: "./libs/b3nd-server-grpc/service.ts" },
-    { name: "./grpc/client", path: "./libs/b3nd-client-grpc/mod.ts" },
+    { name: "./grpc/http/api", path: "./libs/b3nd-server-grpchttp/service.ts" },
+    { name: "./grpc/http/client", path: "./libs/b3nd-client-grpchttp/mod.ts" },
     { name: "./grpc/proto", path: "./libs/b3nd-proto/mod.ts" },
   ],
   outDir: "./npm",
