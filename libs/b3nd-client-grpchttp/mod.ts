@@ -148,17 +148,31 @@ export class GrpcHttpClient implements ProtocolInterfaceNode {
     signal: AbortSignal,
   ): AsyncIterable<Output<string[]>> {
     const abort = new AbortController();
-    signal.addEventListener("abort", () => abort.abort());
+    const onAbort = () => abort.abort();
+    signal.addEventListener("abort", onAbort, { once: true });
+    if (signal.aborted) abort.abort();
 
-    const req = create(ObserveRequestSchema, { urls });
-    const resp = await fetch(`${this.baseUrl}${SERVICE_PREFIX}Observe`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(toJson(ObserveRequestSchema, req)),
-      signal: abort.signal,
-    });
+    let resp: Response;
+    try {
+      const req = create(ObserveRequestSchema, { urls });
+      resp = await fetch(`${this.baseUrl}${SERVICE_PREFIX}Observe`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(toJson(ObserveRequestSchema, req)),
+        signal: abort.signal,
+      });
+    } catch (e) {
+      signal.removeEventListener("abort", onAbort);
+      // Caller-initiated abort exits the iterator cleanly; anything else
+      // propagates.
+      if (signal.aborted) return;
+      throw e;
+    }
 
-    if (!resp.ok || !resp.body) return;
+    if (!resp.ok || !resp.body) {
+      signal.removeEventListener("abort", onAbort);
+      return;
+    }
 
     const reader = resp.body.getReader();
     const textDec = new TextDecoder();
@@ -166,7 +180,14 @@ export class GrpcHttpClient implements ProtocolInterfaceNode {
 
     try {
       while (!signal.aborted) {
-        const { done, value } = await reader.read();
+        let chunk;
+        try {
+          chunk = await reader.read();
+        } catch (e) {
+          if (signal.aborted) return;
+          throw e;
+        }
+        const { done, value } = chunk;
         if (done) break;
         buffer += textDec.decode(value, { stream: true });
         const lines = buffer.split("\n");
@@ -184,6 +205,7 @@ export class GrpcHttpClient implements ProtocolInterfaceNode {
       }
     } finally {
       reader.releaseLock();
+      signal.removeEventListener("abort", onAbort);
     }
   }
 

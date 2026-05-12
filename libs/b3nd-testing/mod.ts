@@ -14,4 +14,4 @@
  */
 
 export { pinContract } from "./contract.ts";
-export type { ServerFactory } from "./contract.ts";
+export type { PinContractOptions, ServerFactory } from "./contract.ts";
