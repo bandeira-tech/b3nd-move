@@ -1,10 +1,7 @@
 import { assertEquals } from "@std/assert";
-import {
-  connection,
-  MemoryStore,
-  Rig,
-  SimpleClient,
-} from "@bandeira-tech/b3nd-core";
+import { connection, Rig } from "@bandeira-tech/b3nd-core/rig";
+import { MemoryStore } from "@bandeira-tech/b3nd-stores/memory";
+import { SimpleClient } from "@bandeira-tech/b3nd-stores/adapters";
 import { grpcHttpApi } from "../b3nd-server-grpchttp/service.ts";
 import { GrpcHttpClient } from "./mod.ts";
 

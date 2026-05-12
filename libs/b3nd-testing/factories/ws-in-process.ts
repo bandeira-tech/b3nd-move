@@ -7,7 +7,7 @@
  * loop when the server shuts down.
  */
 
-import { WebSocketClient } from "@bandeira-tech/b3nd-core";
+import { WebSocketClient } from "../../b3nd-client-ws/mod.ts";
 import { wsApi } from "../../b3nd-server-ws/service.ts";
 import type { ServerFactory } from "../contract.ts";
 import { defaultRig } from "./_rig.ts";

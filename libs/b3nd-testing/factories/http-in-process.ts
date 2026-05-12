@@ -1,11 +1,12 @@
 /**
  * @module
- * In-process HTTP factory — boots `httpApi(rig)` from b3nd-core via
- * `Deno.serve` on an ephemeral port and returns an `HttpClient` pointing
- * at it. Used by the PIN contract suite.
+ * In-process HTTP factory — boots `httpApi(rig)` via `Deno.serve` on
+ * an ephemeral port and returns an `HttpClient` pointing at it. Used
+ * by the PIN contract suite.
  */
 
-import { httpApi, HttpClient } from "@bandeira-tech/b3nd-core";
+import { httpApi } from "../../b3nd-server-http/api.ts";
+import { HttpClient } from "../../b3nd-client-http/mod.ts";
 import type { ServerFactory } from "../contract.ts";
 import { defaultRig } from "./_rig.ts";
 

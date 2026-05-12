@@ -30,12 +30,12 @@
  * requests but WS connections are long-lived.
  */
 
+import type { Message } from "@bandeira-tech/b3nd-core/types";
+import type { Rig } from "@bandeira-tech/b3nd-core/rig";
 import type {
-  Message,
-  Rig,
   WebSocketRequest,
   WebSocketResponse,
-} from "@bandeira-tech/b3nd-core";
+} from "../b3nd-client-ws/mod.ts";
 
 /**
  * Fetch handler with a `closeAll` lifecycle hook.

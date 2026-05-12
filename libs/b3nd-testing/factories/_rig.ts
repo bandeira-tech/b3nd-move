@@ -5,12 +5,9 @@
  * not the store.
  */
 
-import {
-  connection,
-  MemoryStore,
-  Rig,
-  SimpleClient,
-} from "@bandeira-tech/b3nd-core";
+import { connection, Rig } from "@bandeira-tech/b3nd-core/rig";
+import { MemoryStore } from "@bandeira-tech/b3nd-stores/memory";
+import { SimpleClient } from "@bandeira-tech/b3nd-stores/adapters";
 
 /** SimpleClient over MemoryStore, accepting all uris on every route. */
 export function defaultRig(): Rig {
