@@ -36,7 +36,7 @@ transport-specific edges.
 | Factory                         | Transport / encoding                            | Status            |
 | ------------------------------- | ----------------------------------------------- | ----------------- |
 | `httpInProcess`                 | core `httpApi` + `HttpClient`                   | landed (slice 1)  |
-| `grpcHttpInProcess({ binary })` | `grpcHttpApi` + `GrpcHttpClient`, JSON & binary | planned (slice 2) |
+| `grpcHttpInProcess({ binary })` | `grpcHttpApi` + `GrpcHttpClient`, JSON & binary | landed (slice 2)  |
 | `wsInProcess`                   | core WS server + `WebSocketClient`              | planned (slice 3) |
 
 The MCP transport gets its own (smaller) spec — slice 5 — because tool-call

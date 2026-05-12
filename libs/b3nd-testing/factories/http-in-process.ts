@@ -5,21 +5,9 @@
  * at it. Used by the PIN contract suite.
  */
 
-import {
-  connection,
-  httpApi,
-  HttpClient,
-  MemoryStore,
-  Rig,
-  SimpleClient,
-} from "@bandeira-tech/b3nd-core";
+import { httpApi, HttpClient } from "@bandeira-tech/b3nd-core";
 import type { ServerFactory } from "../contract.ts";
-
-/** Default rig: SimpleClient over MemoryStore, accepting all uris. */
-function defaultRig(): Rig {
-  const route = connection(new SimpleClient(new MemoryStore()), ["*"]);
-  return new Rig({ routes: { receive: [route], read: [route] } });
-}
+import { defaultRig } from "./_rig.ts";
 
 /**
  * Boot `httpApi(rig)` on a free port and return an `HttpClient` for it.
