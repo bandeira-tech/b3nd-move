@@ -78,7 +78,7 @@ export function mcpSpec(
 
   test("listTools exposes the b3nd surface", async (client) => {
     const { tools } = await client.listTools();
-    const names = tools.map((t) => t.name).sort();
+    const names = (tools as Array<{ name: string }>).map((t) => t.name).sort();
     assertEquals(names, ["b3nd_read", "b3nd_receive", "b3nd_status"]);
   });
 
