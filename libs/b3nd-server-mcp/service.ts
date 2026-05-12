@@ -66,7 +66,9 @@ export function buildMcpServer(rig: Rig, opts: McpServerOptions = {}): Server {
     () => Promise.resolve({ tools: TOOLS }),
   );
 
-  server.setRequestHandler(CallToolRequestSchema, async (request) => {
+  server.setRequestHandler(CallToolRequestSchema, async (
+    request: { params: { name: string; arguments?: Record<string, unknown> } },
+  ) => {
     const { name, arguments: args } = request.params;
 
     try {
@@ -147,7 +149,9 @@ export function buildMcpServer(rig: Rig, opts: McpServerOptions = {}): Server {
     }
   });
 
-  server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
+  server.setRequestHandler(ReadResourceRequestSchema, async (
+    request: { params: { uri: string } },
+  ) => {
     const resourceUri = request.params.uri;
     const b3ndUri = resourceUri.replace(/^b3nd:\/\//, "");
     try {
