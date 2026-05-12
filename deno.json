@@ -12,7 +12,10 @@
     "./grpc/proto": "./libs/b3nd-proto/mod.ts",
     "./mcp": "./mcp.ts",
     "./mcp/server": "./libs/b3nd-server-mcp/mod.ts",
-    "./mcp/api": "./libs/b3nd-server-mcp/service.ts"
+    "./mcp/api": "./libs/b3nd-server-mcp/service.ts",
+    "./ws": "./ws.ts",
+    "./ws/server": "./libs/b3nd-server-ws/mod.ts",
+    "./ws/api": "./libs/b3nd-server-ws/service.ts"
   },
   "imports": {
     "@bandeira-tech/b3nd-core": "jsr:@bandeira-tech/b3nd-core@^0.15.0",
@@ -24,7 +27,7 @@
     "@modelcontextprotocol/sdk/types.js": "npm:@modelcontextprotocol/sdk@^1.0.0/types.js"
   },
   "tasks": {
-    "check": "deno check mod.ts grpc-http.ts mcp.ts libs/b3nd-server-http/mod.ts libs/b3nd-server-grpchttp/mod.ts libs/b3nd-server-grpchttp/service.ts libs/b3nd-client-grpchttp/mod.ts libs/b3nd-proto/mod.ts libs/b3nd-server-mcp/mod.ts libs/b3nd-server-mcp/service.ts libs/b3nd-testing/mod.ts",
+    "check": "deno check mod.ts grpc-http.ts mcp.ts ws.ts libs/b3nd-server-http/mod.ts libs/b3nd-server-grpchttp/mod.ts libs/b3nd-server-grpchttp/service.ts libs/b3nd-client-grpchttp/mod.ts libs/b3nd-proto/mod.ts libs/b3nd-server-mcp/mod.ts libs/b3nd-server-mcp/service.ts libs/b3nd-server-ws/mod.ts libs/b3nd-server-ws/service.ts libs/b3nd-testing/mod.ts",
     "test": "deno test --allow-all libs/",
     "build:npm": "deno run -A scripts/build-npm.ts"
   },

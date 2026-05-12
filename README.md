@@ -17,6 +17,9 @@ transport — only pay for what you use.
 | `./mcp`              | `mcpServer`, `buildMcpServer` (umbrella)                             | Deno (server) / any (api)          |
 | `./mcp/server`       | `mcpServer` resolver — stdio transport                               | Deno                               |
 | `./mcp/api`          | `buildMcpServer(rig)` — bare MCP Server instance                     | any                                |
+| `./ws`               | `wsServer`, `wsApi` (umbrella)                                       | Deno                               |
+| `./ws/server`        | `wsServer` resolver                                                  | Deno                               |
+| `./ws/api`           | `wsApi(rig)` — fetch handler that upgrades to WS                     | Deno                               |
 
 Details in each lib's README (under `libs/`).
 
