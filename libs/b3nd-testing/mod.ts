@@ -15,3 +15,6 @@
 
 export { pinContract } from "./contract.ts";
 export type { PinContractOptions, ServerFactory } from "./contract.ts";
+
+export { mcpSpec } from "./mcp-spec.ts";
+export type { McpFactory, McpSpecOptions } from "./mcp-spec.ts";
