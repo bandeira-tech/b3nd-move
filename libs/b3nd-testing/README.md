@@ -33,11 +33,11 @@ transport-specific edges.
 
 ## Factories
 
-| Factory                         | Transport / encoding                            | Status            |
-| ------------------------------- | ----------------------------------------------- | ----------------- |
-| `httpInProcess`                 | core `httpApi` + `HttpClient`                   | landed (slice 1)  |
-| `grpcHttpInProcess({ binary })` | `grpcHttpApi` + `GrpcHttpClient`, JSON & binary | landed (slice 2)  |
-| `wsInProcess`                   | core WS server + `WebSocketClient`              | planned (slice 3) |
+| Factory                         | Transport / encoding                            | Status           |
+| ------------------------------- | ----------------------------------------------- | ---------------- |
+| `httpInProcess`                 | core `httpApi` + `HttpClient`                   | landed (slice 1) |
+| `grpcHttpInProcess({ binary })` | `grpcHttpApi` + `GrpcHttpClient`, JSON & binary | landed (slice 2) |
+| `wsInProcess`                   | `wsApi` + core `WebSocketClient`                | landed (slice 3) |
 
 The MCP transport gets its own (smaller) spec — slice 5 — because tool-call
 semantics don't fit PIN-over-wire cleanly.
