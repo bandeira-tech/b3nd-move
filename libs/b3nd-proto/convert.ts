@@ -9,7 +9,11 @@
  */
 
 import { create } from "@bufbuild/protobuf";
-import type { Output, ReceiveResult, StatusResult } from "@bandeira-tech/b3nd-core";
+import type {
+  Output,
+  ReceiveResult,
+  StatusResult,
+} from "@bandeira-tech/b3nd-core";
 import {
   OutputProtoSchema,
   ReceiveResultProtoSchema,
@@ -24,9 +28,14 @@ import type {
 const enc = new TextEncoder();
 const dec = new TextDecoder();
 
-function encodePayload(payload: unknown): { payload: Uint8Array; payloadIsBinary: boolean } {
+function encodePayload(
+  payload: unknown,
+): { payload: Uint8Array; payloadIsBinary: boolean } {
   if (payload instanceof Uint8Array) return { payload, payloadIsBinary: true };
-  return { payload: enc.encode(JSON.stringify(payload)), payloadIsBinary: false };
+  return {
+    payload: enc.encode(JSON.stringify(payload)),
+    payloadIsBinary: false,
+  };
 }
 
 function decodePayload(bytes: Uint8Array, isBinary: boolean): unknown {
@@ -82,6 +91,8 @@ export function statusResponseToResult(r: StatusResponse): StatusResult {
     ...(r.message ? { message: r.message } : {}),
     ...(r.schemaJson ? { schema: JSON.parse(r.schemaJson) as string[] } : {}),
     ...(r.fnsJson ? { fns: JSON.parse(r.fnsJson) as string[] } : {}),
-    ...(r.detailsJson ? { details: JSON.parse(r.detailsJson) as Record<string, unknown> } : {}),
+    ...(r.detailsJson
+      ? { details: JSON.parse(r.detailsJson) as Record<string, unknown> }
+      : {}),
   };
 }

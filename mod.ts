@@ -16,9 +16,7 @@
  * the rig in your own HTTP runtime without this package.
  */
 
-export {
-  createServers,
-} from "./libs/b3nd-server-factory/mod.ts";
+export { createServers } from "./libs/b3nd-server-factory/mod.ts";
 export type {
   ServerComposition,
   ServerResolver,

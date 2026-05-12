@@ -18,7 +18,9 @@ const status = await client.status();
 
 // observe — INV-style NDJSON stream of Output<string[]> = [inputUrl, urisThatChanged]
 const abort = new AbortController();
-for await (const [inputUrl, uris] of client.observe(["mutable://app/*"], abort.signal)) {
+for await (
+  const [inputUrl, uris] of client.observe(["mutable://app/*"], abort.signal)
+) {
   const outputs = await client.read(uris);
   for (const [u, p] of outputs) console.log(u, p);
 }
@@ -28,9 +30,9 @@ for await (const [inputUrl, uris] of client.observe(["mutable://app/*"], abort.s
 
 ```typescript
 interface GrpcHttpClientConfig {
-  url: string;         // base URL of the grpcHttpApi server
-  binary?: boolean;    // true = application/proto; false (default) = application/json
-  timeout?: number;    // fetch timeout in ms (observe excluded)
+  url: string; // base URL of the grpcHttpApi server
+  binary?: boolean; // true = application/proto; false (default) = application/json
+  timeout?: number; // fetch timeout in ms (observe excluded)
 }
 ```
 
@@ -40,5 +42,5 @@ is more compact on the wire — useful for high-throughput server-to-server call
 ## Connect-web alternative
 
 For web apps already using `@connectrpc/connect-web`, the `B3ndService`
-descriptor from `./grpc/proto` can be passed to `createClient()` directly —
-see `b3nd-server-grpchttp` README.
+descriptor from `./grpc/proto` can be passed to `createClient()` directly — see
+`b3nd-server-grpchttp` README.

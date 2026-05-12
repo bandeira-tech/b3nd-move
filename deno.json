@@ -37,6 +37,12 @@
       "deno.ns"
     ]
   },
+  "lint": {
+    "exclude": ["libs/b3nd-proto/gen/", "npm/"]
+  },
+  "fmt": {
+    "exclude": ["libs/b3nd-proto/gen/", "npm/"]
+  },
   "publish": {
     "exclude": [
       "libs/b3nd-proto/buf.gen.yaml",

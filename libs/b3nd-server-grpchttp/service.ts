@@ -24,7 +24,13 @@
  *   createClient(B3ndService, createConnectTransport({ baseUrl }))
  */
 
-import { create, fromBinary, fromJson, toBinary, toJson } from "@bufbuild/protobuf";
+import {
+  create,
+  fromBinary,
+  fromJson,
+  toBinary,
+  toJson,
+} from "@bufbuild/protobuf";
 import type { JsonValue } from "@bufbuild/protobuf";
 import type { Rig } from "@bandeira-tech/b3nd-core";
 import {
@@ -61,7 +67,9 @@ function okResponse(body: BodyInit, enc: Encoding): Response {
   return new Response(body, {
     status: 200,
     headers: {
-      "Content-Type": enc === "binary" ? "application/proto" : "application/json",
+      "Content-Type": enc === "binary"
+        ? "application/proto"
+        : "application/json",
     },
   });
 }
@@ -88,20 +96,32 @@ export function grpcHttpApi(rig: Rig): (req: Request) => Promise<Response> {
     const method = path.slice(SERVICE_PREFIX.length);
     const enc = detectEncoding(req);
     switch (method) {
-      case "Receive": return handleReceive(rig, req, enc);
-      case "Read":    return handleRead(rig, req, enc);
-      case "Observe": return handleObserve(rig, req);
-      case "Status":  return handleStatus(rig, enc);
-      default:        return Promise.resolve(errResponse(`Unknown method: ${method}`, 404));
+      case "Receive":
+        return handleReceive(rig, req, enc);
+      case "Read":
+        return handleRead(rig, req, enc);
+      case "Observe":
+        return handleObserve(rig, req);
+      case "Status":
+        return handleStatus(rig, enc);
+      default:
+        return Promise.resolve(errResponse(`Unknown method: ${method}`, 404));
     }
   };
 }
 
-async function handleReceive(rig: Rig, req: Request, enc: Encoding): Promise<Response> {
+async function handleReceive(
+  rig: Rig,
+  req: Request,
+  enc: Encoding,
+): Promise<Response> {
   let body;
   try {
     body = enc === "binary"
-      ? fromBinary(ReceiveRequestSchema, new Uint8Array(await req.arrayBuffer()))
+      ? fromBinary(
+        ReceiveRequestSchema,
+        new Uint8Array(await req.arrayBuffer()),
+      )
       : fromJson(ReceiveRequestSchema, await req.json() as JsonValue);
   } catch {
     return errResponse("Invalid request body");
@@ -121,7 +141,11 @@ async function handleReceive(rig: Rig, req: Request, enc: Encoding): Promise<Res
   );
 }
 
-async function handleRead(rig: Rig, req: Request, enc: Encoding): Promise<Response> {
+async function handleRead(
+  rig: Rig,
+  req: Request,
+  enc: Encoding,
+): Promise<Response> {
   let body;
   try {
     body = enc === "binary"
@@ -134,7 +158,9 @@ async function handleRead(rig: Rig, req: Request, enc: Encoding): Promise<Respon
 
   try {
     const results = await rig.read(body.urls);
-    const response = create(ReadResponseSchema, { results: results.map(outputToProto) });
+    const response = create(ReadResponseSchema, {
+      results: results.map(outputToProto),
+    });
     return okResponse(
       enc === "binary"
         ? toBinary(ReadResponseSchema, response)
@@ -166,19 +192,25 @@ async function handleObserve(rig: Rig, req: Request): Promise<Response> {
           if (abort.signal.aborted) break;
           const proto = outputToProto(out);
           controller.enqueue(
-            textEnc.encode(JSON.stringify(toJson(OutputProtoSchema, proto)) + "\n"),
+            textEnc.encode(
+              JSON.stringify(toJson(OutputProtoSchema, proto)) + "\n",
+            ),
           );
         }
       } catch (e) {
         if (!abort.signal.aborted) {
           const msg = e instanceof Error ? e.message : String(e);
-          controller.enqueue(textEnc.encode(JSON.stringify({ error: msg }) + "\n"));
+          controller.enqueue(
+            textEnc.encode(JSON.stringify({ error: msg }) + "\n"),
+          );
         }
       } finally {
         controller.close();
       }
     },
-    cancel() { abort.abort(); },
+    cancel() {
+      abort.abort();
+    },
   });
 
   return new Response(stream, {
@@ -195,7 +227,9 @@ async function handleStatus(rig: Rig, enc: Encoding): Promise<Response> {
   const result = await rig.status();
   const response = statusResultToResponse(result);
   return okResponse(
-    enc === "binary" ? toBinary(StatusResponseSchema, response) : JSON.stringify(toJson(StatusResponseSchema, response)),
+    enc === "binary"
+      ? toBinary(StatusResponseSchema, response)
+      : JSON.stringify(toJson(StatusResponseSchema, response)),
     enc,
   );
 }

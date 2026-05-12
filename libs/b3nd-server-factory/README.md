@@ -40,8 +40,8 @@ in the resolver; cross-cutting config (CORS) flows through `composition`.
 
 ```typescript
 interface TransportServer {
-  readonly transport: string;   // "http" | "grpc-http" | "mcp" | …
-  readonly address: string;     // "http://0.0.0.0:3000" | "stdio" | …
+  readonly transport: string; // "http" | "grpc-http" | "mcp" | …
+  readonly address: string; // "http://0.0.0.0:3000" | "stdio" | …
   start(): Promise<void>;
   stop(): Promise<void>;
 }
@@ -51,6 +51,6 @@ interface TransportServer {
 
 ```typescript
 interface ServerComposition {
-  cors?: string;  // CORS origin applied to all HTTP-speaking transports
+  cors?: string; // CORS origin applied to all HTTP-speaking transports
 }
 ```

@@ -18,7 +18,10 @@ function createTestRig(): Rig {
 
 async function withServer(fn: (url: string) => Promise<void>): Promise<void> {
   const port = nextPort++;
-  const server = Deno.serve({ port, hostname: "127.0.0.1" }, grpcHttpApi(createTestRig()));
+  const server = Deno.serve(
+    { port, hostname: "127.0.0.1" },
+    grpcHttpApi(createTestRig()),
+  );
   try {
     await fn(`http://127.0.0.1:${port}`);
   } finally {
@@ -29,7 +32,9 @@ async function withServer(fn: (url: string) => Promise<void>): Promise<void> {
 Deno.test("GrpcHttpClient — receive + read round-trip (JSON)", async () => {
   await withServer(async (url) => {
     const client = new GrpcHttpClient({ url });
-    const [result] = await client.receive([["mutable://test/item", { value: 42 }]]);
+    const [result] = await client.receive([["mutable://test/item", {
+      value: 42,
+    }]]);
     assertEquals(result.accepted, true);
     const [[uri, payload]] = await client.read(["mutable://test/item"]);
     assertEquals(uri, "mutable://test/item");
@@ -40,7 +45,9 @@ Deno.test("GrpcHttpClient — receive + read round-trip (JSON)", async () => {
 Deno.test("GrpcHttpClient — receive + read round-trip (binary)", async () => {
   await withServer(async (url) => {
     const client = new GrpcHttpClient({ url, binary: true });
-    const [result] = await client.receive([["mutable://test/binary-item", { v: 7 }]]);
+    const [result] = await client.receive([["mutable://test/binary-item", {
+      v: 7,
+    }]]);
     assertEquals(result.accepted, true);
     const [[, payload]] = await client.read(["mutable://test/binary-item"]);
     assertEquals(payload, { v: 7 });
@@ -69,7 +76,9 @@ Deno.test("GrpcHttpClient — status", async () => {
 Deno.test("GrpcHttpClient — read non-existent URI yields undefined payload", async () => {
   await withServer(async (url) => {
     const client = new GrpcHttpClient({ url });
-    const [[uri, payload]] = await client.read(["mutable://test/no-such-thing"]);
+    const [[uri, payload]] = await client.read([
+      "mutable://test/no-such-thing",
+    ]);
     assertEquals(uri, "mutable://test/no-such-thing");
     assertEquals(payload, undefined);
   });

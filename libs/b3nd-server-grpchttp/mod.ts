@@ -32,7 +32,9 @@ export interface GrpcHttpServerOptions {
   cors?: string;
 }
 
-export function grpcHttpServer(options?: GrpcHttpServerOptions): ServerResolver {
+export function grpcHttpServer(
+  options?: GrpcHttpServerOptions,
+): ServerResolver {
   return {
     transport: "grpc-http",
     create(rig: Rig, composition?: ServerComposition): TransportServer {

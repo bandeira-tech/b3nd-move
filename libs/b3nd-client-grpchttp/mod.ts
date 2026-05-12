@@ -26,7 +26,13 @@
  * ```
  */
 
-import { create, fromBinary, fromJson, toBinary, toJson } from "@bufbuild/protobuf";
+import {
+  create,
+  fromBinary,
+  fromJson,
+  toBinary,
+  toJson,
+} from "@bufbuild/protobuf";
 import type { JsonValue } from "@bufbuild/protobuf";
 import type {
   Message,
@@ -82,17 +88,25 @@ export class GrpcHttpClient implements ProtocolInterfaceNode {
     try {
       const resp = await fetch(`${this.baseUrl}${SERVICE_PREFIX}${method}`, {
         method: "POST",
-        headers: { "Content-Type": this.binary ? "application/proto" : "application/json" },
+        headers: {
+          "Content-Type": this.binary
+            ? "application/proto"
+            : "application/json",
+        },
         body,
         signal: abort.signal,
       });
       if (!resp.ok) {
-        throw new Error(`gRPC-HTTP ${method} failed (${resp.status}): ${await resp.text()}`);
+        throw new Error(
+          `gRPC-HTTP ${method} failed (${resp.status}): ${await resp.text()}`,
+        );
       }
       return resp;
     } catch (e) {
       if (e instanceof Error && e.name === "AbortError") {
-        throw new Error(`gRPC-HTTP ${method} timed out after ${this.timeout}ms`);
+        throw new Error(
+          `gRPC-HTTP ${method} timed out after ${this.timeout}ms`,
+        );
       }
       throw e;
     } finally {
@@ -109,7 +123,10 @@ export class GrpcHttpClient implements ProtocolInterfaceNode {
       : JSON.stringify(toJson(ReceiveRequestSchema, req));
     const resp = await this.rpc("Receive", body);
     const result = this.binary
-      ? fromBinary(ReceiveResponseSchema, new Uint8Array(await resp.arrayBuffer()))
+      ? fromBinary(
+        ReceiveResponseSchema,
+        new Uint8Array(await resp.arrayBuffer()),
+      )
       : fromJson(ReceiveResponseSchema, await resp.json() as JsonValue);
     return (result.results ?? []).map(receiveResultFromProto);
   }
@@ -157,7 +174,9 @@ export class GrpcHttpClient implements ProtocolInterfaceNode {
         for (const line of lines) {
           if (!line.trim()) continue;
           const parsed = JSON.parse(line) as JsonValue;
-          if (typeof parsed === "object" && parsed !== null && "error" in parsed) {
+          if (
+            typeof parsed === "object" && parsed !== null && "error" in parsed
+          ) {
             throw new Error(String((parsed as Record<string, unknown>).error));
           }
           yield outputFromProto<string[]>(fromJson(OutputProtoSchema, parsed));
@@ -175,7 +194,10 @@ export class GrpcHttpClient implements ProtocolInterfaceNode {
       : JSON.stringify(toJson(StatusRequestSchema, req));
     const resp = await this.rpc("Status", body);
     const result = this.binary
-      ? fromBinary(StatusResponseSchema, new Uint8Array(await resp.arrayBuffer()))
+      ? fromBinary(
+        StatusResponseSchema,
+        new Uint8Array(await resp.arrayBuffer()),
+      )
       : fromJson(StatusResponseSchema, await resp.json() as JsonValue);
     return statusResponseToResult(result);
   }

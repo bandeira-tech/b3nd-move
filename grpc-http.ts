@@ -10,7 +10,10 @@
  */
 
 // ── Server ──────────────────────────────────────────────────────────────────
-export { grpcHttpApi, grpcHttpServer } from "./libs/b3nd-server-grpchttp/mod.ts";
+export {
+  grpcHttpApi,
+  grpcHttpServer,
+} from "./libs/b3nd-server-grpchttp/mod.ts";
 export type { GrpcHttpServerOptions } from "./libs/b3nd-server-grpchttp/mod.ts";
 
 // ── Client ──────────────────────────────────────────────────────────────────

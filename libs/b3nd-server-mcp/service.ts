@@ -61,7 +61,10 @@ export function buildMcpServer(rig: Rig, opts: McpServerOptions = {}): Server {
     { capabilities: { tools: {}, resources: {} } },
   );
 
-  server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: TOOLS }));
+  server.setRequestHandler(
+    ListToolsRequestSchema,
+    () => Promise.resolve({ tools: TOOLS }),
+  );
 
   server.setRequestHandler(CallToolRequestSchema, async (request) => {
     const { name, arguments: args } = request.params;
@@ -75,7 +78,11 @@ export function buildMcpServer(rig: Rig, opts: McpServerOptions = {}): Server {
             content: [{
               type: "text",
               text: JSON.stringify(
-                results.map((r, i) => ({ uri: messages[i][0], accepted: r.accepted, error: r.error })),
+                results.map((r, i) => ({
+                  uri: messages[i][0],
+                  accepted: r.accepted,
+                  error: r.error,
+                })),
                 null,
                 2,
               ),
@@ -115,7 +122,10 @@ export function buildMcpServer(rig: Rig, opts: McpServerOptions = {}): Server {
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       return {
-        content: [{ type: "text", text: JSON.stringify({ error: message, tool: name }, null, 2) }],
+        content: [{
+          type: "text",
+          text: JSON.stringify({ error: message, tool: name }, null, 2),
+        }],
         isError: true,
       };
     }
@@ -153,7 +163,11 @@ export function buildMcpServer(rig: Rig, opts: McpServerOptions = {}): Server {
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       return {
-        contents: [{ uri: resourceUri, mimeType: "application/json", text: JSON.stringify({ error: message }) }],
+        contents: [{
+          uri: resourceUri,
+          mimeType: "application/json",
+          text: JSON.stringify({ error: message }),
+        }],
       };
     }
   });

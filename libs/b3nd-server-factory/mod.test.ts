@@ -11,7 +11,10 @@ const stubRig = {} as Rig;
 
 function fakeResolver(
   transport: string,
-): ServerResolver & { created: TransportServer[]; lastComposition?: ServerComposition } {
+): ServerResolver & {
+  created: TransportServer[];
+  lastComposition?: ServerComposition;
+} {
   const created: TransportServer[] = [];
   const r = {
     transport,
