@@ -54,5 +54,27 @@ transport-specific edges.
 | `grpcHttpInProcess({ binary })` | `grpcHttpApi` + `GrpcHttpClient`, JSON & binary | landed (slice 2) |
 | `wsInProcess`                   | `wsApi` + core `WebSocketClient`                | landed (slice 3) |
 
-The MCP transport gets its own (smaller) spec — slice 5 — because tool-call
-semantics don't fit PIN-over-wire cleanly.
+## MCP tool spec
+
+MCP doesn't fit PIN-over-wire (tool calls + JSON text content vs. typed method
+calls + binary payloads), so it has its own `mcpSpec(label, factory, options?)`
+alongside `pinContract`. The factory builds a `buildMcpServer(rig)`, an MCP SDK
+`Client`, links them via `InMemoryTransport`, and returns the connected client.
+
+```typescript
+import { mcpSpec } from "../mod.ts";
+import { mcpInProcess } from "../factories/mcp-in-process.ts";
+
+mcpSpec("mcp-in-process", mcpInProcess);
+```
+
+Cases covered today:
+
+- `listTools exposes the b3nd surface`
+- `b3nd_status reports healthy`
+- `b3nd_receive + b3nd_read round-trip a payload`
+- `b3nd_read returns one tuple per input url, in order`
+
+| Factory        | Transport                              | Status           |
+| -------------- | -------------------------------------- | ---------------- |
+| `mcpInProcess` | `buildMcpServer` + `InMemoryTransport` | landed (slice 5) |
