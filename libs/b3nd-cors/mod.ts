@@ -5,11 +5,11 @@
  * Wraps a `(Request) => Promise<Response>` handler with CORS headers
  * and an OPTIONS preflight responder. Used by transport servers in
  * this package; also exported for ad-hoc use around `httpApi(rig)`
- * from `@bandeira-tech/b3nd-core`.
+ * from `@bandeira-tech/b3nd-servers/http/api`.
  *
  * @example
  * ```ts
- * import { httpApi } from "@bandeira-tech/b3nd-core";
+ * import { httpApi } from "@bandeira-tech/b3nd-servers/http/api";
  * import { withCors } from "@bandeira-tech/b3nd-servers";
  *
  * const handler = withCors(httpApi(rig), { origin: "*" });

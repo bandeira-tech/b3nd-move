@@ -19,11 +19,8 @@
  * ```
  */
 
-import {
-  httpApi,
-  type HttpApiOptions,
-  type Rig,
-} from "@bandeira-tech/b3nd-core";
+import type { Rig } from "@bandeira-tech/b3nd-core/rig";
+import { httpApi, type HttpApiOptions } from "./api.ts";
 import { withCors } from "../b3nd-cors/mod.ts";
 import type {
   ServerComposition,
