@@ -24,7 +24,7 @@
     "@modelcontextprotocol/sdk/types.js": "npm:@modelcontextprotocol/sdk@^1.0.0/types.js"
   },
   "tasks": {
-    "check": "deno check mod.ts grpc-http.ts mcp.ts libs/b3nd-server-http/mod.ts libs/b3nd-server-grpchttp/mod.ts libs/b3nd-server-grpchttp/service.ts libs/b3nd-client-grpchttp/mod.ts libs/b3nd-proto/mod.ts libs/b3nd-server-mcp/mod.ts libs/b3nd-server-mcp/service.ts",
+    "check": "deno check mod.ts grpc-http.ts mcp.ts libs/b3nd-server-http/mod.ts libs/b3nd-server-grpchttp/mod.ts libs/b3nd-server-grpchttp/service.ts libs/b3nd-client-grpchttp/mod.ts libs/b3nd-proto/mod.ts libs/b3nd-server-mcp/mod.ts libs/b3nd-server-mcp/service.ts libs/b3nd-testing/mod.ts",
     "test": "deno test --allow-all libs/",
     "build:npm": "deno run -A scripts/build-npm.ts"
   },
@@ -48,6 +48,7 @@
       "libs/b3nd-proto/buf.gen.yaml",
       "libs/b3nd-proto/buf.yaml",
       "libs/b3nd-proto/b3nd.proto",
+      "libs/b3nd-testing/",
       "libs/**/*.test.ts",
       "libs/**/*_test.ts",
       "libs/**/README.md",
