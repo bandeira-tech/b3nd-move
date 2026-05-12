@@ -30,9 +30,16 @@ Cases covered today:
 
 ## Known sanitizer quirks
 
-`pinContract(label, factory, options?)` accepts `{ sanitizeOps?, sanitizeResources? }` for factories whose transport has a known upstream resource quirk. Every override should carry a comment pointing at the upstream cause so the relaxation is easy to retire once fixed. Today:
+`pinContract(label, factory, options?)` accepts
+`{ sanitizeOps?, sanitizeResources? }` for factories whose transport has a known
+upstream resource quirk. Every override should carry a comment pointing at the
+upstream cause so the relaxation is easy to retire once fixed. Today:
 
-- **`http-in-process`** runs with `sanitizeOps: false, sanitizeResources: false` because `b3nd-core`'s `httpApi` SSE handler installs a 30s keepalive `setInterval` whose `clearInterval` lives in the stream's `cancel` callback — Deno's per-test sanitizer fires before the server-side stream cancel resolves. Fix is upstream (bind the cleanup to `req.signal`).
+- **`http-in-process`** runs with `sanitizeOps: false, sanitizeResources: false`
+  because `b3nd-core`'s `httpApi` SSE handler installs a 30s keepalive
+  `setInterval` whose `clearInterval` lives in the stream's `cancel` callback —
+  Deno's per-test sanitizer fires before the server-side stream cancel resolves.
+  Fix is upstream (bind the cleanup to `req.signal`).
 
 The contract asserts only framework-level invariants. "What a miss looks like"
 is a content/protocol concern (per `b3nd-core` 0.15+) and stays out of the spec

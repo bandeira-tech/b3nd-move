@@ -22,8 +22,8 @@ jobs:
       - uses: actions/checkout@v4
       - uses: denoland/setup-deno@v2
         with: { deno-version: v2.x }
-      - run: deno lint mod.ts grpc-http.ts mcp.ts libs/
-      - run: deno fmt --check mod.ts grpc-http.ts mcp.ts libs/
+      - run: deno lint mod.ts grpc-http.ts mcp.ts ws.ts libs/
+      - run: deno fmt --check mod.ts grpc-http.ts mcp.ts ws.ts libs/
 
   type-check:
     name: Type Check
