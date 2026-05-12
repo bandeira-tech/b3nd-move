@@ -10,15 +10,15 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file b3nd.proto.
  */
 export const file_b3nd: GenFile = /*@__PURE__*/
-  fileDesc("CgpiM25kLnByb3RvEgdiM25kLnYxIkMKDlJlY2VpdmVSZXF1ZXN0EgsKA3VyaRgBIAEoCRIMCgRkYXRhGAIgASgMEhYKDmRhdGFfaXNfYmluYXJ5GAMgASgIIjIKD1JlY2VpdmVSZXNwb25zZRIQCghhY2NlcHRlZBgBIAEoCBINCgVlcnJvchgCIAEoCSIbCgtSZWFkUmVxdWVzdBIMCgR1cmlzGAEgAygJIjkKDFJlYWRSZXNwb25zZRIpCgdyZXN1bHRzGAEgAygLMhguYjNuZC52MS5SZWFkUmVzdWx0UHJvdG8iZAoPUmVhZFJlc3VsdFByb3RvEg8KB3N1Y2Nlc3MYASABKAgSCwoDdXJpGAIgASgJEg0KBWVycm9yGAMgASgJEiQKBnJlY29yZBgEIAEoCzIULmIzbmQudjEuUmVjb3JkUHJvdG8iMwoLUmVjb3JkUHJvdG8SDAoEZGF0YRgBIAEoDBIWCg5kYXRhX2lzX2JpbmFyeRgCIAEoCCIhCg5PYnNlcnZlUmVxdWVzdBIPCgdwYXR0ZXJuGAEgASgJIg8KDVN0YXR1c1JlcXVlc3QiXAoOU3RhdHVzUmVzcG9uc2USDgoGc3RhdHVzGAEgASgJEg8KB21lc3NhZ2UYAiABKAkSEwoLc2NoZW1hX2pzb24YAyABKAkSFAoMZGV0YWlsc19qc29uGAQgASgJMvsBCgtCM25kU2VydmljZRI8CgdSZWNlaXZlEhcuYjNuZC52MS5SZWNlaXZlUmVxdWVzdBoYLmIzbmQudjEuUmVjZWl2ZVJlc3BvbnNlEjMKBFJlYWQSFC5iM25kLnYxLlJlYWRSZXF1ZXN0GhUuYjNuZC52MS5SZWFkUmVzcG9uc2USPgoHT2JzZXJ2ZRIXLmIzbmQudjEuT2JzZXJ2ZVJlcXVlc3QaGC5iM25kLnYxLlJlYWRSZXN1bHRQcm90bzABEjkKBlN0YXR1cxIWLmIzbmQudjEuU3RhdHVzUmVxdWVzdBoXLmIzbmQudjEuU3RhdHVzUmVzcG9uc2ViBnByb3RvMw");
+  fileDesc("CgpiM25kLnByb3RvEgdiM25kLnYxIkYKC091dHB1dFByb3RvEgsKA3VyaRgBIAEoCRIPCgdwYXlsb2FkGAIgASgMEhkKEXBheWxvYWRfaXNfYmluYXJ5GAMgASgIIjgKDlJlY2VpdmVSZXF1ZXN0EiYKCG1lc3NhZ2VzGAEgAygLMhQuYjNuZC52MS5PdXRwdXRQcm90byI/Cg9SZWNlaXZlUmVzcG9uc2USLAoHcmVzdWx0cxgBIAMoCzIbLmIzbmQudjEuUmVjZWl2ZVJlc3VsdFByb3RvIjUKElJlY2VpdmVSZXN1bHRQcm90bxIQCghhY2NlcHRlZBgBIAEoCBINCgVlcnJvchgCIAEoCSIbCgtSZWFkUmVxdWVzdBIMCgR1cmxzGAEgAygJIjUKDFJlYWRSZXNwb25zZRIlCgdyZXN1bHRzGAEgAygLMhQuYjNuZC52MS5PdXRwdXRQcm90byIeCg5PYnNlcnZlUmVxdWVzdBIMCgR1cmxzGAEgAygJIg8KDVN0YXR1c1JlcXVlc3QibgoOU3RhdHVzUmVzcG9uc2USDgoGc3RhdHVzGAEgASgJEg8KB21lc3NhZ2UYAiABKAkSEwoLc2NoZW1hX2pzb24YAyABKAkSFAoMZGV0YWlsc19qc29uGAQgASgJEhAKCGZuc19qc29uGAUgASgJMvcBCgtCM25kU2VydmljZRI8CgdSZWNlaXZlEhcuYjNuZC52MS5SZWNlaXZlUmVxdWVzdBoYLmIzbmQudjEuUmVjZWl2ZVJlc3BvbnNlEjMKBFJlYWQSFC5iM25kLnYxLlJlYWRSZXF1ZXN0GhUuYjNuZC52MS5SZWFkUmVzcG9uc2USOgoHT2JzZXJ2ZRIXLmIzbmQudjEuT2JzZXJ2ZVJlcXVlc3QaFC5iM25kLnYxLk91dHB1dFByb3RvMAESOQoGU3RhdHVzEhYuYjNuZC52MS5TdGF0dXNSZXF1ZXN0GhcuYjNuZC52MS5TdGF0dXNSZXNwb25zZWIGcHJvdG8z");
 
 /**
- * @generated from message b3nd.v1.ReceiveRequest
+ * The universal addressed-content primitive — [uri, payload].
+ *
+ * @generated from message b3nd.v1.OutputProto
  */
-export type ReceiveRequest = Message<"b3nd.v1.ReceiveRequest"> & {
+export type OutputProto = Message<"b3nd.v1.OutputProto"> & {
   /**
-   * The message URI.
-   *
    * @generated from field: string uri = 1;
    */
   uri: string;
@@ -26,16 +26,33 @@ export type ReceiveRequest = Message<"b3nd.v1.ReceiveRequest"> & {
   /**
    * Payload as JSON-encoded bytes. Binary payloads are raw bytes.
    *
-   * @generated from field: bytes data = 2;
+   * @generated from field: bytes payload = 2;
    */
-  data: Uint8Array;
+  payload: Uint8Array;
 
   /**
-   * True if `data` is raw binary (not JSON-encoded).
+   * True if `payload` is raw binary (not JSON-encoded).
    *
-   * @generated from field: bool data_is_binary = 3;
+   * @generated from field: bool payload_is_binary = 3;
    */
-  dataIsBinary: boolean;
+  payloadIsBinary: boolean;
+};
+
+/**
+ * Describes the message b3nd.v1.OutputProto.
+ * Use `create(OutputProtoSchema)` to create a new message.
+ */
+export const OutputProtoSchema: GenMessage<OutputProto> = /*@__PURE__*/
+  messageDesc(file_b3nd, 0);
+
+/**
+ * @generated from message b3nd.v1.ReceiveRequest
+ */
+export type ReceiveRequest = Message<"b3nd.v1.ReceiveRequest"> & {
+  /**
+   * @generated from field: repeated b3nd.v1.OutputProto messages = 1;
+   */
+  messages: OutputProto[];
 };
 
 /**
@@ -43,12 +60,29 @@ export type ReceiveRequest = Message<"b3nd.v1.ReceiveRequest"> & {
  * Use `create(ReceiveRequestSchema)` to create a new message.
  */
 export const ReceiveRequestSchema: GenMessage<ReceiveRequest> = /*@__PURE__*/
-  messageDesc(file_b3nd, 0);
+  messageDesc(file_b3nd, 1);
 
 /**
  * @generated from message b3nd.v1.ReceiveResponse
  */
 export type ReceiveResponse = Message<"b3nd.v1.ReceiveResponse"> & {
+  /**
+   * @generated from field: repeated b3nd.v1.ReceiveResultProto results = 1;
+   */
+  results: ReceiveResultProto[];
+};
+
+/**
+ * Describes the message b3nd.v1.ReceiveResponse.
+ * Use `create(ReceiveResponseSchema)` to create a new message.
+ */
+export const ReceiveResponseSchema: GenMessage<ReceiveResponse> = /*@__PURE__*/
+  messageDesc(file_b3nd, 2);
+
+/**
+ * @generated from message b3nd.v1.ReceiveResultProto
+ */
+export type ReceiveResultProto = Message<"b3nd.v1.ReceiveResultProto"> & {
   /**
    * @generated from field: bool accepted = 1;
    */
@@ -61,22 +95,22 @@ export type ReceiveResponse = Message<"b3nd.v1.ReceiveResponse"> & {
 };
 
 /**
- * Describes the message b3nd.v1.ReceiveResponse.
- * Use `create(ReceiveResponseSchema)` to create a new message.
+ * Describes the message b3nd.v1.ReceiveResultProto.
+ * Use `create(ReceiveResultProtoSchema)` to create a new message.
  */
-export const ReceiveResponseSchema: GenMessage<ReceiveResponse> = /*@__PURE__*/
-  messageDesc(file_b3nd, 1);
+export const ReceiveResultProtoSchema: GenMessage<ReceiveResultProto> = /*@__PURE__*/
+  messageDesc(file_b3nd, 3);
 
 /**
  * @generated from message b3nd.v1.ReadRequest
  */
 export type ReadRequest = Message<"b3nd.v1.ReadRequest"> & {
   /**
-   * One or more URIs to read.
+   * One or more urls to read (uri + optional `?fn=...&...` query).
    *
-   * @generated from field: repeated string uris = 1;
+   * @generated from field: repeated string urls = 1;
    */
-  uris: string[];
+  urls: string[];
 };
 
 /**
@@ -84,16 +118,16 @@ export type ReadRequest = Message<"b3nd.v1.ReadRequest"> & {
  * Use `create(ReadRequestSchema)` to create a new message.
  */
 export const ReadRequestSchema: GenMessage<ReadRequest> = /*@__PURE__*/
-  messageDesc(file_b3nd, 2);
+  messageDesc(file_b3nd, 4);
 
 /**
  * @generated from message b3nd.v1.ReadResponse
  */
 export type ReadResponse = Message<"b3nd.v1.ReadResponse"> & {
   /**
-   * @generated from field: repeated b3nd.v1.ReadResultProto results = 1;
+   * @generated from field: repeated b3nd.v1.OutputProto results = 1;
    */
-  results: ReadResultProto[];
+  results: OutputProto[];
 };
 
 /**
@@ -101,66 +135,6 @@ export type ReadResponse = Message<"b3nd.v1.ReadResponse"> & {
  * Use `create(ReadResponseSchema)` to create a new message.
  */
 export const ReadResponseSchema: GenMessage<ReadResponse> = /*@__PURE__*/
-  messageDesc(file_b3nd, 3);
-
-/**
- * @generated from message b3nd.v1.ReadResultProto
- */
-export type ReadResultProto = Message<"b3nd.v1.ReadResultProto"> & {
-  /**
-   * @generated from field: bool success = 1;
-   */
-  success: boolean;
-
-  /**
-   * @generated from field: string uri = 2;
-   */
-  uri: string;
-
-  /**
-   * @generated from field: string error = 3;
-   */
-  error: string;
-
-  /**
-   * Record — present when success=true.
-   *
-   * @generated from field: b3nd.v1.RecordProto record = 4;
-   */
-  record?: RecordProto | undefined;
-};
-
-/**
- * Describes the message b3nd.v1.ReadResultProto.
- * Use `create(ReadResultProtoSchema)` to create a new message.
- */
-export const ReadResultProtoSchema: GenMessage<ReadResultProto> = /*@__PURE__*/
-  messageDesc(file_b3nd, 4);
-
-/**
- * @generated from message b3nd.v1.RecordProto
- */
-export type RecordProto = Message<"b3nd.v1.RecordProto"> & {
-  /**
-   * Data as JSON-encoded bytes.
-   *
-   * @generated from field: bytes data = 1;
-   */
-  data: Uint8Array;
-
-  /**
-   * True if `data` is raw binary (not JSON-encoded).
-   *
-   * @generated from field: bool data_is_binary = 2;
-   */
-  dataIsBinary: boolean;
-};
-
-/**
- * Describes the message b3nd.v1.RecordProto.
- * Use `create(RecordProtoSchema)` to create a new message.
- */
-export const RecordProtoSchema: GenMessage<RecordProto> = /*@__PURE__*/
   messageDesc(file_b3nd, 5);
 
 /**
@@ -168,11 +142,11 @@ export const RecordProtoSchema: GenMessage<RecordProto> = /*@__PURE__*/
  */
 export type ObserveRequest = Message<"b3nd.v1.ObserveRequest"> & {
   /**
-   * URI pattern to observe (e.g. "mutable://app/users/*").
+   * URLs to observe — each may be a uri pattern (e.g. "mutable://app/users/*").
    *
-   * @generated from field: string pattern = 1;
+   * @generated from field: repeated string urls = 1;
    */
-  pattern: string;
+  urls: string[];
 };
 
 /**
@@ -224,6 +198,13 @@ export type StatusResponse = Message<"b3nd.v1.StatusResponse"> & {
    * @generated from field: string details_json = 4;
    */
   detailsJson: string;
+
+  /**
+   * Read fns advertised by this node as JSON array string.
+   *
+   * @generated from field: string fns_json = 5;
+   */
+  fnsJson: string;
 };
 
 /**
@@ -238,7 +219,7 @@ export const StatusResponseSchema: GenMessage<StatusResponse> = /*@__PURE__*/
  */
 export const B3ndService: GenService<{
   /**
-   * Receive a single message — all state changes go through here.
+   * Receive a batch of messages — the unified entry point for all state changes.
    *
    * @generated from rpc b3nd.v1.B3ndService.Receive
    */
@@ -248,7 +229,8 @@ export const B3ndService: GenService<{
     output: typeof ReceiveResponseSchema;
   },
   /**
-   * Read from one or more URIs.
+   * Read a batch of urls (uri + optional query). Returns one Output per input,
+   * in input order. Payload semantics are protocol-defined.
    *
    * @generated from rpc b3nd.v1.B3ndService.Read
    */
@@ -258,14 +240,15 @@ export const B3ndService: GenService<{
     output: typeof ReadResponseSchema;
   },
   /**
-   * Observe changes matching a URI pattern — server-streaming.
+   * Observe a batch of urls — server-streaming INV-style change bundles.
+   * Each streamed Output is [inputUrl, payload=string[] of uris that changed].
    *
    * @generated from rpc b3nd.v1.B3ndService.Observe
    */
   observe: {
     methodKind: "server_streaming";
     input: typeof ObserveRequestSchema;
-    output: typeof ReadResultProtoSchema;
+    output: typeof OutputProtoSchema;
   },
   /**
    * Health + capabilities.

@@ -10,7 +10,10 @@
  */
 
 // ── Server ──────────────────────────────────────────────────────────────────
-export { grpcHttpApi, grpcHttpServer } from "./libs/b3nd-server-grpchttp/mod.ts";
+export {
+  grpcHttpApi,
+  grpcHttpServer,
+} from "./libs/b3nd-server-grpchttp/mod.ts";
 export type { GrpcHttpServerOptions } from "./libs/b3nd-server-grpchttp/mod.ts";
 
 // ── Client ──────────────────────────────────────────────────────────────────
@@ -20,23 +23,21 @@ export type { GrpcHttpClientConfig } from "./libs/b3nd-client-grpchttp/mod.ts";
 // ── Proto ────────────────────────────────────────────────────────────────────
 export type {
   ObserveRequest,
+  OutputProto,
   ReadRequest,
   ReadResponse,
-  ReadResultProto,
   ReceiveRequest,
   ReceiveResponse,
-  RecordProto,
+  ReceiveResultProto,
   StatusRequest,
   StatusResponse,
 } from "./libs/b3nd-proto/mod.ts";
 export {
   B3ndService,
-  messageToReceiveRequest,
-  readResultFromProto,
-  readResultToProto,
-  receiveRequestToMessage,
-  receiveResponseToResult,
-  receiveResultToResponse,
+  outputFromProto,
+  outputToProto,
+  receiveResultFromProto,
+  receiveResultToProto,
   statusResponseToResult,
   statusResultToResponse,
 } from "./libs/b3nd-proto/mod.ts";

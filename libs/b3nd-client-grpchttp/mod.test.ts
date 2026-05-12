@@ -18,7 +18,10 @@ function createTestRig(): Rig {
 
 async function withServer(fn: (url: string) => Promise<void>): Promise<void> {
   const port = nextPort++;
-  const server = Deno.serve({ port, hostname: "127.0.0.1" }, grpcHttpApi(createTestRig()));
+  const server = Deno.serve(
+    { port, hostname: "127.0.0.1" },
+    grpcHttpApi(createTestRig()),
+  );
   try {
     await fn(`http://127.0.0.1:${port}`);
   } finally {
@@ -29,22 +32,25 @@ async function withServer(fn: (url: string) => Promise<void>): Promise<void> {
 Deno.test("GrpcHttpClient — receive + read round-trip (JSON)", async () => {
   await withServer(async (url) => {
     const client = new GrpcHttpClient({ url });
-    const [result] = await client.receive([["mutable://test/item", { value: 42 }]]);
+    const [result] = await client.receive([["mutable://test/item", {
+      value: 42,
+    }]]);
     assertEquals(result.accepted, true);
-    const [read] = await client.read("mutable://test/item");
-    assertEquals(read.success, true);
-    assertEquals(read.record?.data, { value: 42 });
+    const [[uri, payload]] = await client.read(["mutable://test/item"]);
+    assertEquals(uri, "mutable://test/item");
+    assertEquals(payload, { value: 42 });
   });
 });
 
 Deno.test("GrpcHttpClient — receive + read round-trip (binary)", async () => {
   await withServer(async (url) => {
     const client = new GrpcHttpClient({ url, binary: true });
-    const [result] = await client.receive([["mutable://test/binary-item", { v: 7 }]]);
+    const [result] = await client.receive([["mutable://test/binary-item", {
+      v: 7,
+    }]]);
     assertEquals(result.accepted, true);
-    const [read] = await client.read("mutable://test/binary-item");
-    assertEquals(read.success, true);
-    assertEquals(read.record?.data, { v: 7 });
+    const [[, payload]] = await client.read(["mutable://test/binary-item"]);
+    assertEquals(payload, { v: 7 });
   });
 });
 
@@ -55,8 +61,8 @@ Deno.test("GrpcHttpClient — batch read", async () => {
     await client.receive([["mutable://test/b", { id: "b" }]]);
     const results = await client.read(["mutable://test/a", "mutable://test/b"]);
     assertEquals(results.length, 2);
-    assertEquals(results[0].success, true);
-    assertEquals(results[1].success, true);
+    assertEquals(results[0], ["mutable://test/a", { id: "a" }]);
+    assertEquals(results[1], ["mutable://test/b", { id: "b" }]);
   });
 });
 
@@ -67,10 +73,13 @@ Deno.test("GrpcHttpClient — status", async () => {
   });
 });
 
-Deno.test("GrpcHttpClient — read non-existent URI", async () => {
+Deno.test("GrpcHttpClient — read non-existent URI yields undefined payload", async () => {
   await withServer(async (url) => {
     const client = new GrpcHttpClient({ url });
-    const [result] = await client.read("mutable://test/no-such-thing");
-    assertEquals(result.success, false);
+    const [[uri, payload]] = await client.read([
+      "mutable://test/no-such-thing",
+    ]);
+    assertEquals(uri, "mutable://test/no-such-thing");
+    assertEquals(payload, undefined);
   });
 });

@@ -28,33 +28,54 @@ function post(
   );
 }
 
+// Encode an arbitrary JS payload to base64-of-UTF-8-JSON — the wire form
+// that @bufbuild/protobuf produces for the `bytes payload` field in JSON
+// transport.
+function payloadJson(value: unknown): string {
+  return btoa(JSON.stringify(value));
+}
+
 Deno.test("Receive — write and read back", async () => {
   const handler = grpcHttpApi(createTestRig());
 
   const receiveResp = await post(handler, "Receive", {
-    uri: "mutable://test/hello",
-    data: btoa(JSON.stringify({ msg: "world" })),
-    dataIsBinary: false,
+    messages: [
+      {
+        uri: "mutable://test/hello",
+        payload: payloadJson({ msg: "world" }),
+        payloadIsBinary: false,
+      },
+    ],
   });
   assertEquals(receiveResp.status, 200);
-  assertEquals((await receiveResp.json()).accepted, true);
+  const receiveBody = await receiveResp.json();
+  assertEquals(receiveBody.results.length, 1);
+  assertEquals(receiveBody.results[0].accepted, true);
 
-  const readResp = await post(handler, "Read", { uris: ["mutable://test/hello"] });
+  const readResp = await post(handler, "Read", {
+    urls: ["mutable://test/hello"],
+  });
   assertEquals(readResp.status, 200);
-  const readResult = await readResp.json();
-  assertEquals(readResult.results.length, 1);
-  assertEquals(readResult.results[0].success, true);
+  const readBody = await readResp.json();
+  assertEquals(readBody.results.length, 1);
+  assertEquals(readBody.results[0].uri, "mutable://test/hello");
+  assertEquals(readBody.results[0].payload, payloadJson({ msg: "world" }));
 });
 
 Deno.test("Receive — connect+json Content-Type", async () => {
   const handler = grpcHttpApi(createTestRig());
   const resp = await post(handler, "Receive", {
-    uri: "mutable://test/connect",
-    data: btoa(JSON.stringify({ x: 1 })),
-    dataIsBinary: false,
+    messages: [
+      {
+        uri: "mutable://test/connect",
+        payload: payloadJson({ x: 1 }),
+        payloadIsBinary: false,
+      },
+    ],
   }, "application/connect+json");
   assertEquals(resp.status, 200);
-  assertEquals((await resp.json()).accepted, true);
+  const body = await resp.json();
+  assertEquals(body.results[0].accepted, true);
 });
 
 Deno.test("Status — returns healthy", async () => {
@@ -64,15 +85,15 @@ Deno.test("Status — returns healthy", async () => {
   assertEquals((await resp.json()).status, "healthy");
 });
 
-Deno.test("Receive — missing URI returns 400", async () => {
+Deno.test("Receive — empty messages returns 400", async () => {
   const handler = grpcHttpApi(createTestRig());
-  const resp = await post(handler, "Receive", { uri: "", data: "", dataIsBinary: false });
+  const resp = await post(handler, "Receive", { messages: [] });
   assertEquals(resp.status, 400);
 });
 
-Deno.test("Read — missing URIs returns 400", async () => {
+Deno.test("Read — missing urls returns 400", async () => {
   const handler = grpcHttpApi(createTestRig());
-  const resp = await post(handler, "Read", { uris: [] });
+  const resp = await post(handler, "Read", { urls: [] });
   assertEquals(resp.status, 400);
 });
 
@@ -85,7 +106,9 @@ Deno.test("Unknown method returns 404", async () => {
 Deno.test("Non-POST returns 404", async () => {
   const handler = grpcHttpApi(createTestRig());
   const resp = await handler(
-    new Request("http://localhost/b3nd.v1.B3ndService/Status", { method: "GET" }),
+    new Request("http://localhost/b3nd.v1.B3ndService/Status", {
+      method: "GET",
+    }),
   );
   assertEquals(resp.status, 404);
 });

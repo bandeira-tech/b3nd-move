@@ -16,7 +16,7 @@ const TOOLS = [
   {
     name: "b3nd_receive",
     description:
-      "Send messages to the B3nd rig — the unified entry point for all state changes. Each message is [uri, payload]; a null payload deletes the URI.",
+      "Send messages to the B3nd rig — the unified entry point for all state changes. Each message is [uri, payload]; payload semantics are protocol-defined.",
     inputSchema: {
       type: "object" as const,
       properties: {
@@ -32,19 +32,17 @@ const TOOLS = [
   {
     name: "b3nd_read",
     description:
-      "Read data from one or more B3nd URIs. Pass a trailing slash to list all children of a path.",
+      "Read data from one or more B3nd urls. A url is a uri + optional ?fn=...&... query. Returns one [uri, payload] tuple per input, in input order.",
     inputSchema: {
       type: "object" as const,
       properties: {
-        uris: {
-          description: "A single URI string or an array of URIs to read",
-          oneOf: [
-            { type: "string" },
-            { type: "array", items: { type: "string" } },
-          ],
+        urls: {
+          type: "array",
+          description: "Array of urls to read",
+          items: { type: "string" },
         },
       },
-      required: ["uris"],
+      required: ["urls"],
     },
   },
   {
@@ -63,9 +61,14 @@ export function buildMcpServer(rig: Rig, opts: McpServerOptions = {}): Server {
     { capabilities: { tools: {}, resources: {} } },
   );
 
-  server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: TOOLS }));
+  server.setRequestHandler(
+    ListToolsRequestSchema,
+    () => Promise.resolve({ tools: TOOLS }),
+  );
 
-  server.setRequestHandler(CallToolRequestSchema, async (request) => {
+  server.setRequestHandler(CallToolRequestSchema, async (
+    request: { params: { name: string; arguments?: Record<string, unknown> } },
+  ) => {
     const { name, arguments: args } = request.params;
 
     try {
@@ -77,7 +80,11 @@ export function buildMcpServer(rig: Rig, opts: McpServerOptions = {}): Server {
             content: [{
               type: "text",
               text: JSON.stringify(
-                results.map((r, i) => ({ uri: messages[i][0], accepted: r.accepted, error: r.error })),
+                results.map((r, i) => ({
+                  uri: messages[i][0],
+                  accepted: r.accepted,
+                  error: r.error,
+                })),
                 null,
                 2,
               ),
@@ -87,18 +94,17 @@ export function buildMcpServer(rig: Rig, opts: McpServerOptions = {}): Server {
         }
 
         case "b3nd_read": {
-          const { uris } = args as { uris: string | string[] };
-          const results = await rig.read(uris);
+          const { urls } = args as { urls: string[] };
+          const outputs = await rig.read(urls);
           return {
             content: [{
               type: "text",
               text: JSON.stringify(
-                results.map((r) => r.success ? { uri: r.uri, data: r.record?.data } : { uri: r.uri, error: r.error }),
+                outputs.map(([uri, payload]) => ({ uri, payload })),
                 null,
                 2,
               ),
             }],
-            isError: results.every((r) => !r.success),
           };
         }
 
@@ -118,7 +124,10 @@ export function buildMcpServer(rig: Rig, opts: McpServerOptions = {}): Server {
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       return {
-        content: [{ type: "text", text: JSON.stringify({ error: message, tool: name }, null, 2) }],
+        content: [{
+          type: "text",
+          text: JSON.stringify({ error: message, tool: name }, null, 2),
+        }],
         isError: true,
       };
     }
@@ -140,22 +149,29 @@ export function buildMcpServer(rig: Rig, opts: McpServerOptions = {}): Server {
     }
   });
 
-  server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
+  server.setRequestHandler(ReadResourceRequestSchema, async (
+    request: { params: { uri: string } },
+  ) => {
     const resourceUri = request.params.uri;
     const b3ndUri = resourceUri.replace(/^b3nd:\/\//, "");
     try {
-      const [result] = await rig.read(b3ndUri);
+      const [output] = await rig.read([b3ndUri]);
+      const [, payload] = output;
       return {
         contents: [{
           uri: resourceUri,
           mimeType: "application/json",
-          text: JSON.stringify(result.success ? result.record?.data : { error: result.error }, null, 2),
+          text: JSON.stringify(payload, null, 2),
         }],
       };
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       return {
-        contents: [{ uri: resourceUri, mimeType: "application/json", text: JSON.stringify({ error: message }) }],
+        contents: [{
+          uri: resourceUri,
+          mimeType: "application/json",
+          text: JSON.stringify({ error: message }),
+        }],
       };
     }
   });

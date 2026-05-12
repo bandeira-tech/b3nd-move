@@ -17,7 +17,11 @@
 
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import type { Rig } from "@bandeira-tech/b3nd-core";
-import type { ServerComposition, ServerResolver, TransportServer } from "../b3nd-server-factory/mod.ts";
+import type {
+  ServerComposition,
+  ServerResolver,
+  TransportServer,
+} from "../b3nd-server-factory/mod.ts";
 import { buildMcpServer, type McpServerOptions } from "./service.ts";
 
 export type { McpServerOptions } from "./service.ts";

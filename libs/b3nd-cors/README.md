@@ -2,8 +2,8 @@
 
 CORS middleware for `(Request) => Promise<Response>` handlers.
 
-Used internally by `httpServer` and `grpcHttpServer`. Also exported from
-the root subpath for wrapping `httpApi(rig)` or `grpcHttpApi(rig)` directly.
+Used internally by `httpServer` and `grpcHttpServer`. Also exported from the
+root subpath for wrapping `httpApi(rig)` or `grpcHttpApi(rig)` directly.
 
 ## API
 
@@ -23,9 +23,9 @@ through with `Access-Control-*` headers merged in.
 
 ```typescript
 interface CorsOptions {
-  origin: string;      // required — "*" or a specific origin
-  methods?: string;    // default: "GET, POST, PUT, DELETE, OPTIONS"
-  headers?: string;    // default: "Content-Type, Authorization, Last-Event-ID"
-  maxAge?: number;     // default: 86400
+  origin: string; // required — "*" or a specific origin
+  methods?: string; // default: "GET, POST, PUT, DELETE, OPTIONS"
+  headers?: string; // default: "Content-Type, Authorization, Last-Event-ID"
+  maxAge?: number; // default: 86400
 }
 ```

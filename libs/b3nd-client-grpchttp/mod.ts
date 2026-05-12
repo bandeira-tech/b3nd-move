@@ -21,30 +21,37 @@
  * ```typescript
  * const client = new GrpcHttpClient({ url: "http://localhost:50051" });
  * await client.receive([["mutable://app/item", { name: "thing" }]]);
- * const [result] = await client.read("mutable://app/item");
+ * const [out] = await client.read(["mutable://app/item"]);
+ * const [uri, payload] = out;
  * ```
  */
 
-import { create, fromBinary, fromJson, toBinary, toJson } from "@bufbuild/protobuf";
+import {
+  create,
+  fromBinary,
+  fromJson,
+  toBinary,
+  toJson,
+} from "@bufbuild/protobuf";
 import type { JsonValue } from "@bufbuild/protobuf";
 import type {
   Message,
+  Output,
   ProtocolInterfaceNode,
-  ReadResult,
   ReceiveResult,
   StatusResult,
 } from "@bandeira-tech/b3nd-core";
 import {
-  messageToReceiveRequest,
-  readResultFromProto,
-  receiveResponseToResult,
+  outputFromProto,
+  outputToProto,
+  receiveResultFromProto,
   statusResponseToResult,
 } from "../b3nd-proto/convert.ts";
 import {
   ObserveRequestSchema,
+  OutputProtoSchema,
   ReadRequestSchema,
   ReadResponseSchema,
-  ReadResultProtoSchema,
   ReceiveRequestSchema,
   ReceiveResponseSchema,
   StatusRequestSchema,
@@ -81,17 +88,25 @@ export class GrpcHttpClient implements ProtocolInterfaceNode {
     try {
       const resp = await fetch(`${this.baseUrl}${SERVICE_PREFIX}${method}`, {
         method: "POST",
-        headers: { "Content-Type": this.binary ? "application/proto" : "application/json" },
+        headers: {
+          "Content-Type": this.binary
+            ? "application/proto"
+            : "application/json",
+        },
         body,
         signal: abort.signal,
       });
       if (!resp.ok) {
-        throw new Error(`gRPC-HTTP ${method} failed (${resp.status}): ${await resp.text()}`);
+        throw new Error(
+          `gRPC-HTTP ${method} failed (${resp.status}): ${await resp.text()}`,
+        );
       }
       return resp;
     } catch (e) {
       if (e instanceof Error && e.name === "AbortError") {
-        throw new Error(`gRPC-HTTP ${method} timed out after ${this.timeout}ms`);
+        throw new Error(
+          `gRPC-HTTP ${method} timed out after ${this.timeout}ms`,
+        );
       }
       throw e;
     } finally {
@@ -100,21 +115,24 @@ export class GrpcHttpClient implements ProtocolInterfaceNode {
   }
 
   async receive(msgs: Message[]): Promise<ReceiveResult[]> {
-    return Promise.all(msgs.map(async (msg) => {
-      const req = messageToReceiveRequest(msg);
-      const body = this.binary
-        ? toBinary(ReceiveRequestSchema, req)
-        : JSON.stringify(toJson(ReceiveRequestSchema, req));
-      const resp = await this.rpc("Receive", body);
-      const result = this.binary
-        ? fromBinary(ReceiveResponseSchema, new Uint8Array(await resp.arrayBuffer()))
-        : fromJson(ReceiveResponseSchema, await resp.json() as JsonValue);
-      return receiveResponseToResult(result);
-    }));
+    const req = create(ReceiveRequestSchema, {
+      messages: msgs.map((m) => outputToProto(m)),
+    });
+    const body = this.binary
+      ? toBinary(ReceiveRequestSchema, req)
+      : JSON.stringify(toJson(ReceiveRequestSchema, req));
+    const resp = await this.rpc("Receive", body);
+    const result = this.binary
+      ? fromBinary(
+        ReceiveResponseSchema,
+        new Uint8Array(await resp.arrayBuffer()),
+      )
+      : fromJson(ReceiveResponseSchema, await resp.json() as JsonValue);
+    return (result.results ?? []).map(receiveResultFromProto);
   }
 
-  async read<T = unknown>(uris: string | string[]): Promise<ReadResult<T>[]> {
-    const req = create(ReadRequestSchema, { uris: Array.isArray(uris) ? uris : [uris] });
+  async read<T = unknown>(urls: string[]): Promise<Output<T>[]> {
+    const req = create(ReadRequestSchema, { urls });
     const body = this.binary
       ? toBinary(ReadRequestSchema, req)
       : JSON.stringify(toJson(ReadRequestSchema, req));
@@ -122,17 +140,17 @@ export class GrpcHttpClient implements ProtocolInterfaceNode {
     const result = this.binary
       ? fromBinary(ReadResponseSchema, new Uint8Array(await resp.arrayBuffer()))
       : fromJson(ReadResponseSchema, await resp.json() as JsonValue);
-    return (result.results ?? []).map((r) => readResultFromProto<T>(r));
+    return (result.results ?? []).map((r) => outputFromProto<T>(r));
   }
 
-  async *observe<T = unknown>(
-    pattern: string,
+  async *observe(
+    urls: string[],
     signal: AbortSignal,
-  ): AsyncIterable<ReadResult<T>> {
+  ): AsyncIterable<Output<string[]>> {
     const abort = new AbortController();
     signal.addEventListener("abort", () => abort.abort());
 
-    const req = create(ObserveRequestSchema, { pattern });
+    const req = create(ObserveRequestSchema, { urls });
     const resp = await fetch(`${this.baseUrl}${SERVICE_PREFIX}Observe`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -156,10 +174,12 @@ export class GrpcHttpClient implements ProtocolInterfaceNode {
         for (const line of lines) {
           if (!line.trim()) continue;
           const parsed = JSON.parse(line) as JsonValue;
-          if (typeof parsed === "object" && parsed !== null && "error" in parsed) {
+          if (
+            typeof parsed === "object" && parsed !== null && "error" in parsed
+          ) {
             throw new Error(String((parsed as Record<string, unknown>).error));
           }
-          yield readResultFromProto<T>(fromJson(ReadResultProtoSchema, parsed));
+          yield outputFromProto<string[]>(fromJson(OutputProtoSchema, parsed));
         }
       }
     } finally {
@@ -174,7 +194,10 @@ export class GrpcHttpClient implements ProtocolInterfaceNode {
       : JSON.stringify(toJson(StatusRequestSchema, req));
     const resp = await this.rpc("Status", body);
     const result = this.binary
-      ? fromBinary(StatusResponseSchema, new Uint8Array(await resp.arrayBuffer()))
+      ? fromBinary(
+        StatusResponseSchema,
+        new Uint8Array(await resp.arrayBuffer()),
+      )
       : fromJson(StatusResponseSchema, await resp.json() as JsonValue);
     return statusResponseToResult(result);
   }
