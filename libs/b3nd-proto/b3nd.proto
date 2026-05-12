@@ -4,68 +4,71 @@ package b3nd.v1;
 
 // B3ndService — the four ProtocolInterfaceNode primitives over gRPC.
 //
-// `data` fields use `bytes` (JSON-encoded) to avoid protobuf Struct
-// impedance mismatch. Arbitrary TS types pass through as UTF-8 JSON.
-// Binary Uint8Array payloads pass through as raw bytes.
+// Output is the universal addressed-content primitive: [uri, payload].
+// `payload` is opaque to the framework — encoded as JSON-UTF-8 bytes by
+// default, or raw bytes when `payload_is_binary` is true.
 
 service B3ndService {
-  // Receive a single message — all state changes go through here.
+  // Receive a batch of messages — the unified entry point for all state changes.
   rpc Receive(ReceiveRequest) returns (ReceiveResponse);
 
-  // Read from one or more URIs.
+  // Read a batch of urls (uri + optional query). Returns one Output per input,
+  // in input order. Payload semantics are protocol-defined.
   rpc Read(ReadRequest) returns (ReadResponse);
 
-  // Observe changes matching a URI pattern — server-streaming.
-  rpc Observe(ObserveRequest) returns (stream ReadResultProto);
+  // Observe a batch of urls — server-streaming INV-style change bundles.
+  // Each streamed Output is [inputUrl, payload=string[] of uris that changed].
+  rpc Observe(ObserveRequest) returns (stream OutputProto);
 
   // Health + capabilities.
   rpc Status(StatusRequest) returns (StatusResponse);
 }
 
-// ── Messages ────────────────────────────────────────────────────────
+// ── Output ──────────────────────────────────────────────────────────
 
-message ReceiveRequest {
-  // The message URI.
+// The universal addressed-content primitive — [uri, payload].
+message OutputProto {
   string uri = 1;
   // Payload as JSON-encoded bytes. Binary payloads are raw bytes.
-  bytes data = 2;
-  // True if `data` is raw binary (not JSON-encoded).
-  bool data_is_binary = 3;
+  bytes payload = 2;
+  // True if `payload` is raw binary (not JSON-encoded).
+  bool payload_is_binary = 3;
+}
+
+// ── Receive ─────────────────────────────────────────────────────────
+
+message ReceiveRequest {
+  repeated OutputProto messages = 1;
 }
 
 message ReceiveResponse {
+  repeated ReceiveResultProto results = 1;
+}
+
+message ReceiveResultProto {
   bool accepted = 1;
   string error = 2;
 }
 
+// ── Read ────────────────────────────────────────────────────────────
+
 message ReadRequest {
-  // One or more URIs to read.
-  repeated string uris = 1;
+  // One or more urls to read (uri + optional `?fn=...&...` query).
+  repeated string urls = 1;
 }
 
 message ReadResponse {
-  repeated ReadResultProto results = 1;
+  repeated OutputProto results = 1;
 }
 
-message ReadResultProto {
-  bool success = 1;
-  string uri = 2;
-  string error = 3;
-  // Record — present when success=true.
-  RecordProto record = 4;
-}
-
-message RecordProto {
-  // Data as JSON-encoded bytes.
-  bytes data = 1;
-  // True if `data` is raw binary (not JSON-encoded).
-  bool data_is_binary = 2;
-}
+// ── Observe ─────────────────────────────────────────────────────────
 
 message ObserveRequest {
-  // URI pattern to observe (e.g. "mutable://app/users/*").
-  string pattern = 1;
+  // URLs to observe — each may be a uri pattern (e.g. "mutable://app/users/*").
+  repeated string urls = 1;
 }
+
+// ── Status ──────────────────────────────────────────────────────────
 
 message StatusRequest {}
 
@@ -76,4 +79,6 @@ message StatusResponse {
   string schema_json = 3;
   // Extra details as JSON string.
   string details_json = 4;
+  // Read fns advertised by this node as JSON array string.
+  string fns_json = 5;
 }

@@ -12,12 +12,12 @@
 
 export type {
   ObserveRequest,
+  OutputProto,
   ReadRequest,
   ReadResponse,
-  ReadResultProto,
   ReceiveRequest,
   ReceiveResponse,
-  RecordProto,
+  ReceiveResultProto,
   StatusRequest,
   StatusResponse,
 } from "./gen/b3nd_pb.ts";
@@ -25,23 +25,21 @@ export type {
 export {
   B3ndService,
   ObserveRequestSchema,
+  OutputProtoSchema,
   ReadRequestSchema,
   ReadResponseSchema,
-  ReadResultProtoSchema,
   ReceiveRequestSchema,
   ReceiveResponseSchema,
-  RecordProtoSchema,
+  ReceiveResultProtoSchema,
   StatusRequestSchema,
   StatusResponseSchema,
 } from "./gen/b3nd_pb.ts";
 
 export {
-  messageToReceiveRequest,
-  readResultFromProto,
-  readResultToProto,
-  receiveRequestToMessage,
-  receiveResponseToResult,
-  receiveResultToResponse,
+  outputFromProto,
+  outputToProto,
+  receiveResultFromProto,
+  receiveResultToProto,
   statusResponseToResult,
   statusResultToResponse,
 } from "./convert.ts";

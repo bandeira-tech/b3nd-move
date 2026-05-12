@@ -19,8 +19,8 @@ consumers don't need buf installed.
 ## Exports
 
 **Types** (all from `gen/b3nd_pb.ts`):
-`ReceiveRequest`, `ReceiveResponse`, `ReadRequest`, `ReadResponse`,
-`ReadResultProto`, `RecordProto`, `ObserveRequest`, `StatusRequest`,
+`OutputProto`, `ReceiveRequest`, `ReceiveResponse`, `ReceiveResultProto`,
+`ReadRequest`, `ReadResponse`, `ObserveRequest`, `StatusRequest`,
 `StatusResponse`
 
 **Schemas** (for use with `@bufbuild/protobuf` `create` / `fromJson` / `toBinary`):
@@ -37,10 +37,10 @@ const client = createClient(B3ndService, createConnectTransport({ baseUrl }));
 
 **Converters** — bridge between b3nd-core types and proto messages:
 ```typescript
-messageToReceiveRequest(msg: Message): ReceiveRequest
-receiveResponseToResult(res: ReceiveResponse): ReceiveResult
-readResultToProto(result: ReadResult): ReadResultProto
-readResultFromProto(proto: ReadResultProto): ReadResult
+outputToProto<T>(out: Output<T>): OutputProto
+outputFromProto<T>(p: OutputProto): Output<T>
+receiveResultToProto(r: ReceiveResult): ReceiveResultProto
+receiveResultFromProto(r: ReceiveResultProto): ReceiveResult
 statusResultToResponse(result: StatusResult): StatusResponse
 statusResponseToResult(res: StatusResponse): StatusResult
 ```

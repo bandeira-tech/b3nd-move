@@ -7,9 +7,9 @@ over stdio. Three tools matching `ProtocolInterfaceNode` exactly.
 
 | Tool | Maps to | Description |
 |---|---|---|
-| `b3nd_receive` | `rig.receive(messages)` | Batch write. `[uri, null]` deletes. |
-| `b3nd_read` | `rig.read(uris)` | Single or batch read. Trailing-slash URI lists children. |
-| `b3nd_status` | `rig.status()` | Health + schema. |
+| `b3nd_receive` | `rig.receive(messages)` | Batch write. Each message is `[uri, payload]`; payload semantics are protocol-defined. |
+| `b3nd_read` | `rig.read(urls)` | Batch read. Each url is a uri + optional `?fn=...&...` query (e.g. trailing-slash uri lists children via `fn=ls`). |
+| `b3nd_status` | `rig.status()` | Health + schema + fns. |
 
 ## API
 

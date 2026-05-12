@@ -3,9 +3,9 @@
  * gRPC-HTTP service — B3ndService as a fetch handler.
  *
  * Routes:
- *   POST /b3nd.v1.B3ndService/Receive  → rig.receive()
- *   POST /b3nd.v1.B3ndService/Read     → rig.read()
- *   POST /b3nd.v1.B3ndService/Observe  → rig.observe() — NDJSON stream
+ *   POST /b3nd.v1.B3ndService/Receive  → rig.receive(messages)
+ *   POST /b3nd.v1.B3ndService/Read     → rig.read(urls)
+ *   POST /b3nd.v1.B3ndService/Observe  → rig.observe(urls) — NDJSON stream
  *   POST /b3nd.v1.B3ndService/Status   → rig.status()
  *
  * Encoding is negotiated by Content-Type:
@@ -28,16 +28,16 @@ import { create, fromBinary, fromJson, toBinary, toJson } from "@bufbuild/protob
 import type { JsonValue } from "@bufbuild/protobuf";
 import type { Rig } from "@bandeira-tech/b3nd-core";
 import {
-  readResultToProto,
-  receiveRequestToMessage,
-  receiveResultToResponse,
+  outputFromProto,
+  outputToProto,
+  receiveResultToProto,
   statusResultToResponse,
 } from "../b3nd-proto/convert.ts";
 import {
   ObserveRequestSchema,
+  OutputProtoSchema,
   ReadRequestSchema,
   ReadResponseSchema,
-  ReadResultProtoSchema,
   ReceiveRequestSchema,
   ReceiveResponseSchema,
   StatusResponseSchema,
@@ -106,12 +106,17 @@ async function handleReceive(rig: Rig, req: Request, enc: Encoding): Promise<Res
   } catch {
     return errResponse("Invalid request body");
   }
-  if (!body.uri) return errResponse("uri is required");
+  if (!body.messages?.length) return errResponse("messages array is required");
 
-  const [result] = await rig.receive([receiveRequestToMessage(body)]);
-  const response = receiveResultToResponse(result);
+  const msgs = body.messages.map((m) => outputFromProto(m));
+  const results = await rig.receive(msgs);
+  const response = create(ReceiveResponseSchema, {
+    results: results.map(receiveResultToProto),
+  });
   return okResponse(
-    enc === "binary" ? toBinary(ReceiveResponseSchema, response) : JSON.stringify(toJson(ReceiveResponseSchema, response)),
+    enc === "binary"
+      ? toBinary(ReceiveResponseSchema, response)
+      : JSON.stringify(toJson(ReceiveResponseSchema, response)),
     enc,
   );
 }
@@ -125,14 +130,20 @@ async function handleRead(rig: Rig, req: Request, enc: Encoding): Promise<Respon
   } catch {
     return errResponse("Invalid request body");
   }
-  if (!body.uris?.length) return errResponse("uris array is required");
+  if (!body.urls?.length) return errResponse("urls array is required");
 
-  const results = await rig.read(body.uris);
-  const response = create(ReadResponseSchema, { results: results.map(readResultToProto) });
-  return okResponse(
-    enc === "binary" ? toBinary(ReadResponseSchema, response) : JSON.stringify(toJson(ReadResponseSchema, response)),
-    enc,
-  );
+  try {
+    const results = await rig.read(body.urls);
+    const response = create(ReadResponseSchema, { results: results.map(outputToProto) });
+    return okResponse(
+      enc === "binary"
+        ? toBinary(ReadResponseSchema, response)
+        : JSON.stringify(toJson(ReadResponseSchema, response)),
+      enc,
+    );
+  } catch (e) {
+    return errResponse(e instanceof Error ? e.message : String(e), 500);
+  }
 }
 
 async function handleObserve(rig: Rig, req: Request): Promise<Response> {
@@ -142,7 +153,7 @@ async function handleObserve(rig: Rig, req: Request): Promise<Response> {
   } catch {
     return errResponse("Invalid request body");
   }
-  if (!body.pattern) return errResponse("pattern is required");
+  if (!body.urls?.length) return errResponse("urls array is required");
 
   const abort = new AbortController();
   req.signal.addEventListener("abort", () => abort.abort());
@@ -151,11 +162,11 @@ async function handleObserve(rig: Rig, req: Request): Promise<Response> {
   const stream = new ReadableStream({
     async start(controller) {
       try {
-        for await (const result of rig.observe(body.pattern, abort.signal)) {
+        for await (const out of rig.observe(body.urls, abort.signal)) {
           if (abort.signal.aborted) break;
-          const proto = readResultToProto(result);
+          const proto = outputToProto(out);
           controller.enqueue(
-            textEnc.encode(JSON.stringify(toJson(ReadResultProtoSchema, proto)) + "\n"),
+            textEnc.encode(JSON.stringify(toJson(OutputProtoSchema, proto)) + "\n"),
           );
         }
       } catch (e) {
