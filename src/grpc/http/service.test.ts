@@ -1,14 +1,19 @@
-import { assertEquals } from "@std/assert";
-import { connection, Rig } from "@bandeira-tech/b3nd-core/rig";
-import { MemoryStore } from "@bandeira-tech/b3nd-stores/memory";
-import { SimpleClient } from "@bandeira-tech/b3nd-stores/adapters";
-import { grpcHttpApi } from "./service.ts";
+/**
+ * Handler-level tests for `grpcHttpApi(rig)` — wire-protocol concerns
+ * that aren't covered by the PIN integration tests in
+ * `tests/integration/`: Content-Type negotiation, empty-batch
+ * rejection, route/method validation. Calls the handler directly with
+ * crafted Request objects; no `Deno.serve`, no network.
+ *
+ * Round-trip behavior is covered by `moveSuite` in the integration
+ * tests against `stubRig`, so we don't reproduce it here.
+ */
 
-function createTestRig(): Rig {
-  const client = new SimpleClient(new MemoryStore());
-  const route = connection(client, ["*"]);
-  return new Rig({ routes: { receive: [route], read: [route] } });
-}
+/// <reference lib="deno.ns" />
+
+import { assertEquals } from "@std/assert";
+import { grpcHttpApi } from "./service.ts";
+import { stubRig } from "../../../tests/rig.ts";
 
 function post(
   handler: (req: Request) => Promise<Response>,
@@ -32,39 +37,12 @@ function payloadJson(value: unknown): string {
   return btoa(JSON.stringify(value));
 }
 
-Deno.test("Receive — write and read back", async () => {
-  const handler = grpcHttpApi(createTestRig());
-
-  const receiveResp = await post(handler, "Receive", {
-    messages: [
-      {
-        uri: "mutable://test/hello",
-        payload: payloadJson({ msg: "world" }),
-        payloadIsBinary: false,
-      },
-    ],
-  });
-  assertEquals(receiveResp.status, 200);
-  const receiveBody = await receiveResp.json();
-  assertEquals(receiveBody.results.length, 1);
-  assertEquals(receiveBody.results[0].accepted, true);
-
-  const readResp = await post(handler, "Read", {
-    urls: ["mutable://test/hello"],
-  });
-  assertEquals(readResp.status, 200);
-  const readBody = await readResp.json();
-  assertEquals(readBody.results.length, 1);
-  assertEquals(readBody.results[0].uri, "mutable://test/hello");
-  assertEquals(readBody.results[0].payload, payloadJson({ msg: "world" }));
-});
-
 Deno.test("Receive — connect+json Content-Type", async () => {
-  const handler = grpcHttpApi(createTestRig());
+  const handler = grpcHttpApi(stubRig());
   const resp = await post(handler, "Receive", {
     messages: [
       {
-        uri: "mutable://test/connect",
+        uri: "mutable://t/connect",
         payload: payloadJson({ x: 1 }),
         payloadIsBinary: false,
       },
@@ -76,32 +54,32 @@ Deno.test("Receive — connect+json Content-Type", async () => {
 });
 
 Deno.test("Status — returns healthy", async () => {
-  const handler = grpcHttpApi(createTestRig());
+  const handler = grpcHttpApi(stubRig());
   const resp = await post(handler, "Status", {});
   assertEquals(resp.status, 200);
   assertEquals((await resp.json()).status, "healthy");
 });
 
 Deno.test("Receive — empty messages returns 400", async () => {
-  const handler = grpcHttpApi(createTestRig());
+  const handler = grpcHttpApi(stubRig());
   const resp = await post(handler, "Receive", { messages: [] });
   assertEquals(resp.status, 400);
 });
 
 Deno.test("Read — missing urls returns 400", async () => {
-  const handler = grpcHttpApi(createTestRig());
+  const handler = grpcHttpApi(stubRig());
   const resp = await post(handler, "Read", { urls: [] });
   assertEquals(resp.status, 400);
 });
 
 Deno.test("Unknown method returns 404", async () => {
-  const handler = grpcHttpApi(createTestRig());
+  const handler = grpcHttpApi(stubRig());
   const resp = await post(handler, "Unknown", {});
   assertEquals(resp.status, 404);
 });
 
 Deno.test("Non-POST returns 404", async () => {
-  const handler = grpcHttpApi(createTestRig());
+  const handler = grpcHttpApi(stubRig());
   const resp = await handler(
     new Request("http://localhost/b3nd.v1.B3ndService/Status", {
       method: "GET",

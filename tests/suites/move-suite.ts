@@ -1,14 +1,15 @@
 /**
- * Browser-side suite for b3nd-move ProtocolInterfaceNode clients.
+ * PIN suite for b3nd-move `ProtocolInterfaceNode` clients — the
+ * single shared suite used by both the in-Deno and the in-browser
+ * integration runs.
  *
- * Asserts the move layer (encode → transport → decode) carries
- * the PIN API faithfully across a real browser fetch/WebSocket
- * boundary. Every test exercises BATCH on both sides (multi-input
- * requests, multi-output responses), since that's where encoding
- * bugs hide.
+ * Asserts the move layer (encode → transport → decode) carries the
+ * PIN API faithfully across the network boundary. Every test
+ * exercises BATCH on both sides (multi-input requests, multi-output
+ * responses), since that's where encoding bugs hide.
  *
  * The suite does NOT validate storage semantics — it runs against the
- * `stubRig` from `tests/rigs/stub.ts`, whose backing PIN echoes
+ * `stubRig` from `tests/rig.ts`, whose backing PIN echoes
  * deterministically per these content-addressed rules:
  *
  *   receive([uri, payload]):

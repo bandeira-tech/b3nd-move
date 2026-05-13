@@ -1,20 +1,28 @@
 /**
  * WebSocket — in-Deno integration: real `wsApi` + real
- * `WebSocketClient` against a `MemoryStore`-backed rig.
+ * `WebSocketClient` against the stub rig.
  */
 
 /// <reference lib="deno.ns" />
 
-import { pinContract } from "../../suites/pin-contract.ts";
+import { runMoveSuite } from "../../suites/move-suite.ts";
 import { startWsServer } from "../../factories/ws.ts";
-import { memoryRig } from "../../rigs/memory.ts";
+import { stubRig } from "../../rig.ts";
 import { WebSocketClient } from "../../../src/ws/client.ts";
 
-pinContract("ws", async () => {
-  const server = await startWsServer(memoryRig());
-  const client = new WebSocketClient({
-    url: server.url,
-    reconnect: { enabled: false },
-  });
-  return { client, cleanup: () => Promise.resolve(server.stop()) };
+const server = await startWsServer(stubRig());
+
+runMoveSuite("WebSocketClient (deno)", {
+  client: () =>
+    new WebSocketClient({
+      url: server.url,
+      reconnect: { enabled: false },
+    }),
+});
+
+Deno.test({
+  name: "WebSocketClient (deno) — cleanup",
+  sanitizeOps: false,
+  sanitizeResources: false,
+  fn: () => Promise.resolve(server.stop()),
 });

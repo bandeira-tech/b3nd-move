@@ -129,8 +129,13 @@ const stubProgram: Program = async (out) => {
  * Build a Rig wired to a single `StubBackend` on all three routes,
  * with the `/__reject__/` classifier registered as a program. The
  * same backend instance serves receive, read, and observe — it is
- * stateless so sharing is fine, mirroring the `defaultRig()` shape
- * used by the in-process pinContract factories.
+ * stateless so sharing is fine.
+ *
+ * This is the only rig the tests use. The rig+store integration is
+ * the responsibility of `@bandeira-tech/b3nd-stores`; b3nd-move's
+ * integration tests only need to verify the wire carries values
+ * faithfully across the transport boundary, decoupled from any
+ * storage behavior.
  */
 export function stubRig(): Rig {
   const backend = new StubBackend();

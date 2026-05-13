@@ -1,21 +1,27 @@
 # `tests/` — Integration tests + shared test infra
 
 Everything outside production code lives here: the integration tests, the shared
-rigs and transport factories, the named test-set suites, and the browser runner
-machinery. `src/` is now purely production code.
+transport factories, the stub rig, the named test-set suites, and the browser
+runner machinery. `src/` is now purely production code.
 
-Two integration runtime pairings, covered side by side:
+Two integration runtime pairings, both running against the same shared suite and
+the same single rig:
 
-| Pairing     | Server                  | Client                            | Rig                                | Suite                                  |
-| ----------- | ----------------------- | --------------------------------- | ---------------------------------- | -------------------------------------- |
-| **Deno**    | real transport, in Deno | real client, in Deno              | `memoryRig()` (real `MemoryStore`) | `pinContract` / `mcpSpec` (round-trip) |
-| **Browser** | real transport, in Deno | real client, in headless Chromium | `stubRig()` (deterministic echo)   | `moveSuite` (per-operation, batched)   |
+| Pairing     | Server                  | Client                            | Suite                                |
+| ----------- | ----------------------- | --------------------------------- | ------------------------------------ |
+| **Deno**    | real transport, in Deno | real client, in Deno              | `moveSuite` (per-operation, batched) |
+| **Browser** | real transport, in Deno | real client, in headless Chromium | `moveSuite`                          |
 
-Both share the same **factories** (real transport boot) and the same **PIN
-interface** as the boundary they're testing across. The Deno-side rig verifies
-that values round-trip through real storage; the browser-side rig verifies that
-values cross the wire and the cross-runtime boundary faithfully, decoupled from
-any storage behavior.
+MCP gets its own analog (`mcpSpec`) because tool calls + JSON text content have
+a different shape than typed PIN method calls — but the assertions follow the
+same conventions.
+
+**Why no real rig?** The rig+store integration is the responsibility of
+[`@bandeira-tech/b3nd-stores`](https://jsr.io/@bandeira-tech/b3nd-stores) — its
+package tests real rigs against real stores. b3nd-move only needs to prove that
+the message passage works: every byte that move owns goes out and comes back
+faithfully across the network boundary. That's what `stubRig` lets us do — a
+real `Rig` with a deterministic echo backend behind it.
 
 ## Layout
 
@@ -23,16 +29,13 @@ any storage behavior.
 tests/
 ├── factories/                # boot real transports — parameterised on rig
 │   ├── http.ts               # startHttpServer(rig, { cors? }) → { url, stop }
-│   ├── ws.ts                 # startWsServer(rig)             → { url, stop }
-│   ├── grpc.ts               # startGrpcServer(rig, { cors? })→ { url, stop }
-│   └── mcp.ts                # startMcpInProcess(rig)          → { client, cleanup }
-├── rigs/                     # build rigs
-│   ├── memory.ts             # memoryRig()  — SimpleClient + MemoryStore
-│   └── stub.ts               # stubRig()    — deterministic echo PIN
+│   ├── ws.ts                 # startWsServer(rig)              → { url, stop }
+│   ├── grpc.ts               # startGrpcServer(rig, { cors? }) → { url, stop }
+│   └── mcp.ts                # startMcpInProcess(rig)           → { client, cleanup }
+├── rig.ts                    # stubRig() — the only rig the tests use
 ├── suites/                   # named test-set generators
-│   ├── pin-contract.ts       # round-trip PIN contract, takes ServerFactory
-│   ├── mcp-spec.ts           # MCP tool surface contract
-│   └── move-suite.ts         # browser, per-operation, batch on both sides
+│   ├── move-suite.ts         # per-operation, batch on both sides
+│   └── mcp-spec.ts           # MCP tool surface, same conventions
 ├── browser/                  # browser harness machinery
 │   ├── runner.ts             # esbuild + @astral/astral driver
 │   ├── harness.html          # page template (server URL injected)
@@ -43,12 +46,12 @@ tests/
 │       ├── grpc.ts
 │       └── grpc-binary.ts
 └── integration/              # .test.ts files that compose everything
-    ├── deno/                 # real rig + real client, both in Deno
+    ├── deno/                 # real client + real server, both in Deno
     │   ├── http.test.ts
     │   ├── ws.test.ts
-    │   ├── grpc.test.ts      # registers contract twice: json + binary
+    │   ├── grpc.test.ts      # registers move-suite twice: json + binary
     │   └── mcp.test.ts
-    └── browser/              # real server, stub rig, browser client
+    └── browser/              # real client in Chromium, real server in Deno
         ├── http.test.ts
         ├── ws.test.ts
         ├── grpc.test.ts
@@ -93,6 +96,15 @@ The harness page and the API server live on different loopback origins on
 purpose — that's what the browser sees in real deployments, and what
 `withCors` + `OPTIONS` preflight has to handle to be useful.
 
+## How a Deno-side run works
+
+1. The integration test starts the real transport server with
+   `start<X>Server(stubRig())` once at the top level.
+2. `runMoveSuite(...)` registers the per-operation test set, each test
+   constructing a fresh client pointed at the shared server URL.
+3. A trailing cleanup `Deno.test` shuts the server down. Deno runs tests in
+   registration order, so the cleanup runs last.
+
 ## Stub rig contract
 
 `stubRig()` is a real `Rig` from `@bandeira-tech/b3nd-core` wired to one
@@ -110,32 +122,47 @@ The move-suite drives every transport with the same conventions:
 | `observe(urls)` | 3 frames per subscribed pattern: `[pattern, [` ${pattern}/${i}`]]`, then end                                                                                    |
 | `status()`      | `{status: "healthy", message: "stub", fns: ["receive","read","observe","status"]}`                                                                              |
 
-Every test exercises **batched inputs AND batched outputs** so the encode/
-decode paths get exercised in their multi-item shape — that's where transport
-bugs usually live (off-by-one slot mapping, lost ordering, dropped misses).
+Every test exercises **batched inputs AND batched outputs** so the encode/decode
+paths get exercised in their multi-item shape — that's where transport bugs
+usually live (off-by-one slot mapping, lost ordering, dropped misses).
 
 ## Sharing infra with per-module unit tests
 
 Per-module tests (`src/ws/observe.test.ts`, `src/grpc/http/client.test.ts`,
-etc.) can import the shared rigs and factories to avoid hand-rolling in-test
+etc.) can import the shared factory and rig to avoid hand-rolling in-test
 setups:
 
 ```ts
 import { startHttpServer } from "../../../tests/factories/http.ts";
-import { memoryRig } from "../../../tests/rigs/memory.ts";
+import { stubRig } from "../../../tests/rig.ts";
 
-const server = await startHttpServer(memoryRig());
+const server = await startHttpServer(stubRig());
 ```
 
-The factories and rigs are publish-excluded along with the rest of `tests/`, so
+The factories and rig are publish-excluded along with the rest of `tests/`, so
 they exist only at workspace scope.
 
 ## Adding a new transport
 
 1. Add `tests/factories/<name>.ts` exporting `start<Name>Server(rig)` →
    `{ url, stop }`.
-2. Add an in-Deno test at `tests/integration/deno/<name>.test.ts` that composes
-   `start<Name>Server(memoryRig())` + a fresh client and runs `pinContract`.
+2. Add an in-Deno test at `tests/integration/deno/<name>.test.ts`:
+   ```ts
+   import { runMoveSuite } from "../../suites/move-suite.ts";
+   import { start<Name>Server } from "../../factories/<name>.ts";
+   import { stubRig } from "../../rig.ts";
+   import { TheClient } from "../../../src/<name>/client.ts";
+
+   const server = await start<Name>Server(stubRig());
+   runMoveSuite("TheClient (deno)", {
+     client: () => new TheClient({ url: server.url }),
+   });
+   Deno.test({
+     name: "TheClient (deno) — cleanup",
+     sanitizeOps: false, sanitizeResources: false,
+     fn: () => Promise.resolve(server.stop()),
+   });
+   ```
 3. Add a browser harness at `tests/browser/harnesses/<name>.ts`:
    ```ts
    import { serverUrl, setupHarness } from "../deno-stub.ts";
@@ -151,7 +178,7 @@ they exist only at workspace scope.
    ```ts
    import { runBrowserSuite } from "../../browser/runner.ts";
    import { start<Name>Server } from "../../factories/<name>.ts";
-   import { stubRig } from "../../rigs/stub.ts";
+   import { stubRig } from "../../rig.ts";
 
    await runBrowserSuite({
      harnessEntry: new URL("../../browser/harnesses/<name>.ts", import.meta.url),
