@@ -1,40 +1,58 @@
-# B3nd Servers
+# B3nd Move
 
-Server-side composition for the B3nd framework. One package, subpaths for each
-transport — only pay for what you use.
+Encoding, transport, decoding. The moving layer for B3nd.
 
-## Subpaths
+A B3nd node has two sides facing the wire: a **server** that takes incoming
+bytes, decodes them, drives a `Rig` from `@bandeira-tech/b3nd-core`, and
+encodes the response — and a **client** that does the inverse from the other
+end. `b3nd-move` ships both halves for each supported transport, in one
+canonical place, with no re-export indirection between them and your code.
 
-| Subpath              | Exports                                                              | Runtime                            |
-| -------------------- | -------------------------------------------------------------------- | ---------------------------------- |
-| `.`                  | `createServers`, `withCors` + types                                  | any                                |
-| `./http`             | `httpServer` — `Deno.serve` + CORS                                   | Deno                               |
-| `./grpc/http`        | `grpcHttpServer`, `grpcHttpApi`, `GrpcHttpClient` + proto (umbrella) | Deno (server) / any (api + client) |
-| `./grpc/http/api`    | `grpcHttpApi(rig)` — pure fetch handler                              | any                                |
-| `./grpc/http/server` | `grpcHttpServer` resolver                                            | Deno                               |
-| `./grpc/http/client` | `GrpcHttpClient`                                                     | any                                |
-| `./grpc/proto`       | wire types, schemas, converters, `B3ndService` descriptor            | any                                |
-| `./mcp`              | `mcpServer`, `buildMcpServer` (umbrella)                             | Deno (server) / any (api)          |
-| `./mcp/server`       | `mcpServer` resolver — stdio transport                               | Deno                               |
-| `./mcp/api`          | `buildMcpServer(rig)` — bare MCP Server instance                     | any                                |
-| `./ws`               | `wsServer`, `wsApi` (umbrella)                                       | Deno                               |
-| `./ws/server`        | `wsServer` resolver                                                  | Deno                               |
-| `./ws/api`           | `wsApi(rig)` — fetch handler that upgrades to WS                     | Deno                               |
+```
+   wire bytes  ──►  decode  ──►  Rig (core)  ──►  encode  ──►  wire bytes
+       ▲                                                            │
+       └───────────── client.ts ◄───────────── server.ts ◄──────────┘
+                            (the moving layer)
+```
 
-Details in each lib's README (under `libs/`).
+Pick a transport, import the side you need:
+
+| Transport     | Server                       | Client                       | Pure handler                  |
+| ------------- | ---------------------------- | ---------------------------- | ----------------------------- |
+| HTTP          | `b3nd-move/http/server`      | `b3nd-move/http/client`      | `b3nd-move/http/service`      |
+| WebSocket     | `b3nd-move/ws/server`        | `b3nd-move/ws/client`        | `b3nd-move/ws/service`        |
+| gRPC-over-HTTP| `b3nd-move/grpc/http/server` | `b3nd-move/grpc/http/client` | `b3nd-move/grpc/http/service` |
+| MCP (stdio)   | `b3nd-move/mcp/server`       | —                            | `b3nd-move/mcp/service`       |
+
+Plus the cross-cutting pieces:
+
+| Subpath                       | Exports                                                |
+| ----------------------------- | ------------------------------------------------------ |
+| `b3nd-move/factory`           | `createServers` + `ServerResolver` / `TransportServer` |
+| `b3nd-move/cors`              | `withCors`                                             |
+| `b3nd-move/grpc/proto/types`  | generated wire types + schemas + `B3ndService`         |
+| `b3nd-move/grpc/proto/convert`| proto ↔ b3nd converters                                |
+
+## The three layers
+
+- **server.ts** — the runtime-bound half. Wraps a `service` handler with
+  `Deno.serve` (or stdio for MCP), exposes a `ServerResolver` for
+  `createServers`. Deno-only.
+- **service.ts** — the portable half. A pure `(Request) => Response` (or
+  factory like `buildMcpServer(rig)`). Runs anywhere fetch runs: Node,
+  Bun, Cloudflare Workers, browsers as request handlers.
+- **client.ts** — a `ProtocolInterfaceNode` over the wire. Works in any
+  fetch-capable environment.
+
+Each layer lives in exactly one file. No barrels.
 
 ## Quick start (Deno)
 
 ```typescript
-import {
-  connection,
-  MemoryStore,
-  Rig,
-  SimpleClient,
-} from "@bandeira-tech/b3nd-core";
-import { createServers } from "@bandeira-tech/b3nd-servers";
-import { httpServer } from "@bandeira-tech/b3nd-servers/http";
-import { grpcHttpServer } from "@bandeira-tech/b3nd-servers/grpc/http/server";
+import { connection, MemoryStore, Rig, SimpleClient } from "@bandeira-tech/b3nd-core";
+import { createServers } from "@bandeira-tech/b3nd-move/factory";
+import { httpServer } from "@bandeira-tech/b3nd-move/http/server";
+import { grpcHttpServer } from "@bandeira-tech/b3nd-move/grpc/http/server";
 
 const store = new SimpleClient(new MemoryStore());
 const rig = new Rig({
@@ -52,34 +70,52 @@ const servers = createServers(rig, [
 await Promise.all(servers.map((s) => s.start()));
 ```
 
-## Quick start (Node / Cloudflare / Bun)
+## Quick start (Node / Bun / Cloudflare)
 
-Use the pure fetch handlers — no `Deno.serve` involved:
+Use the portable `service` handlers — no `Deno.serve`:
 
 ```typescript
-import { httpApi } from "@bandeira-tech/b3nd-core";
-import { withCors } from "@bandeira-tech/b3nd-servers";
-import { grpcHttpApi } from "@bandeira-tech/b3nd-servers/grpc/http/api";
+import { httpApi } from "@bandeira-tech/b3nd-move/http/service";
+import { grpcHttpApi } from "@bandeira-tech/b3nd-move/grpc/http/service";
+import { withCors } from "@bandeira-tech/b3nd-move/cors";
 
 const http = withCors(httpApi(rig), { origin: "*" });
 const grpc = withCors(grpcHttpApi(rig), { origin: "*" });
 
-// plug either into Hono, Express, raw node:http, or a Cloudflare Worker
+// plug into Hono, Express, node:http, a Cloudflare Worker, …
 export default { fetch: grpc };
 ```
+
+## Quick start (client)
+
+```typescript
+import { HttpClient } from "@bandeira-tech/b3nd-move/http/client";
+
+const client = new HttpClient({ url: "http://localhost:3000" });
+await client.receive([["mutable://app/item", { name: "thing" }]]);
+const [out] = await client.read(["mutable://app/item"]);
+```
+
+## How rigs compose with transports
+
+Downstream code (CLIs, daemons, browser apps) builds a `Rig` once and aims
+it at one or more transports. The same rig serves HTTP, WebSocket, gRPC,
+and MCP simultaneously — the move layer is the only thing that varies. A
+CLI that wants to serve protocol X over transport Y on encoding Z is
+constructed by picking the right rig and the right `b3nd-move` resolvers.
 
 ## Development
 
 ```bash
 deno task check
 deno task test
-deno task build:npm   # universal slice → ./npm/
+deno task build:npm   # universal slices → ./npm/
 ```
 
 ## Related
 
-- [b3nd-core](https://github.com/bandeira-tech/b3nd-core) — `Rig`, `httpApi`,
-  shared types
+- [b3nd-core](https://github.com/bandeira-tech/b3nd-core) — `Rig`,
+  `ProtocolInterfaceNode`, shared types
 - [b3nd-canon](https://github.com/bandeira-tech/b3nd-canon) — protocol-building
   toolkit
 
