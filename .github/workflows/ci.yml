@@ -25,6 +25,15 @@ jobs:
       - run: deno lint src/ tests/
       - run: deno fmt --check src/ tests/
 
+  integration-deno:
+    name: Integration (Deno-in-process)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: denoland/setup-deno@v2
+        with: { deno-version: v2.x }
+      - run: deno task test:integration:deno
+
   type-check:
     name: Type Check
     runs-on: ubuntu-latest
@@ -38,8 +47,8 @@ jobs:
   # @astral/astral) hits the real transport server (httpApi/wsApi/grpcHttpApi
   # in Deno, wrapped in withCors where the browser needs it). One job per
   # transport so failures point at the specific surface.
-  integration-tests:
-    name: Integration (${{ matrix.transport }})
+  integration-browser:
+    name: Integration (browser ${{ matrix.transport }})
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false

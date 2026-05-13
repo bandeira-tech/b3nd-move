@@ -18,9 +18,11 @@
  *   5. waits for `__b3ndHarnessReady`, calls `runTests()`, and
  *   6. re-registers each browser-side result as its own `Deno.test`.
  *
- * Because the stub server and the harness server are different
- * origins, the stub MUST send CORS-permissive responses; the bundled
- * stubs in `tests/runners/stubs/` already do this.
+ * Because the API server and the harness server are different origins,
+ * the API server MUST send CORS-permissive responses on the relevant
+ * paths. The HTTP and gRPC factories under `tests/factories/` provide
+ * a `cors: true` flag that wraps the real handler in `withCors` —
+ * always pass it for browser-driven runs.
  */
 
 /// <reference lib="deno.ns" />
@@ -29,26 +31,19 @@ import { launch } from "@astral/astral";
 import * as esbuild from "esbuild";
 import { denoPlugins } from "@luca/esbuild-deno-loader";
 import { fromFileUrl } from "@std/path";
-import type { BrowserTestResult } from "../helpers/browser-deno-stub.ts";
+import type { BrowserTestResult } from "./deno-stub.ts";
+import type { ServerHandle } from "../factories/http.ts";
 
 const HARNESS_HTML_PATH = fromFileUrl(
   new URL("./harness.html", import.meta.url),
 );
 
-/** Handle returned by a transport's stub-server factory. */
-export interface StubServerHandle {
-  /** Base URL the browser client should connect to. */
-  url: string;
-  /** Stop the server. Called after the browser run completes. */
-  stop: () => Promise<void> | void;
-}
-
 export interface RunBrowserSuiteOptions {
   /** URL or absolute path to the transport's browser harness entry. */
   harnessEntry: URL | string;
-  /** Starts the transport stub. The returned `url` is injected into
+  /** Starts the transport server. The returned `url` is injected into
    *  the harness HTML so the bundled client can connect to it. */
-  startServer: () => Promise<StubServerHandle> | StubServerHandle;
+  startServer: () => Promise<ServerHandle> | ServerHandle;
   /** Path to deno.json for the esbuild loader; defaults to repo root. */
   configPath?: string;
 }

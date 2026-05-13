@@ -82,7 +82,7 @@ export function setupHarness(): void {
 
 /**
  * The server URL the Deno runner injected into the harness HTML
- * before serving (see `tests/runners/harness.html`). Transport
+ * before serving (see `tests/browser/harness.html`). Transport
  * harnesses use this to construct their client.
  */
 export function serverUrl(): string {

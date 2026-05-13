@@ -7,9 +7,9 @@
  * requests, multi-output responses), since that's where encoding
  * bugs hide.
  *
- * The suite does NOT validate storage semantics — there is no rig
- * and no store. The transport stubs in `tests/runners/stubs/` are
- * deterministic, content-addressed echoers:
+ * The suite does NOT validate storage semantics — it runs against the
+ * `stubRig` from `tests/rigs/stub.ts`, whose backing PIN echoes
+ * deterministically per these content-addressed rules:
  *
  *   receive([uri, payload]):
  *     - uri contains "/__reject__/" → { accepted: false, error: "rejected by stub" }
