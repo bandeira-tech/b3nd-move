@@ -206,7 +206,10 @@ export function httpApi(
         return json({ error: "Invalid JSON body" }, 400);
       }
       const urls = (body as { urls?: unknown })?.urls;
-      if (!Array.isArray(urls) || !urls.every((u) => typeof u === "string")) {
+      if (
+        !Array.isArray(urls) || urls.length === 0 ||
+        !urls.every((u) => typeof u === "string")
+      ) {
         return json({ error: "Expected { urls: string[] }" }, 400);
       }
       try {
