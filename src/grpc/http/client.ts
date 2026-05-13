@@ -115,6 +115,7 @@ export class GrpcHttpClient implements ProtocolInterfaceNode {
   }
 
   async receive(msgs: Message[]): Promise<ReceiveResult[]> {
+    if (msgs.length === 0) return [];
     const req = create(ReceiveRequestSchema, {
       messages: msgs.map((m) => outputToProto(m)),
     });
@@ -132,6 +133,7 @@ export class GrpcHttpClient implements ProtocolInterfaceNode {
   }
 
   async read<T = unknown>(urls: string[]): Promise<Output<T>[]> {
+    if (urls.length === 0) return [];
     const req = create(ReadRequestSchema, { urls });
     const body = this.binary
       ? toBinary(ReadRequestSchema, req)
@@ -147,6 +149,7 @@ export class GrpcHttpClient implements ProtocolInterfaceNode {
     urls: string[],
     signal: AbortSignal,
   ): AsyncIterable<Output<string[]>> {
+    if (urls.length === 0) return;
     const abort = new AbortController();
     const onAbort = () => abort.abort();
     signal.addEventListener("abort", onAbort, { once: true });
