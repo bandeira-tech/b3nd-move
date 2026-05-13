@@ -1,0 +1,13 @@
+# Buf codegen for b3nd.proto.
+# Run: npx buf generate src/grpc/proto
+# Output: src/grpc/proto/gen/
+#
+# bufbuild/es generates message types, schema descriptors, and the
+# B3ndService GenService — everything needed without a separate
+# connectrpc/es plugin (whose output is the legacy v1 API).
+version: v2
+plugins:
+  - remote: buf.build/bufbuild/es
+    out: gen
+    opt:
+      - target=ts

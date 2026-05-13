@@ -3,19 +3,23 @@
 /**
  * Build an NPM package from the Deno source via @deno/dnt.
  *
- * Output: ./npm/  — published as `@bandeira-tech/b3nd-servers` on npm.
+ * Output: ./npm/  — published as `@bandeira-tech/b3nd-move` on npm.
  *
  * The npm build ships ONLY the universal slices that run on Node and in
  * browsers:
  *
- *   • `.`                  — composition primitives + `withCors`
- *   • `./grpc/http/api`    — `grpcHttpApi(rig)` (pure (Request) => Response handler)
- *   • `./grpc/http/client` — `GrpcHttpClient`
- *   • `./grpc/proto`       — wire types + converters
+ *   • `./factory`            — `createServers` + types
+ *   • `./cors`               — `withCors`
+ *   • `./http/service`       — `httpApi(rig)` (pure fetch handler)
+ *   • `./http/client`        — `HttpClient`
+ *   • `./grpc/http/service`  — `grpcHttpApi(rig)` (pure fetch handler)
+ *   • `./grpc/http/client`   — `GrpcHttpClient`
+ *   • `./grpc/proto/types`   — generated wire types + schemas
+ *   • `./grpc/proto/convert` — converters between proto and b3nd types
  *
- * The Deno-only slices (`./http`, `./grpc/http`, `./grpc/http/server`) call
- * `Deno.serve` and stay JSR-only. Node consumers feed `grpcHttpApi(rig)` (or
- * `httpApi(rig)` from `@bandeira-tech/b3nd-core`) to their own HTTP
+ * The Deno-only slices (`./http/server`, `./ws/server`, `./grpc/http/server`,
+ * `./mcp/*`) call `Deno.serve` or speak stdio and stay JSR-only. Node
+ * consumers feed `httpApi(rig)` / `grpcHttpApi(rig)` to their own HTTP
  * runtime — Hono, Express, raw `node:http`, Cloudflare Workers, …
  */
 
@@ -28,10 +32,14 @@ await emptyDir("./npm");
 
 await build({
   entryPoints: [
-    { name: ".", path: "./mod.ts" },
-    { name: "./grpc/http/api", path: "./libs/b3nd-server-grpchttp/service.ts" },
-    { name: "./grpc/http/client", path: "./libs/b3nd-client-grpchttp/mod.ts" },
-    { name: "./grpc/proto", path: "./libs/b3nd-proto/mod.ts" },
+    { name: "./factory", path: "./src/factory.ts" },
+    { name: "./cors", path: "./src/cors.ts" },
+    { name: "./http/service", path: "./src/http/service.ts" },
+    { name: "./http/client", path: "./src/http/client.ts" },
+    { name: "./grpc/http/service", path: "./src/grpc/http/service.ts" },
+    { name: "./grpc/http/client", path: "./src/grpc/http/client.ts" },
+    { name: "./grpc/proto/types", path: "./src/grpc/proto/gen/b3nd_pb.ts" },
+    { name: "./grpc/proto/convert", path: "./src/grpc/proto/convert.ts" },
   ],
   outDir: "./npm",
   shims: { deno: false },
@@ -47,18 +55,18 @@ await build({
     lib: ["ES2022", "DOM", "DOM.Iterable"],
   },
   package: {
-    name: "@bandeira-tech/b3nd-servers",
+    name: "@bandeira-tech/b3nd-move",
     version,
     description: denoJson.description,
     license: "MIT",
     repository: {
       type: "git",
-      url: "git+https://github.com/bandeira-tech/b3nd-servers.git",
+      url: "git+https://github.com/bandeira-tech/b3nd-move.git",
     },
     bugs: {
-      url: "https://github.com/bandeira-tech/b3nd-servers/issues",
+      url: "https://github.com/bandeira-tech/b3nd-move/issues",
     },
-    homepage: "https://github.com/bandeira-tech/b3nd-servers#readme",
+    homepage: "https://github.com/bandeira-tech/b3nd-move#readme",
     engines: { node: ">=20" },
     sideEffects: false,
     publishConfig: {
@@ -85,4 +93,4 @@ await build({
   },
 });
 
-console.log(`\n✔ Built @bandeira-tech/b3nd-servers@${version} → ./npm/`);
+console.log(`\n✔ Built @bandeira-tech/b3nd-move@${version} → ./npm/`);
