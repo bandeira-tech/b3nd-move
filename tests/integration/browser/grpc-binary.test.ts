@@ -10,7 +10,7 @@
 
 import { runBrowserSuite } from "../../browser/runner.ts";
 import { startGrpcServer } from "../../factories/grpc.ts";
-import { stubRig } from "../../rigs/stub.ts";
+import { stubRig } from "../../rig.ts";
 
 await runBrowserSuite({
   harnessEntry: new URL(

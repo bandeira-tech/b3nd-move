@@ -1,25 +1,30 @@
 /**
  * HTTP — in-Deno integration: real `httpApi` + real `HttpClient`
- * against a `MemoryStore`-backed rig. Drives the shared
- * `pinContract` round-trip suite.
+ * against the stub rig. Drives the shared `moveSuite` — same suite
+ * as the browser run, just with a Deno-resident client.
+ *
+ * The rig+store integration lives in `@bandeira-tech/b3nd-stores`;
+ * here we only verify that the move layer (encode → transport →
+ * decode) carries values faithfully across the network boundary.
  */
 
 /// <reference lib="deno.ns" />
 
-import { pinContract } from "../../suites/pin-contract.ts";
+import { runMoveSuite } from "../../suites/move-suite.ts";
 import { startHttpServer } from "../../factories/http.ts";
-import { memoryRig } from "../../rigs/memory.ts";
+import { stubRig } from "../../rig.ts";
 import { HttpClient } from "../../../src/http/client.ts";
 
-// Known upstream resource quirk: core's `httpApi` SSE handler installs
-// a 30s keepalive `setInterval` whose `clearInterval` lives in the
-// stream's `cancel` callback. Deno's per-test sanitizer fires before
-// the server-side stream cancel resolves, so observe tests see a
-// false-positive op leak. The fix is upstream — bind the cleanup to
-// `req.signal` in `@bandeira-tech/b3nd-core/libs/b3nd-rig/http.ts`.
-// Drop `sanitizeOps: false` once that lands.
-pinContract("http", async () => {
-  const server = await startHttpServer(memoryRig());
-  const client = new HttpClient({ url: server.url });
-  return { client, cleanup: () => Promise.resolve(server.stop()) };
-}, { sanitizeOps: false, sanitizeResources: false });
+const server = await startHttpServer(stubRig());
+
+runMoveSuite("HttpClient (deno)", {
+  client: () => new HttpClient({ url: server.url }),
+});
+
+// Runs last by registration order — tears down the shared server.
+Deno.test({
+  name: "HttpClient (deno) — cleanup",
+  sanitizeOps: false,
+  sanitizeResources: false,
+  fn: () => Promise.resolve(server.stop()),
+});

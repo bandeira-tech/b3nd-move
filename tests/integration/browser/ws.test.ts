@@ -8,7 +8,7 @@
 
 import { runBrowserSuite } from "../../browser/runner.ts";
 import { startWsServer } from "../../factories/ws.ts";
-import { stubRig } from "../../rigs/stub.ts";
+import { stubRig } from "../../rig.ts";
 
 await runBrowserSuite({
   harnessEntry: new URL("../../browser/harnesses/ws.ts", import.meta.url),

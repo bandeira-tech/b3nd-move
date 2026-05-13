@@ -12,7 +12,7 @@
 
 import { runBrowserSuite } from "../../browser/runner.ts";
 import { startHttpServer } from "../../factories/http.ts";
-import { stubRig } from "../../rigs/stub.ts";
+import { stubRig } from "../../rig.ts";
 
 await runBrowserSuite({
   harnessEntry: new URL("../../browser/harnesses/http.ts", import.meta.url),

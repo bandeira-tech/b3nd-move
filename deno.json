@@ -21,8 +21,6 @@
   },
   "imports": {
     "@bandeira-tech/b3nd-core": "jsr:@bandeira-tech/b3nd-core@^0.17.0",
-    "@bandeira-tech/b3nd-stores/memory": "jsr:@bandeira-tech/b3nd-stores@^0.4.0/memory",
-    "@bandeira-tech/b3nd-stores/adapters": "jsr:@bandeira-tech/b3nd-stores@^0.4.0/adapters",
     "@std/assert": "jsr:@std/assert@^1.0.15",
     "@bufbuild/protobuf": "npm:@bufbuild/protobuf@^2.2.0",
     "@bufbuild/protobuf/codegenv2": "npm:@bufbuild/protobuf@^2.2.0/codegenv2",
@@ -37,7 +35,7 @@
     "esbuild": "npm:esbuild@^0.24.0"
   },
   "tasks": {
-    "check": "deno check src/factory.ts src/cors.ts src/http/server.ts src/http/service.ts src/http/client.ts src/ws/server.ts src/ws/service.ts src/ws/client.ts src/grpc/http/server.ts src/grpc/http/service.ts src/grpc/http/client.ts src/grpc/proto/convert.ts src/grpc/proto/gen/b3nd_pb.ts src/mcp/server.ts src/mcp/service.ts tests/suites/pin-contract.ts tests/suites/mcp-spec.ts tests/suites/move-suite.ts",
+    "check": "deno check src/factory.ts src/cors.ts src/http/server.ts src/http/service.ts src/http/client.ts src/ws/server.ts src/ws/service.ts src/ws/client.ts src/grpc/http/server.ts src/grpc/http/service.ts src/grpc/http/client.ts src/grpc/proto/convert.ts src/grpc/proto/gen/b3nd_pb.ts src/mcp/server.ts src/mcp/service.ts tests/suites/move-suite.ts tests/suites/mcp-spec.ts",
     "test": "deno test --allow-all src/",
     "test:integration:deno": "deno test --allow-all tests/integration/deno/",
     "test:integration:http": "deno test --allow-all tests/integration/browser/http.test.ts",
