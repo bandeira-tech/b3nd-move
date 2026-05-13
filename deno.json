@@ -30,11 +30,18 @@
     "@modelcontextprotocol/sdk/inMemory.js": "npm:@modelcontextprotocol/sdk@^1.0.0/inMemory.js",
     "@modelcontextprotocol/sdk/server/index.js": "npm:@modelcontextprotocol/sdk@^1.0.0/server/index.js",
     "@modelcontextprotocol/sdk/server/stdio.js": "npm:@modelcontextprotocol/sdk@^1.0.0/server/stdio.js",
-    "@modelcontextprotocol/sdk/types.js": "npm:@modelcontextprotocol/sdk@^1.0.0/types.js"
+    "@modelcontextprotocol/sdk/types.js": "npm:@modelcontextprotocol/sdk@^1.0.0/types.js",
+    "@astral/astral": "jsr:@astral/astral@^0.5.3",
+    "@luca/esbuild-deno-loader": "jsr:@luca/esbuild-deno-loader@^0.11.1",
+    "@std/path": "jsr:@std/path@^1.0.0",
+    "esbuild": "npm:esbuild@^0.24.0"
   },
   "tasks": {
     "check": "deno check src/factory.ts src/cors.ts src/http/server.ts src/http/service.ts src/http/client.ts src/ws/server.ts src/ws/service.ts src/ws/client.ts src/grpc/http/server.ts src/grpc/http/service.ts src/grpc/http/client.ts src/grpc/proto/convert.ts src/grpc/proto/gen/b3nd_pb.ts src/mcp/server.ts src/mcp/service.ts src/testing/contract.ts src/testing/mcp-spec.ts src/testing/shared-suite.ts src/testing/mock-http-server.ts",
-    "test": "deno test --allow-all src/",
+    "test": "deno test --allow-all --ignore=src/http/integration.test.ts,src/ws/integration.test.ts,src/grpc/http/integration.test.ts src/",
+    "test:integration:http": "deno test --allow-all src/http/integration.test.ts",
+    "test:integration:ws": "deno test --allow-all src/ws/integration.test.ts",
+    "test:integration:grpc": "deno test --allow-all src/grpc/http/integration.test.ts",
     "build:npm": "deno run -A scripts/build-npm.ts"
   },
   "compilerOptions": {
@@ -59,6 +66,7 @@
       "src/grpc/proto/b3nd.proto",
       "src/testing/",
       "src/**/*.test.ts",
+      "src/**/_browser/",
       "tests/",
       "node_modules/",
       "npm/",
