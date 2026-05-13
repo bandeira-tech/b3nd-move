@@ -126,7 +126,9 @@ async function handleReceive(
   } catch {
     return errResponse("Invalid request body");
   }
-  if (!body.messages?.length) return errResponse("messages array is required");
+  if (!body.messages?.length) {
+    return errResponse("Expected [[uri, payload], ...]");
+  }
 
   const msgs = body.messages.map((m) => outputFromProto(m));
   const results = await rig.receive(msgs);
@@ -154,7 +156,7 @@ async function handleRead(
   } catch {
     return errResponse("Invalid request body");
   }
-  if (!body.urls?.length) return errResponse("urls array is required");
+  if (!body.urls?.length) return errResponse("Expected { urls: string[] }");
 
   try {
     const results = await rig.read(body.urls);
@@ -179,7 +181,7 @@ async function handleObserve(rig: Rig, req: Request): Promise<Response> {
   } catch {
     return errResponse("Invalid request body");
   }
-  if (!body.urls?.length) return errResponse("urls array is required");
+  if (!body.urls?.length) return errResponse("Expected { urls: string[] }");
 
   const abort = new AbortController();
   req.signal.addEventListener("abort", () => abort.abort());

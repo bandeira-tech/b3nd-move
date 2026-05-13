@@ -90,12 +90,29 @@ export function wsApi(rig: Rig): WsApi {
       try {
         switch (type) {
           case "receive": {
-            const results = await rig.receive(payload as Message[]);
+            const msgs = payload as Message[];
+            if (!Array.isArray(msgs) || msgs.length === 0) {
+              send({
+                id,
+                success: false,
+                error: "Expected [[uri, payload], ...]",
+              });
+              return;
+            }
+            const results = await rig.receive(msgs);
             send({ id, success: true, data: results });
             return;
           }
           case "read": {
             const { urls } = payload as { urls: string[] };
+            if (!Array.isArray(urls) || urls.length === 0) {
+              send({
+                id,
+                success: false,
+                error: "Expected { urls: string[] }",
+              });
+              return;
+            }
             const outputs = await rig.read(urls);
             send({ id, success: true, data: outputs });
             return;
@@ -107,6 +124,14 @@ export function wsApi(rig: Rig): WsApi {
           }
           case "observe": {
             const { urls } = payload as { urls: string[] };
+            if (!Array.isArray(urls) || urls.length === 0) {
+              send({
+                id,
+                success: false,
+                error: "Expected { urls: string[] }",
+              });
+              return;
+            }
             const abort = new AbortController();
             observes.set(id, abort);
             try {
