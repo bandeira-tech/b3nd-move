@@ -32,10 +32,7 @@
 
 import type { Message } from "@bandeira-tech/b3nd-core/types";
 import type { Rig } from "@bandeira-tech/b3nd-core/rig";
-import type {
-  WebSocketRequest,
-  WebSocketResponse,
-} from "./client.ts";
+import type { WebSocketRequest, WebSocketResponse } from "./client.ts";
 
 /**
  * Fetch handler with a `closeAll` lifecycle hook.

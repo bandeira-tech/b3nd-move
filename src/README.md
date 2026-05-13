@@ -1,8 +1,8 @@
 # src
 
-The moving layer for B3nd. Each transport directory follows the same
-three-file convention; the two files at this level are the cross-cutting
-infrastructure that every transport plugs into.
+The moving layer for B3nd. Each transport directory follows the same three-file
+convention; the two files at this level are the cross-cutting infrastructure
+that every transport plugs into.
 
 ## Convention
 
@@ -13,35 +13,35 @@ src/<transport>/
   client.ts   ← ProtocolInterfaceNode over the wire
 ```
 
-`server.ts` wraps `service.ts` with a listener (and CORS). `client.ts`
-speaks the wire shape `service.ts` exposes. Every transport's surface
-collapses to these three files plus optional helpers (e.g. `http/sse.ts`).
-No barrels — import from the canonical file directly.
+`server.ts` wraps `service.ts` with a listener (and CORS). `client.ts` speaks
+the wire shape `service.ts` exposes. Every transport's surface collapses to
+these three files plus optional helpers (e.g. `http/sse.ts`). No barrels —
+import from the canonical file directly.
 
 ## Cross-cutting surface
 
 | File         | Exports                                                                   | Runtime |
 | ------------ | ------------------------------------------------------------------------- | ------- |
 | `factory.ts` | `createServers`, `ServerResolver`, `TransportServer`, `ServerComposition` | any     |
-| `cors.ts`    | `withCors`, `CorsOptions`                                                  | any     |
+| `cors.ts`    | `withCors`, `CorsOptions`                                                 | any     |
 
 ## Concepts
 
-**`ServerResolver`** is the contract every transport's `server.ts`
-implements: `(Rig, ServerComposition?) → TransportServer`. It mirrors
-`BackendResolver` on the storage side:
+**`ServerResolver`** is the contract every transport's `server.ts` implements:
+`(Rig, ServerComposition?) → TransportServer`. It mirrors `BackendResolver` on
+the storage side:
 
 ```
 BackendResolver  : URL  → Store           (storage)
 ServerResolver   : Rig  → TransportServer (moving)
 ```
 
-**`createServers`** doesn't start anything — it just maps resolvers over
-a rig. Lifecycle (`start` / `stop`) is per-server.
+**`createServers`** doesn't start anything — it just maps resolvers over a rig.
+Lifecycle (`start` / `stop`) is per-server.
 
-**`ServerComposition`** flows cross-cutting concerns (currently just
-`cors`) into every resolver in the group. Per-server options win over
-composition defaults.
+**`ServerComposition`** flows cross-cutting concerns (currently just `cors`)
+into every resolver in the group. Per-server options win over composition
+defaults.
 
 ## Usage
 
@@ -58,8 +58,8 @@ const servers = createServers(rig, [
 await Promise.all(servers.map((s) => s.start()));
 ```
 
-For runtimes without `Deno.serve` (Node, Bun, Cloudflare), skip the
-resolvers and wrap the portable `service` directly:
+For runtimes without `Deno.serve` (Node, Bun, Cloudflare), skip the resolvers
+and wrap the portable `service` directly:
 
 ```typescript
 import { httpApi } from "@bandeira-tech/b3nd-move/http/service";
