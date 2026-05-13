@@ -110,18 +110,18 @@ export class HttpClient implements ProtocolInterfaceNode {
         body: serializedBatch,
       });
 
-      const serverResults: ReceiveResult[] = await response.json();
-
       if (!response.ok) {
-        // Server returned an error — apply to all valid messages
-        const errorMsg =
-          (serverResults as unknown as { error?: string }).error ||
-          response.statusText;
+        // Request-level failure (bad JSON, malformed batch, server error).
+        // Per-slot results require a 2xx body — fan the status out across
+        // every valid slot.
+        const errorMsg = `HTTP ${response.status} ${response.statusText}`
+          .trim();
         for (const idx of validIndices) {
           results[idx] = { accepted: false, error: errorMsg };
         }
       } else {
-        // Map server results back into the combined results array
+        // 2xx: server processed the batch; trust the per-slot body.
+        const serverResults: ReceiveResult[] = await response.json();
         for (let j = 0; j < validIndices.length; j++) {
           results[validIndices[j]] = serverResults[j] ?? {
             accepted: false,

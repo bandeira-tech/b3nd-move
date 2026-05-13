@@ -188,8 +188,9 @@ export function httpApi(
       // messageDataHandler on the Rig if you want envelope semantics);
       // SimpleClient/DataStoreClient never decompose on their own.
       const results = await rig.receive(batch);
-      const allAccepted = results.every((r) => r.accepted);
-      return json(results, allAccepted ? 200 : 400);
+      // 200 means the server processed the batch; per-slot accept/reject
+      // lives in the body. Non-2xx is reserved for request-level failures.
+      return json(results, 200);
     }
 
     // ── Read (batch) ──
