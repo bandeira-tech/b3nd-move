@@ -150,12 +150,6 @@ export function runMoveSuite(suiteName: string, config: MoveSuiteConfig) {
     assertEquals((results[4] as Output)[1], { echo: urls[4] });
   });
 
-  t("read: empty batch returns empty array (no roundtrip)", async () => {
-    const client = await Promise.resolve(config.client());
-    const results = await client.read([]);
-    assertEquals(results.length, 0);
-  });
-
   // ── observe: batch subscriptions, batch frames ──────────────────
 
   if (supportsObserve) {

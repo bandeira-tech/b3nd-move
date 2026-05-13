@@ -11,9 +11,9 @@
 /// <reference lib="deno.ns" />
 
 import { runBrowserSuite } from "../../../tests/runners/browser-runner.ts";
-import { startGrpcStub } from "../../../tests/runners/stubs/grpc-stub.ts";
+import { startGrpcServer } from "../../../tests/runners/servers/grpc-server.ts";
 
 await runBrowserSuite({
   harnessEntry: new URL("./_browser/harness.ts", import.meta.url),
-  startServer: () => startGrpcStub(),
+  startServer: () => startGrpcServer(),
 });

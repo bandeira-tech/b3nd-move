@@ -1,11 +1,17 @@
 # `tests/` — Browser Integration Harness
 
 End-to-end proof that the **client half** of each transport, when bundled and
-run inside a real browser, talks to its **server half** correctly. The point is
-the _move layer_ — encoding, the wire, and decoding — so the server side is a
-deterministic stub: no rig, no store, just canned shapes per request URI. If a
-test passes, every byte that move owns went out and came back faithfully across
-the process boundary.
+run inside a real browser, talks to its **real server half** correctly. Every
+test fires the actual production code paths — the real `httpServer`/`wsServer`/
+`grpcHttpServer` running on Deno — with only the **rig** stubbed, so the wire
+behavior is exercised without coupling to actual storage. If a test passes,
+every byte that move owns went out and came back faithfully across the process
+and runtime boundary.
+
+The Deno-side counterpart — "real client + real server, both in Deno" — lives in
+[`src/testing/`](../src/testing/README.md) (the `pinContract` suite). Both
+halves use the same PIN interface as their pivot; together they cover every
+runtime pairing the move layer supports.
 
 ## Layout
 
@@ -17,23 +23,25 @@ tests/
     ├── browser-runner.ts      ← esbuild + astral driver
     ├── harness.html           ← page template (server URL injected)
     ├── move-suite.ts          ← per-operation, batch-on-both-sides suite
-    └── stubs/
-        ├── http-stub.ts       ← HTTP transport stub
-        ├── ws-stub.ts         ← WebSocket transport stub
-        └── grpc-stub.ts       ← gRPC-HTTP transport stub (JSON encoding)
+    ├── stub-rig.ts            ← Rig instance backed by a stub PIN
+    └── servers/
+        ├── http-server.ts     ← real httpApi + withCors + stubRig
+        ├── ws-server.ts       ← real wsApi + stubRig
+        └── grpc-server.ts     ← real grpcHttpApi + withCors + stubRig
 
 src/<transport>/
 ├── _browser/harness.ts        ← bundled entry, wires client to suite
-└── integration.test.ts        ← runs the harness against the transport stub
+└── integration.test.ts        ← runs the harness against the real server
 ```
 
 ## How a run works
 
-1. The transport's `integration.test.ts` boots its stub server on a loopback
-   port (returned `url`).
+1. The transport's `integration.test.ts` boots the **real** transport server
+   (`httpApi(stubRig())`, `wsApi(stubRig())`, `grpcHttpApi(stubRig())`, wrapped
+   in `withCors` where browsers need it) on a loopback port.
 2. `browser-runner.ts` bundles `_browser/harness.ts` with esbuild +
    `@luca/esbuild-deno-loader`, replaces `__B3ND_SERVER_URL__` in `harness.html`
-   with the stub URL, and serves the bundle/HTML on a _second_ loopback port.
+   with the server URL, and serves the bundle/HTML on a _second_ loopback port.
 3. Headless Chromium (`@astral/astral`) loads the harness URL. The harness
    imports `browser-deno-stub.ts` first — that swaps
    `globalThis.Deno = { test: collect }` so the move suite's `Deno.test(...)`
@@ -43,34 +51,39 @@ src/<transport>/
    `{ name, ok, error }[]`, and re-registers each as a `Deno.test` so results
    stream out of `deno test` as if they ran locally.
 
-The harness server and the stub server live on different origins on purpose — it
-proves cross-origin works (every stub serves permissive CORS + handles `OPTIONS`
-preflight).
+The harness page and the API server live on different loopback origins on
+purpose — that's what the browser sees in real deployments, and it's what
+`withCors` + `OPTIONS` preflight has to handle correctly to be useful.
 
-## Stub contract
+## Stub rig contract
 
-All transport stubs follow the same content-addressed echo rules so a single
-move suite drives every transport. See `move-suite.ts` for the authoritative
-definition; in short:
+The stub rig is a real `Rig` from `@bandeira-tech/b3nd-core` wired to one
+deterministic `ProtocolInterfaceNode` on all routes, with a program registered
+under `mutable://t` so rejection happens at the pipeline stage (the rig's
+backend dispatch is fire-and-forget; only the program/handler outcome surfaces
+in `rig.receive`'s return).
 
-| Operation           | Input shape | Stub response                                                                                                                    |
-| ------------------- | ----------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| `receive(msgs)`     | `Message[]` | `[{accepted: true, ref: uri}, …]`, except `uri` containing `/__reject__/` returns `{accepted: false, error: "rejected by stub"}` |
-| `read(urls)`        | `string[]`  | `[[url, {echo: url}], …]`, except `url` containing `/__miss__/` returns `[url, null]`                                            |
-| `observe(patterns)` | `string[]`  | 3 emitted events per subscribed pattern with synthesized child uris, then stream end                                             |
-| `status()`          | —           | `{status:"healthy", fns:["receive","read","observe","status"], message:"stub"}`                                                  |
+The move-suite drives every transport with the same content-addressed
+conventions:
 
-Every test in `move-suite.ts` uses **batched inputs AND batched outputs** so the
-encode/decode paths get exercised in their multi-item shape — that's where
-transport bugs usually live (off-by-one slot mapping, lost ordering, dropped
-misses).
+| Op              | Convention                                                                                                                                                      |
+| --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `receive(msgs)` | `[{accepted: true}, …]`; URIs containing `/__reject__/` → `{accepted: false, error: "rejected by stub"}` (rejected by the program)                              |
+| `read(urls)`    | `[[url, {echo: url}], …]`; URIs containing `/__miss__/` → `[url, null]`; URIs ending in `/` synthesize a 3-child listing (used by the HTTP SSE observe backlog) |
+| `observe(urls)` | 3 frames per subscribed pattern: `[pattern, [` ${pattern}/${i}`]]`, then end                                                                                    |
+| `status()`      | `{status: "healthy", message: "stub", fns: ["receive","read","observe","status"]}`                                                                              |
+
+Every test exercises **batched inputs AND batched outputs** so the encode/
+decode paths get exercised in their multi-item shape — that's where transport
+bugs usually live (off-by-one slot mapping, lost ordering, dropped misses).
 
 ## Running
 
 ```bash
 deno task test:integration:http
 deno task test:integration:ws
-deno task test:integration:grpc
+deno task test:integration:grpc           # gRPC-HTTP, JSON encoding
+deno task test:integration:grpc-binary    # gRPC-HTTP, application/proto
 ```
 
 `deno task test` (the default) excludes integration tests so they don't pull
@@ -79,8 +92,24 @@ Chromium into its cache (a few hundred MB).
 
 ## Adding a new transport
 
-1. Write `tests/runners/stubs/<name>-stub.ts` that follows the contract above
-   and returns `{ url, stop }`.
+1. Write `tests/runners/servers/<name>-server.ts` that returns `{ url, stop }`
+   after booting `<name>Api(stubRig())` (wrapped in `withCors` if browsers will
+   hit it from a different origin):
+   ```ts
+   import { theApi } from "../../../src/the/service.ts";
+   import { withCors } from "../../../src/cors.ts";
+   import { stubRig } from "../stub-rig.ts";
+
+   export function startTheServer() {
+     const handler = withCors(theApi(stubRig()), { origin: "*" });
+     const server = Deno.serve({ port: 0, hostname: "127.0.0.1" }, handler);
+     const { port } = server.addr as Deno.NetAddr;
+     return Promise.resolve({
+       url: `http://127.0.0.1:${port}`,
+       stop: () => server.shutdown(),
+     });
+   }
+   ```
 2. Add `src/<name>/_browser/harness.ts`:
    ```ts
    import {
@@ -98,12 +127,20 @@ Chromium into its cache (a few hundred MB).
 3. Add `src/<name>/integration.test.ts`:
    ```ts
    import { runBrowserSuite } from "../../tests/runners/browser-runner.ts";
-   import { startTheStub } from "../../tests/runners/stubs/the-stub.ts";
+   import { startTheServer } from "../../tests/runners/servers/the-server.ts";
 
    await runBrowserSuite({
      harnessEntry: new URL("./_browser/harness.ts", import.meta.url),
-     startServer: () => startTheStub(),
+     startServer: () => startTheServer(),
    });
    ```
-4. Extend `deno.json` `tasks.test --ignore` and add a `test:integration:<name>`
-   task.
+4. Extend `deno.json`'s `tasks.test --ignore` and add a
+   `test:integration:<name>` task.
+
+## Why not also run move-suite in Deno against the real server?
+
+That role is already filled by `src/testing/`'s `pinContract` — same shape, same
+real server, run from a Deno-side client. Adding a Deno-side runner here would
+duplicate intent. The point of `tests/` specifically is to exercise what in-Deno
+runs can't catch: the browser fetch / WebSocket / SSE / NDJSON paths under real
+CORS, real preflight, real cross-origin handshake.

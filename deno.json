@@ -37,11 +37,12 @@
     "esbuild": "npm:esbuild@^0.24.0"
   },
   "tasks": {
-    "check": "deno check src/factory.ts src/cors.ts src/http/server.ts src/http/service.ts src/http/client.ts src/ws/server.ts src/ws/service.ts src/ws/client.ts src/grpc/http/server.ts src/grpc/http/service.ts src/grpc/http/client.ts src/grpc/proto/convert.ts src/grpc/proto/gen/b3nd_pb.ts src/mcp/server.ts src/mcp/service.ts src/testing/contract.ts src/testing/mcp-spec.ts src/testing/shared-suite.ts src/testing/mock-http-server.ts",
-    "test": "deno test --allow-all --ignore=src/http/integration.test.ts,src/ws/integration.test.ts,src/grpc/http/integration.test.ts src/",
+    "check": "deno check src/factory.ts src/cors.ts src/http/server.ts src/http/service.ts src/http/client.ts src/ws/server.ts src/ws/service.ts src/ws/client.ts src/grpc/http/server.ts src/grpc/http/service.ts src/grpc/http/client.ts src/grpc/proto/convert.ts src/grpc/proto/gen/b3nd_pb.ts src/mcp/server.ts src/mcp/service.ts src/testing/contract.ts src/testing/mcp-spec.ts",
+    "test": "deno test --allow-all --ignore=src/http/integration.test.ts,src/ws/integration.test.ts,src/grpc/http/integration.test.ts,src/grpc/http/integration-binary.test.ts src/",
     "test:integration:http": "deno test --allow-all src/http/integration.test.ts",
     "test:integration:ws": "deno test --allow-all src/ws/integration.test.ts",
     "test:integration:grpc": "deno test --allow-all src/grpc/http/integration.test.ts",
+    "test:integration:grpc-binary": "deno test --allow-all src/grpc/http/integration-binary.test.ts",
     "build:npm": "deno run -A scripts/build-npm.ts"
   },
   "compilerOptions": {

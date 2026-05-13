@@ -11,9 +11,9 @@
 /// <reference lib="deno.ns" />
 
 import { runBrowserSuite } from "../../tests/runners/browser-runner.ts";
-import { startWsStub } from "../../tests/runners/stubs/ws-stub.ts";
+import { startWsServer } from "../../tests/runners/servers/ws-server.ts";
 
 await runBrowserSuite({
   harnessEntry: new URL("./_browser/harness.ts", import.meta.url),
-  startServer: () => startWsStub(),
+  startServer: () => startWsServer(),
 });
