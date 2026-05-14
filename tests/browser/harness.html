@@ -1,0 +1,16 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title>b3nd-move browser integration harness</title>
+  </head>
+  <body>
+    <h1>b3nd-move browser integration harness</h1>
+    <p>Driven by per-transport <code>integration.test.ts</code>.</p>
+    <!-- __B3ND_SERVER_URL__ replaced by the Deno runner before serving. -->
+    <script>
+      globalThis.__b3ndServerUrl = "__B3ND_SERVER_URL__";
+    </script>
+    <script type="module" src="./harness.js"></script>
+  </body>
+</html>

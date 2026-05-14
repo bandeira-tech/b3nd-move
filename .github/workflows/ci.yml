@@ -22,8 +22,17 @@ jobs:
       - uses: actions/checkout@v4
       - uses: denoland/setup-deno@v2
         with: { deno-version: v2.x }
-      - run: deno lint src/
-      - run: deno fmt --check src/
+      - run: deno lint src/ tests/
+      - run: deno fmt --check src/ tests/
+
+  integration-deno:
+    name: Integration (Deno-in-process)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: denoland/setup-deno@v2
+        with: { deno-version: v2.x }
+      - run: deno task test:integration:deno
 
   type-check:
     name: Type Check
@@ -33,3 +42,28 @@ jobs:
       - uses: denoland/setup-deno@v2
         with: { deno-version: v2.x }
       - run: deno task check
+
+  # Browser integration: real client (bundled into headless Chromium via
+  # @astral/astral) hits the real transport server (httpApi/wsApi/grpcHttpApi
+  # in Deno, wrapped in withCors where the browser needs it). One job per
+  # transport so failures point at the specific surface.
+  integration-browser:
+    name: Integration (browser ${{ matrix.transport }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        transport: [http, ws, grpc, grpc-binary]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: denoland/setup-deno@v2
+        with: { deno-version: v2.x }
+      # astral downloads a pinned Chromium build into ~/.cache/astral on
+      # first run; cache it across runs so we don't pay the ~150MB hit
+      # on every CI invocation.
+      - name: Cache astral Chromium
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/astral
+          key: astral-chromium-${{ runner.os }}
+      - run: deno task test:integration:${{ matrix.transport }}
