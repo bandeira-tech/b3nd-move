@@ -12,19 +12,41 @@ import type {
   ReceiveResult,
   StatusResult,
 } from "@bandeira-tech/b3nd-core/types";
+import {
+  basic as basicMiddleware,
+  bearer as bearerMiddleware,
+  type ClientMiddleware,
+  runConnect,
+  runSend,
+} from "../middleware.ts";
+
+/**
+ * Legacy auth config. Prefer `middleware: [bearer(...)]` /
+ * `middleware: [basic(...)]` from `b3nd-move/middleware`. Kept as a
+ * deprecation shim — silently converted to middleware at construction.
+ *
+ * @deprecated use `middleware` instead
+ */
+export interface WebSocketAuthConfig {
+  type: "bearer" | "basic" | "custom";
+  token?: string;
+  username?: string;
+  password?: string;
+  custom?: Record<string, unknown>;
+}
 
 /** Configuration for `WebSocketClient`. */
 export interface WebSocketClientConfig {
   /** WebSocket server URL. */
   url: string;
-  /** Optional authentication configuration. */
-  auth?: {
-    type: "bearer" | "basic" | "custom";
-    token?: string;
-    username?: string;
-    password?: string;
-    custom?: Record<string, unknown>;
-  };
+  /**
+   * Composable middleware. `onConnect` runs once at handshake (mutate
+   * URL or subprotocols); `onSend` runs before every outbound frame
+   * (mutate envelope). See `b3nd-move/middleware` for canon helpers.
+   */
+  middleware?: ClientMiddleware[];
+  /** @deprecated use `middleware: [bearer(...)]` / `[basic(...)]` instead. */
+  auth?: WebSocketAuthConfig;
   /** Optional reconnection configuration. */
   reconnect?: {
     enabled: boolean;
@@ -53,6 +75,7 @@ export interface WebSocketResponse {
 
 export class WebSocketClient implements ProtocolInterfaceNode {
   private config: WebSocketClientConfig;
+  private middleware: ClientMiddleware[] | undefined;
   private ws: WebSocket | null = null;
   private connected = false;
   private reconnectAttempts = 0;
@@ -86,6 +109,14 @@ export class WebSocketClient implements ProtocolInterfaceNode {
         ...config.reconnect,
       },
     };
+
+    // Fold the legacy `auth` field into the middleware chain. Users of
+    // the deprecated shape get the same behavior; new code goes through
+    // `middleware` directly.
+    const fromAuth = legacyAuthToMiddleware(config.auth);
+    this.middleware = config.middleware || fromAuth
+      ? [...(fromAuth ? [fromAuth] : []), ...(config.middleware ?? [])]
+      : undefined;
   }
 
   /**
@@ -128,25 +159,20 @@ export class WebSocketClient implements ProtocolInterfaceNode {
   /**
    * Establish WebSocket connection
    */
-  private connect(): Promise<void> {
+  private async connect(): Promise<void> {
+    const url = new URL(this.config.url);
+    const subprotocols: string[] = [];
+    await runConnect(this.middleware, {
+      transport: "ws",
+      url,
+      subprotocols,
+    });
+
     return new Promise<void>((resolve, reject) => {
       try {
-        const url = new URL(this.config.url);
-
-        // Add auth to URL if needed
-        if (this.config.auth) {
-          switch (this.config.auth.type) {
-            case "bearer":
-              url.searchParams.set("token", this.config.auth.token || "");
-              break;
-            case "basic":
-              url.username = this.config.auth.username || "";
-              url.password = this.config.auth.password || "";
-              break;
-          }
-        }
-
-        this.ws = new WebSocket(url.toString());
+        this.ws = subprotocols.length > 0
+          ? new WebSocket(url.toString(), subprotocols)
+          : new WebSocket(url.toString());
         this.ws.addEventListener("open", () => {
           this.connected = true;
           this.reconnectAttempts = 0;
@@ -277,16 +303,19 @@ export class WebSocketClient implements ProtocolInterfaceNode {
   ): Promise<T> {
     await this.ensureConnected();
 
+    const id = crypto.randomUUID();
+    const envelope: Record<string, unknown> = { id, type, payload };
+    await runSend(this.middleware, { transport: "ws", envelope });
+
     return new Promise<T>((resolve, reject) => {
-      const id = crypto.randomUUID();
-      const request: WebSocketRequest = { id, type, payload };
+      const requestId = envelope.id as string;
 
       const timeout = setTimeout(() => {
-        this.pendingRequests.delete(id);
+        this.pendingRequests.delete(requestId);
         reject(new Error(`Request timeout after ${this.config.timeout}ms`));
       }, this.config.timeout);
 
-      this.pendingRequests.set(id, {
+      this.pendingRequests.set(requestId, {
         resolve: (response) => {
           if (response.success) {
             resolve(response.data as T);
@@ -299,9 +328,9 @@ export class WebSocketClient implements ProtocolInterfaceNode {
       });
 
       try {
-        this.ws?.send(JSON.stringify(request));
+        this.ws?.send(JSON.stringify(envelope));
       } catch (error) {
-        this.pendingRequests.delete(id);
+        this.pendingRequests.delete(requestId);
         clearTimeout(timeout);
         reject(error);
       }
@@ -366,15 +395,18 @@ export class WebSocketClient implements ProtocolInterfaceNode {
       }
     });
 
-    const onAbort = () => {
+    const onAbort = async () => {
       try {
-        this.ws?.send(
-          JSON.stringify({
-            id,
-            type: "observe-cancel",
-            payload: {},
-          } as WebSocketRequest),
-        );
+        const cancelEnvelope: Record<string, unknown> = {
+          id,
+          type: "observe-cancel",
+          payload: {},
+        };
+        await runSend(this.middleware, {
+          transport: "ws",
+          envelope: cancelEnvelope,
+        });
+        this.ws?.send(JSON.stringify(cancelEnvelope));
       } catch {
         // Ignore — connection may already be closed.
       }
@@ -388,13 +420,16 @@ export class WebSocketClient implements ProtocolInterfaceNode {
     signal.addEventListener("abort", onAbort, { once: true });
 
     try {
-      this.ws!.send(
-        JSON.stringify({
-          id,
-          type: "observe",
-          payload: { urls },
-        } as WebSocketRequest),
-      );
+      const openEnvelope: Record<string, unknown> = {
+        id,
+        type: "observe",
+        payload: { urls },
+      };
+      await runSend(this.middleware, {
+        transport: "ws",
+        envelope: openEnvelope,
+      });
+      this.ws!.send(JSON.stringify(openEnvelope));
       while (true) {
         while (queue.length > 0) yield queue.shift()!;
         if (signal.aborted || ended) return;
@@ -418,5 +453,27 @@ export class WebSocketClient implements ProtocolInterfaceNode {
         message: error instanceof Error ? error.message : String(error),
       };
     }
+  }
+}
+
+/**
+ * Convert the deprecated `auth` config into a middleware. Returns
+ * `undefined` for unsupported or empty auth (notably `type: "custom"`
+ * — that shape had no documented runtime behavior).
+ */
+function legacyAuthToMiddleware(
+  auth: WebSocketAuthConfig | undefined,
+): ClientMiddleware | undefined {
+  if (!auth) return undefined;
+  switch (auth.type) {
+    case "bearer":
+      return bearerMiddleware(auth.token ?? "");
+    case "basic":
+      return basicMiddleware(auth.username ?? "", auth.password ?? "");
+    case "custom":
+      // The legacy `custom` field never had a documented application —
+      // it was an escape hatch users were expected to handle outside
+      // the client. New code should write their own ClientMiddleware.
+      return undefined;
   }
 }

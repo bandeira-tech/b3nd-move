@@ -14,6 +14,7 @@ import type {
 } from "@bandeira-tech/b3nd-core/types";
 import { routingKey } from "@bandeira-tech/b3nd-core/url";
 import { openSseStream } from "./sse.ts";
+import { type ClientMiddleware, runRequest } from "../middleware.ts";
 
 /** Configuration for `HttpClient`. */
 export interface HttpClientConfig {
@@ -23,12 +24,18 @@ export interface HttpClientConfig {
   headers?: Record<string, string>;
   /** Request timeout in milliseconds (default: 30000). */
   timeout?: number;
+  /**
+   * Composable middleware run before every outbound request. See
+   * `b3nd-move/middleware` for canon helpers like `bearer()` / `basic()`.
+   */
+  middleware?: ClientMiddleware[];
 }
 
 export class HttpClient implements ProtocolInterfaceNode {
   private baseUrl: string;
   private headers: Record<string, string>;
   private timeout: number;
+  private middleware: ClientMiddleware[] | undefined;
 
   /** The base URL this client connects to. */
   readonly url: string;
@@ -38,6 +45,7 @@ export class HttpClient implements ProtocolInterfaceNode {
     this.url = this.baseUrl;
     this.headers = config.headers || {};
     this.timeout = config.timeout || 30000;
+    this.middleware = config.middleware;
   }
 
   /**
@@ -51,14 +59,25 @@ export class HttpClient implements ProtocolInterfaceNode {
     const timeoutId = setTimeout(() => controller.abort(), this.timeout);
 
     try {
-      const url = `${this.baseUrl}${path}`;
-      const response = await fetch(url, {
+      const url = new URL(`${this.baseUrl}${path}`);
+      const headers = new Headers({
+        "Content-Type": "application/json",
+        ...this.headers,
+        ...(options.headers as Record<string, string> | undefined),
+      });
+      const ctx = {
+        transport: "http" as const,
+        url,
+        headers,
+        body: (options.body ?? null) as BodyInit | null,
+      };
+
+      await runRequest(this.middleware, ctx);
+
+      const response = await fetch(ctx.url, {
         ...options,
-        headers: {
-          "Content-Type": "application/json",
-          ...this.headers,
-          ...options.headers,
-        },
+        headers: ctx.headers,
+        body: ctx.body,
         signal: controller.signal,
       });
 
@@ -179,9 +198,23 @@ export class HttpClient implements ProtocolInterfaceNode {
         .filter((s) => !s.startsWith(":") && s !== "*")
         .join("/");
       const uriPath = prefix.replace("://", "/");
-      const sseUrl = `${this.baseUrl}/api/v1/observe/${uriPath}`;
+      const sseUrlObj = new URL(`${this.baseUrl}/api/v1/observe/${uriPath}`);
+      const sseHeaders = new Headers(this.headers);
+      // Observe is a long-lived GET; run middleware once with an empty
+      // body so token-style helpers can stamp auth onto the request.
+      await runRequest(this.middleware, {
+        transport: "http",
+        url: sseUrlObj,
+        headers: sseHeaders,
+        body: null,
+      });
       try {
-        for await (const event of openSseStream(sseUrl, { signal })) {
+        for await (
+          const event of openSseStream(sseUrlObj.toString(), {
+            signal,
+            headers: sseHeaders,
+          })
+        ) {
           if (signal.aborted) return;
           // Each SSE event carries one uri (or several, when the
           // server batches). Tag the package with the caller's input

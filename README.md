@@ -30,6 +30,7 @@ Plus the cross-cutting pieces:
 | ----------------------------- | ------------------------------------------------------ |
 | `b3nd-move/factory`           | `createServers` + `ServerResolver` / `TransportServer` |
 | `b3nd-move/cors`              | `withCors`                                             |
+| `b3nd-move/middleware`        | `ClientMiddleware` + canon (`bearer`, `basic`, …)      |
 | `b3nd-move/grpc/proto/types`  | generated wire types + schemas + `B3ndService`         |
 | `b3nd-move/grpc/proto/convert`| proto ↔ b3nd converters                                |
 
@@ -95,6 +96,54 @@ const client = new HttpClient({ url: "http://localhost:3000" });
 await client.receive([["mutable://app/item", { name: "thing" }]]);
 const [out] = await client.read(["mutable://app/item"]);
 ```
+
+## Auth & client middleware
+
+Every client (`HttpClient`, `WebSocketClient`, `GrpcHttpClient`) accepts the
+same `middleware: ClientMiddleware[]` config. Middleware are run at the
+right lifecycle phase per transport:
+
+| Hook        | HTTP / gRPC-HTTP        | WebSocket                          |
+| ----------- | ----------------------- | ---------------------------------- |
+| `onConnect` | —                       | once at handshake (URL, subprotos) |
+| `onRequest` | per outbound call       | —                                  |
+| `onSend`    | —                       | per outbound frame (envelope)      |
+
+The canon helpers in `b3nd-move/middleware` cover the common cases:
+
+```typescript
+import { bearer, basic, apiKey, signEnvelope } from "@bandeira-tech/b3nd-move/middleware";
+import { HttpClient } from "@bandeira-tech/b3nd-move/http/client";
+import { WebSocketClient } from "@bandeira-tech/b3nd-move/ws/client";
+import { GrpcHttpClient } from "@bandeira-tech/b3nd-move/grpc/http/client";
+
+const token = () => tokenStore.get();         // sync or async getter
+
+new HttpClient({     url, middleware: [bearer(token)] });
+new WebSocketClient({ url, middleware: [bearer(token)] });
+new GrpcHttpClient({ url, middleware: [bearer(token)] });
+```
+
+Each canon helper picks the right hook per transport: `bearer()` sets
+`Authorization: Bearer …` on HTTP-style calls and falls back to a
+`?token=…` query param on the WS handshake (browser `WebSocket` cannot
+send headers — use `subprotocol()` if your server reads from
+`Sec-WebSocket-Protocol` instead).
+
+Custom middleware is just an object with the hooks you need:
+
+```typescript
+import type { ClientMiddleware } from "@bandeira-tech/b3nd-move/middleware";
+
+const stampRequestId: ClientMiddleware = {
+  onRequest: (ctx) => { ctx.headers.set("X-Request-ID", crypto.randomUUID()); },
+  onSend:    (ctx) => { ctx.envelope.requestId = crypto.randomUUID(); },
+};
+```
+
+`WebSocketClient`'s legacy `auth: { type, token, … }` config is kept as a
+deprecation shim — it's converted to `bearer()` / `basic()` middleware at
+construction and will be removed in the next major.
 
 ## How rigs compose with transports
 

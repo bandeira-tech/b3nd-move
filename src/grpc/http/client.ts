@@ -47,6 +47,7 @@ import {
   receiveResultFromProto,
   statusResponseToResult,
 } from "../proto/convert.ts";
+import { type ClientMiddleware, runRequest } from "../../middleware.ts";
 import {
   ObserveRequestSchema,
   OutputProtoSchema,
@@ -65,6 +66,11 @@ export interface GrpcHttpClientConfig {
   binary?: boolean;
   /** Request timeout in milliseconds. Default: 30000. */
   timeout?: number;
+  /**
+   * Composable middleware run before every outbound request. See
+   * `b3nd-move/middleware` for canon helpers like `bearer()` / `basic()`.
+   */
+  middleware?: ClientMiddleware[];
 }
 
 const SERVICE_PREFIX = "/b3nd.v1.B3ndService/";
@@ -73,6 +79,7 @@ export class GrpcHttpClient implements ProtocolInterfaceNode {
   private baseUrl: string;
   private binary: boolean;
   private timeout: number;
+  private middleware: ClientMiddleware[] | undefined;
   readonly url: string;
 
   constructor(config: GrpcHttpClientConfig) {
@@ -80,20 +87,30 @@ export class GrpcHttpClient implements ProtocolInterfaceNode {
     this.url = this.baseUrl;
     this.binary = config.binary ?? false;
     this.timeout = config.timeout ?? 30000;
+    this.middleware = config.middleware;
   }
 
   private async rpc(method: string, body: BodyInit): Promise<Response> {
     const abort = new AbortController();
     const id = setTimeout(() => abort.abort(), this.timeout);
     try {
-      const resp = await fetch(`${this.baseUrl}${SERVICE_PREFIX}${method}`, {
+      const url = new URL(`${this.baseUrl}${SERVICE_PREFIX}${method}`);
+      const headers = new Headers({
+        "Content-Type": this.binary
+          ? "application/proto"
+          : "application/json",
+      });
+      const ctx = {
+        transport: "grpc-http" as const,
+        url,
+        headers,
+        body: body as BodyInit | null,
+      };
+      await runRequest(this.middleware, ctx);
+      const resp = await fetch(ctx.url, {
         method: "POST",
-        headers: {
-          "Content-Type": this.binary
-            ? "application/proto"
-            : "application/json",
-        },
-        body,
+        headers: ctx.headers,
+        body: ctx.body,
         signal: abort.signal,
       });
       if (!resp.ok) {
@@ -158,10 +175,19 @@ export class GrpcHttpClient implements ProtocolInterfaceNode {
     let resp: Response;
     try {
       const req = create(ObserveRequestSchema, { urls });
-      resp = await fetch(`${this.baseUrl}${SERVICE_PREFIX}Observe`, {
+      const ctx = {
+        transport: "grpc-http" as const,
+        url: new URL(`${this.baseUrl}${SERVICE_PREFIX}Observe`),
+        headers: new Headers({ "Content-Type": "application/json" }),
+        body: JSON.stringify(toJson(ObserveRequestSchema, req)) as
+          | BodyInit
+          | null,
+      };
+      await runRequest(this.middleware, ctx);
+      resp = await fetch(ctx.url, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(toJson(ObserveRequestSchema, req)),
+        headers: ctx.headers,
+        body: ctx.body,
         signal: abort.signal,
       });
     } catch (e) {
