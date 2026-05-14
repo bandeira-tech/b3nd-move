@@ -5,6 +5,7 @@
   "exports": {
     "./factory": "./src/factory.ts",
     "./cors": "./src/cors.ts",
+    "./errors": "./src/errors.ts",
     "./http/server": "./src/http/server.ts",
     "./http/service": "./src/http/service.ts",
     "./http/client": "./src/http/client.ts",
@@ -33,7 +34,7 @@
     "@modelcontextprotocol/sdk/types.js": "npm:@modelcontextprotocol/sdk@^1.0.0/types.js"
   },
   "tasks": {
-    "check": "deno check src/factory.ts src/cors.ts src/http/server.ts src/http/service.ts src/http/client.ts src/ws/server.ts src/ws/service.ts src/ws/client.ts src/grpc/http/server.ts src/grpc/http/service.ts src/grpc/http/client.ts src/grpc/proto/convert.ts src/grpc/proto/gen/b3nd_pb.ts src/mcp/server.ts src/mcp/service.ts src/testing/contract.ts src/testing/mcp-spec.ts src/testing/shared-suite.ts src/testing/mock-http-server.ts",
+    "check": "deno check src/factory.ts src/cors.ts src/errors.ts src/http/server.ts src/http/service.ts src/http/client.ts src/ws/server.ts src/ws/service.ts src/ws/client.ts src/grpc/http/server.ts src/grpc/http/service.ts src/grpc/http/client.ts src/grpc/proto/convert.ts src/grpc/proto/gen/b3nd_pb.ts src/mcp/server.ts src/mcp/service.ts src/testing/contract.ts src/testing/mcp-spec.ts src/testing/shared-suite.ts src/testing/mock-http-server.ts",
     "test": "deno test --allow-all src/",
     "build:npm": "deno run -A scripts/build-npm.ts"
   },
