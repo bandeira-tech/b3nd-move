@@ -1,23 +1,15 @@
 import { assertEquals } from "@std/assert";
-import { connection, Rig } from "@bandeira-tech/b3nd-core/rig";
-import { MemoryStore } from "@bandeira-tech/b3nd-stores/memory";
-import { SimpleClient } from "@bandeira-tech/b3nd-stores/adapters";
 import { grpcHttpApi } from "./service.ts";
 import { GrpcHttpClient } from "./client.ts";
+import { testRig } from "../../../tests/rigs/memory.ts";
 
 let nextPort = 19100 + Math.floor(Math.random() * 900);
-
-function createTestRig(): Rig {
-  const client = new SimpleClient(new MemoryStore());
-  const route = connection(client, ["*"]);
-  return new Rig({ routes: { receive: [route], read: [route] } });
-}
 
 async function withServer(fn: (url: string) => Promise<void>): Promise<void> {
   const port = nextPort++;
   const server = Deno.serve(
     { port, hostname: "127.0.0.1" },
-    grpcHttpApi(createTestRig()),
+    grpcHttpApi(testRig()),
   );
   try {
     await fn(`http://127.0.0.1:${port}`);

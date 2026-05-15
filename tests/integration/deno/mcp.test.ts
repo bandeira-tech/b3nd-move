@@ -1,6 +1,6 @@
 /**
  * MCP — in-Deno integration: real `buildMcpServer` linked to a real
- * SDK `Client` over `InMemoryTransport`, against a `MemoryStore`-
+ * SDK `Client` over `InMemoryTransport`, against an in-process Map-
  * backed rig. Drives the shared `mcpSpec` tool-surface suite.
  */
 
@@ -8,6 +8,6 @@
 
 import { mcpSpec } from "../../suites/mcp-spec.ts";
 import { startMcpInProcess } from "../../factories/mcp.ts";
-import { memoryRig } from "../../rigs/memory.ts";
+import { testRig } from "../../rigs/memory.ts";
 
-mcpSpec("mcp", () => startMcpInProcess(memoryRig()));
+mcpSpec("mcp", () => startMcpInProcess(testRig()));

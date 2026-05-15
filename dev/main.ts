@@ -1,7 +1,7 @@
 /**
  * `deno task serve` entry point.
  *
- * Builds a `MemoryStore`-backed Rig and starts the requested transports.
+ * Builds an in-process Map-backed Rig and starts the requested transports.
  * Local-dev only — production deployments build their own rig and
  * runner.
  *
@@ -16,8 +16,7 @@
 /// <reference lib="deno.ns" />
 
 import { connection, Rig } from "@bandeira-tech/b3nd-core/rig";
-import { MemoryStore } from "@bandeira-tech/b3nd-stores/memory";
-import { SimpleClient } from "@bandeira-tech/b3nd-stores/adapters";
+import { MemoryBackend } from "../tests/rigs/memory.ts";
 import { serve, type ServerConfig, type TransportServer } from "./serve.ts";
 
 const HELP = `
@@ -106,8 +105,7 @@ function parseArgs(argv: string[]): ParsedArgs {
 }
 
 function buildRig(): Rig {
-  const client = new SimpleClient(new MemoryStore());
-  const route = connection(client, ["*"]);
+  const route = connection(new MemoryBackend(), ["*"]);
   return new Rig({
     routes: { receive: [route], read: [route], observe: [route] },
   });

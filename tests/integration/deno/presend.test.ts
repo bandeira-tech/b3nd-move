@@ -14,7 +14,7 @@ import { GrpcHttpClient } from "../../../src/grpc/http/client.ts";
 import { WebSocketClient } from "../../../src/ws/client.ts";
 import { startGrpcServer } from "../../factories/grpc.ts";
 import { startWsServer } from "../../factories/ws.ts";
-import { memoryRig } from "../../rigs/memory.ts";
+import { testRig } from "../../rigs/memory.ts";
 
 Deno.test("HttpClient preSend — stamps headers and query params on every call", async () => {
   const seen: {
@@ -127,7 +127,7 @@ Deno.test("HttpClient preSend — functions compose via plain calls", async () =
 });
 
 Deno.test("GrpcHttpClient preSend — stamps headers on rpc", async () => {
-  const server = await startGrpcServer(memoryRig());
+  const server = await startGrpcServer(testRig());
   let seenAuth: string | null = null;
   // Wrap by routing through the actual client; we sniff via a separate
   // listener proxy. Simpler: re-use the real server but stamp on
@@ -161,7 +161,7 @@ Deno.test("GrpcHttpClient preSend — stamps headers on rpc", async () => {
 });
 
 Deno.test("WebSocketClient preSend — mutates outbound envelope per frame", async () => {
-  const server = await startWsServer(memoryRig());
+  const server = await startWsServer(testRig());
   try {
     let count = 0;
     const client = new WebSocketClient({
@@ -183,7 +183,7 @@ Deno.test("WebSocketClient preSend — mutates outbound envelope per frame", asy
 });
 
 Deno.test("WebSocketClient — url accepts a function for handshake-time token", async () => {
-  const server = await startWsServer(memoryRig());
+  const server = await startWsServer(testRig());
   try {
     let calls = 0;
     const client = new WebSocketClient({
