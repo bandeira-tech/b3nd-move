@@ -14,7 +14,22 @@ import type {
 } from "@bandeira-tech/b3nd-core/types";
 import { routingKey } from "@bandeira-tech/b3nd-core/url";
 import { openSseStream } from "./sse.ts";
-import { type ClientMiddleware, runRequest } from "../middleware.ts";
+
+/** The request about to go on the wire. Mutate any field. */
+export interface HttpPreSendRequest {
+  url: URL;
+  headers: Headers;
+  body: BodyInit | null;
+}
+
+/**
+ * Pre-send hook for HTTP requests. Runs after the default URL,
+ * headers, and body are built; mutate the fields in place. Compose
+ * multiple behaviors by chaining function calls inside the hook.
+ */
+export type HttpPreSend = (
+  req: HttpPreSendRequest,
+) => void | Promise<void>;
 
 /** Configuration for `HttpClient`. */
 export interface HttpClientConfig {
@@ -25,17 +40,26 @@ export interface HttpClientConfig {
   /** Request timeout in milliseconds (default: 30000). */
   timeout?: number;
   /**
-   * Composable middleware run before every outbound request. See
-   * `b3nd-move/middleware` for canon helpers like `bearer()` / `basic()`.
+   * Pre-send hook. Receives the in-flight request; mutate `url`,
+   * `headers`, or `body` before it leaves. Use this for auth, tracing,
+   * signing, etc.
+   *
+   * @example
+   * ```ts
+   * new HttpClient({
+   *   url,
+   *   preSend: (r) => r.headers.set("Authorization", `Bearer ${getToken()}`),
+   * });
+   * ```
    */
-  middleware?: ClientMiddleware[];
+  preSend?: HttpPreSend;
 }
 
 export class HttpClient implements ProtocolInterfaceNode {
   private baseUrl: string;
   private headers: Record<string, string>;
   private timeout: number;
-  private middleware: ClientMiddleware[] | undefined;
+  private preSend: HttpPreSend | undefined;
 
   /** The base URL this client connects to. */
   readonly url: string;
@@ -45,7 +69,7 @@ export class HttpClient implements ProtocolInterfaceNode {
     this.url = this.baseUrl;
     this.headers = config.headers || {};
     this.timeout = config.timeout || 30000;
-    this.middleware = config.middleware;
+    this.preSend = config.preSend;
   }
 
   /**
@@ -59,25 +83,22 @@ export class HttpClient implements ProtocolInterfaceNode {
     const timeoutId = setTimeout(() => controller.abort(), this.timeout);
 
     try {
-      const url = new URL(`${this.baseUrl}${path}`);
-      const headers = new Headers({
-        "Content-Type": "application/json",
-        ...this.headers,
-        ...(options.headers as Record<string, string> | undefined),
-      });
-      const ctx = {
-        transport: "http" as const,
-        url,
-        headers,
+      const req: HttpPreSendRequest = {
+        url: new URL(`${this.baseUrl}${path}`),
+        headers: new Headers({
+          "Content-Type": "application/json",
+          ...this.headers,
+          ...(options.headers as Record<string, string> | undefined),
+        }),
         body: (options.body ?? null) as BodyInit | null,
       };
 
-      await runRequest(this.middleware, ctx);
+      if (this.preSend) await this.preSend(req);
 
-      const response = await fetch(ctx.url, {
+      const response = await fetch(req.url, {
         ...options,
-        headers: ctx.headers,
-        body: ctx.body,
+        headers: req.headers,
+        body: req.body,
         signal: controller.signal,
       });
 
@@ -198,21 +219,19 @@ export class HttpClient implements ProtocolInterfaceNode {
         .filter((s) => !s.startsWith(":") && s !== "*")
         .join("/");
       const uriPath = prefix.replace("://", "/");
-      const sseUrlObj = new URL(`${this.baseUrl}/api/v1/observe/${uriPath}`);
-      const sseHeaders = new Headers(this.headers);
-      // Observe is a long-lived GET; run middleware once with an empty
-      // body so token-style helpers can stamp auth onto the request.
-      await runRequest(this.middleware, {
-        transport: "http",
-        url: sseUrlObj,
-        headers: sseHeaders,
+      const req: HttpPreSendRequest = {
+        url: new URL(`${this.baseUrl}/api/v1/observe/${uriPath}`),
+        headers: new Headers(this.headers),
         body: null,
-      });
+      };
+      // Observe is a long-lived GET; run preSend once so auth-style
+      // hooks can stamp headers / query params onto the request.
+      if (this.preSend) await this.preSend(req);
       try {
         for await (
-          const event of openSseStream(sseUrlObj.toString(), {
+          const event of openSseStream(req.url.toString(), {
             signal,
-            headers: sseHeaders,
+            headers: req.headers,
           })
         ) {
           if (signal.aborted) return;

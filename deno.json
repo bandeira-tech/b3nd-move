@@ -5,7 +5,6 @@
   "exports": {
     "./factory": "./src/factory.ts",
     "./cors": "./src/cors.ts",
-    "./middleware": "./src/middleware.ts",
     "./http/server": "./src/http/server.ts",
     "./http/service": "./src/http/service.ts",
     "./http/client": "./src/http/client.ts",
@@ -38,7 +37,7 @@
     "esbuild": "npm:esbuild@^0.24.0"
   },
   "tasks": {
-    "check": "deno check src/factory.ts src/cors.ts src/middleware.ts src/http/server.ts src/http/service.ts src/http/client.ts src/ws/server.ts src/ws/service.ts src/ws/client.ts src/grpc/http/server.ts src/grpc/http/service.ts src/grpc/http/client.ts src/grpc/proto/convert.ts src/grpc/proto/gen/b3nd_pb.ts src/mcp/server.ts src/mcp/service.ts tests/suites/pin-contract.ts tests/suites/mcp-spec.ts tests/suites/move-suite.ts",
+    "check": "deno check src/factory.ts src/cors.ts src/http/server.ts src/http/service.ts src/http/client.ts src/ws/server.ts src/ws/service.ts src/ws/client.ts src/grpc/http/server.ts src/grpc/http/service.ts src/grpc/http/client.ts src/grpc/proto/convert.ts src/grpc/proto/gen/b3nd_pb.ts src/mcp/server.ts src/mcp/service.ts tests/suites/pin-contract.ts tests/suites/mcp-spec.ts tests/suites/move-suite.ts",
     "test": "deno test --allow-all src/",
     "test:integration:deno": "deno test --allow-all tests/integration/deno/",
     "test:integration:http": "deno test --allow-all tests/integration/browser/http.test.ts",

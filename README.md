@@ -30,7 +30,6 @@ Plus the cross-cutting pieces:
 | ----------------------------- | ------------------------------------------------------ |
 | `b3nd-move/factory`           | `createServers` + `ServerResolver` / `TransportServer` |
 | `b3nd-move/cors`              | `withCors`                                             |
-| `b3nd-move/middleware`        | `ClientMiddleware` + canon (`bearer`, `basic`, …)      |
 | `b3nd-move/grpc/proto/types`  | generated wire types + schemas + `B3ndService`         |
 | `b3nd-move/grpc/proto/convert`| proto ↔ b3nd converters                                |
 
@@ -97,53 +96,54 @@ await client.receive([["mutable://app/item", { name: "thing" }]]);
 const [out] = await client.read(["mutable://app/item"]);
 ```
 
-## Auth & client middleware
+## Auth & pre-send hooks
 
-Every client (`HttpClient`, `WebSocketClient`, `GrpcHttpClient`) accepts the
-same `middleware: ClientMiddleware[]` config. Middleware are run at the
-right lifecycle phase per transport:
-
-| Hook        | HTTP / gRPC-HTTP        | WebSocket                          |
-| ----------- | ----------------------- | ---------------------------------- |
-| `onConnect` | —                       | once at handshake (URL, subprotos) |
-| `onRequest` | per outbound call       | —                                  |
-| `onSend`    | —                       | per outbound frame (envelope)      |
-
-The canon helpers in `b3nd-move/middleware` cover the common cases:
+Every client takes a single `preSend` function — there is no middleware
+abstraction. Compose behaviors with plain function calls.
 
 ```typescript
-import { bearer, basic, apiKey, signEnvelope } from "@bandeira-tech/b3nd-move/middleware";
 import { HttpClient } from "@bandeira-tech/b3nd-move/http/client";
 import { WebSocketClient } from "@bandeira-tech/b3nd-move/ws/client";
 import { GrpcHttpClient } from "@bandeira-tech/b3nd-move/grpc/http/client";
 
-const token = () => tokenStore.get();         // sync or async getter
+new HttpClient({
+  url,
+  preSend: (r) => r.headers.set("Authorization", `Bearer ${await tokens.get()}`),
+});
 
-new HttpClient({     url, middleware: [bearer(token)] });
-new WebSocketClient({ url, middleware: [bearer(token)] });
-new GrpcHttpClient({ url, middleware: [bearer(token)] });
+new GrpcHttpClient({
+  url,
+  preSend: (r) => r.headers.set("Authorization", `Bearer ${await tokens.get()}`),
+});
+
+// WebSocket: preSend runs per frame. Handshake auth goes in the URL —
+// pass a function if it needs to be computed fresh per (re)connect.
+new WebSocketClient({
+  url: async () => `wss://node?token=${await tokens.get()}`,
+  preSend: (env) => { env.requestId = crypto.randomUUID(); },
+});
 ```
 
-Each canon helper picks the right hook per transport: `bearer()` sets
-`Authorization: Bearer …` on HTTP-style calls and falls back to a
-`?token=…` query param on the WS handshake (browser `WebSocket` cannot
-send headers — use `subprotocol()` if your server reads from
-`Sec-WebSocket-Protocol` instead).
+The hook shape per client:
 
-Custom middleware is just an object with the hooks you need:
+| Client            | `preSend` argument                                    |
+| ----------------- | ----------------------------------------------------- |
+| `HttpClient`      | `{ url: URL, headers: Headers, body: BodyInit \| null }` |
+| `GrpcHttpClient`  | `{ url: URL, headers: Headers, body: BodyInit \| null }` |
+| `WebSocketClient` | `envelope: Record<string, unknown>` (mutated in place) |
+
+Composition is just function composition — no framework needed:
 
 ```typescript
-import type { ClientMiddleware } from "@bandeira-tech/b3nd-move/middleware";
+const auth  = (r) => r.headers.set("Authorization", `Bearer ${getToken()}`);
+const trace = (r) => r.headers.set("X-Trace", crypto.randomUUID());
 
-const stampRequestId: ClientMiddleware = {
-  onRequest: (ctx) => { ctx.headers.set("X-Request-ID", crypto.randomUUID()); },
-  onSend:    (ctx) => { ctx.envelope.requestId = crypto.randomUUID(); },
-};
+new HttpClient({ url, preSend: async (r) => { await auth(r); trace(r); } });
 ```
 
-`WebSocketClient`'s legacy `auth: { type, token, … }` config is kept as a
-deprecation shim — it's converted to `bearer()` / `basic()` middleware at
-construction and will be removed in the next major.
+Browser `WebSocket` cannot send custom headers, which is why WS auth goes
+in the handshake URL or subprotocols — build the URL with the credentials
+you want before opening the socket.
 
 ## How rigs compose with transports
 

@@ -12,41 +12,28 @@ import type {
   ReceiveResult,
   StatusResult,
 } from "@bandeira-tech/b3nd-core/types";
-import {
-  basic as basicMiddleware,
-  bearer as bearerMiddleware,
-  type ClientMiddleware,
-  runConnect,
-  runSend,
-} from "../middleware.ts";
 
 /**
- * Legacy auth config. Prefer `middleware: [bearer(...)]` /
- * `middleware: [basic(...)]` from `b3nd-move/middleware`. Kept as a
- * deprecation shim — silently converted to middleware at construction.
- *
- * @deprecated use `middleware` instead
+ * Pre-send hook for WebSocket frames. Receives the envelope about to
+ * go on the wire; mutate fields in place (sign, stamp, etc.).
  */
-export interface WebSocketAuthConfig {
-  type: "bearer" | "basic" | "custom";
-  token?: string;
-  username?: string;
-  password?: string;
-  custom?: Record<string, unknown>;
-}
+export type WebSocketPreSend = (
+  envelope: Record<string, unknown>,
+) => void | Promise<void>;
 
 /** Configuration for `WebSocketClient`. */
 export interface WebSocketClientConfig {
-  /** WebSocket server URL. */
-  url: string;
   /**
-   * Composable middleware. `onConnect` runs once at handshake (mutate
-   * URL or subprotocols); `onSend` runs before every outbound frame
-   * (mutate envelope). See `b3nd-move/middleware` for canon helpers.
+   * WebSocket server URL. Pass a function to compute the URL fresh per
+   * handshake — useful when an auth token in the query string rotates.
    */
-  middleware?: ClientMiddleware[];
-  /** @deprecated use `middleware: [bearer(...)]` / `[basic(...)]` instead. */
-  auth?: WebSocketAuthConfig;
+  url: string | (() => string | Promise<string>);
+  /**
+   * Pre-send hook. Runs before every outbound frame; mutate the
+   * envelope object in place. Compose by chaining function calls
+   * inside the hook.
+   */
+  preSend?: WebSocketPreSend;
   /** Optional reconnection configuration. */
   reconnect?: {
     enabled: boolean;
@@ -75,7 +62,7 @@ export interface WebSocketResponse {
 
 export class WebSocketClient implements ProtocolInterfaceNode {
   private config: WebSocketClientConfig;
-  private middleware: ClientMiddleware[] | undefined;
+  private preSend: WebSocketPreSend | undefined;
   private ws: WebSocket | null = null;
   private connected = false;
   private reconnectAttempts = 0;
@@ -109,14 +96,7 @@ export class WebSocketClient implements ProtocolInterfaceNode {
         ...config.reconnect,
       },
     };
-
-    // Fold the legacy `auth` field into the middleware chain. Users of
-    // the deprecated shape get the same behavior; new code goes through
-    // `middleware` directly.
-    const fromAuth = legacyAuthToMiddleware(config.auth);
-    this.middleware = config.middleware || fromAuth
-      ? [...(fromAuth ? [fromAuth] : []), ...(config.middleware ?? [])]
-      : undefined;
+    this.preSend = config.preSend;
   }
 
   /**
@@ -160,19 +140,14 @@ export class WebSocketClient implements ProtocolInterfaceNode {
    * Establish WebSocket connection
    */
   private async connect(): Promise<void> {
-    const url = new URL(this.config.url);
-    const subprotocols: string[] = [];
-    await runConnect(this.middleware, {
-      transport: "ws",
-      url,
-      subprotocols,
-    });
+    const urlSource = this.config.url;
+    const resolvedUrl = typeof urlSource === "function"
+      ? await urlSource()
+      : urlSource;
 
     return new Promise<void>((resolve, reject) => {
       try {
-        this.ws = subprotocols.length > 0
-          ? new WebSocket(url.toString(), subprotocols)
-          : new WebSocket(url.toString());
+        this.ws = new WebSocket(resolvedUrl);
         this.ws.addEventListener("open", () => {
           this.connected = true;
           this.reconnectAttempts = 0;
@@ -305,7 +280,7 @@ export class WebSocketClient implements ProtocolInterfaceNode {
 
     const id = crypto.randomUUID();
     const envelope: Record<string, unknown> = { id, type, payload };
-    await runSend(this.middleware, { transport: "ws", envelope });
+    if (this.preSend) await this.preSend(envelope);
 
     return new Promise<T>((resolve, reject) => {
       const requestId = envelope.id as string;
@@ -402,10 +377,7 @@ export class WebSocketClient implements ProtocolInterfaceNode {
           type: "observe-cancel",
           payload: {},
         };
-        await runSend(this.middleware, {
-          transport: "ws",
-          envelope: cancelEnvelope,
-        });
+        if (this.preSend) await this.preSend(cancelEnvelope);
         this.ws?.send(JSON.stringify(cancelEnvelope));
       } catch {
         // Ignore — connection may already be closed.
@@ -425,10 +397,7 @@ export class WebSocketClient implements ProtocolInterfaceNode {
         type: "observe",
         payload: { urls },
       };
-      await runSend(this.middleware, {
-        transport: "ws",
-        envelope: openEnvelope,
-      });
+      if (this.preSend) await this.preSend(openEnvelope);
       this.ws!.send(JSON.stringify(openEnvelope));
       while (true) {
         while (queue.length > 0) yield queue.shift()!;
@@ -453,27 +422,5 @@ export class WebSocketClient implements ProtocolInterfaceNode {
         message: error instanceof Error ? error.message : String(error),
       };
     }
-  }
-}
-
-/**
- * Convert the deprecated `auth` config into a middleware. Returns
- * `undefined` for unsupported or empty auth (notably `type: "custom"`
- * — that shape had no documented runtime behavior).
- */
-function legacyAuthToMiddleware(
-  auth: WebSocketAuthConfig | undefined,
-): ClientMiddleware | undefined {
-  if (!auth) return undefined;
-  switch (auth.type) {
-    case "bearer":
-      return bearerMiddleware(auth.token ?? "");
-    case "basic":
-      return basicMiddleware(auth.username ?? "", auth.password ?? "");
-    case "custom":
-      // The legacy `custom` field never had a documented application —
-      // it was an escape hatch users were expected to handle outside
-      // the client. New code should write their own ClientMiddleware.
-      return undefined;
   }
 }

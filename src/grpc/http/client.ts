@@ -47,7 +47,6 @@ import {
   receiveResultFromProto,
   statusResponseToResult,
 } from "../proto/convert.ts";
-import { type ClientMiddleware, runRequest } from "../../middleware.ts";
 import {
   ObserveRequestSchema,
   OutputProtoSchema,
@@ -59,6 +58,21 @@ import {
   StatusResponseSchema,
 } from "../proto/gen/b3nd_pb.ts";
 
+/** The request about to go on the wire. Mutate any field. */
+export interface GrpcHttpPreSendRequest {
+  url: URL;
+  headers: Headers;
+  body: BodyInit | null;
+}
+
+/**
+ * Pre-send hook for gRPC-HTTP requests. Runs after the default URL,
+ * headers, and body are built; mutate the fields in place.
+ */
+export type GrpcHttpPreSend = (
+  req: GrpcHttpPreSendRequest,
+) => void | Promise<void>;
+
 export interface GrpcHttpClientConfig {
   /** Base URL of the gRPC-HTTP server (e.g. "http://localhost:50051"). */
   url: string;
@@ -67,10 +81,11 @@ export interface GrpcHttpClientConfig {
   /** Request timeout in milliseconds. Default: 30000. */
   timeout?: number;
   /**
-   * Composable middleware run before every outbound request. See
-   * `b3nd-move/middleware` for canon helpers like `bearer()` / `basic()`.
+   * Pre-send hook. Receives the in-flight request; mutate `url`,
+   * `headers`, or `body` before it leaves. Use this for auth, tracing,
+   * signing, etc.
    */
-  middleware?: ClientMiddleware[];
+  preSend?: GrpcHttpPreSend;
 }
 
 const SERVICE_PREFIX = "/b3nd.v1.B3ndService/";
@@ -79,7 +94,7 @@ export class GrpcHttpClient implements ProtocolInterfaceNode {
   private baseUrl: string;
   private binary: boolean;
   private timeout: number;
-  private middleware: ClientMiddleware[] | undefined;
+  private preSend: GrpcHttpPreSend | undefined;
   readonly url: string;
 
   constructor(config: GrpcHttpClientConfig) {
@@ -87,30 +102,27 @@ export class GrpcHttpClient implements ProtocolInterfaceNode {
     this.url = this.baseUrl;
     this.binary = config.binary ?? false;
     this.timeout = config.timeout ?? 30000;
-    this.middleware = config.middleware;
+    this.preSend = config.preSend;
   }
 
   private async rpc(method: string, body: BodyInit): Promise<Response> {
     const abort = new AbortController();
     const id = setTimeout(() => abort.abort(), this.timeout);
     try {
-      const url = new URL(`${this.baseUrl}${SERVICE_PREFIX}${method}`);
-      const headers = new Headers({
-        "Content-Type": this.binary
-          ? "application/proto"
-          : "application/json",
-      });
-      const ctx = {
-        transport: "grpc-http" as const,
-        url,
-        headers,
-        body: body as BodyInit | null,
+      const req: GrpcHttpPreSendRequest = {
+        url: new URL(`${this.baseUrl}${SERVICE_PREFIX}${method}`),
+        headers: new Headers({
+          "Content-Type": this.binary
+            ? "application/proto"
+            : "application/json",
+        }),
+        body,
       };
-      await runRequest(this.middleware, ctx);
-      const resp = await fetch(ctx.url, {
+      if (this.preSend) await this.preSend(req);
+      const resp = await fetch(req.url, {
         method: "POST",
-        headers: ctx.headers,
-        body: ctx.body,
+        headers: req.headers,
+        body: req.body,
         signal: abort.signal,
       });
       if (!resp.ok) {
@@ -174,20 +186,17 @@ export class GrpcHttpClient implements ProtocolInterfaceNode {
 
     let resp: Response;
     try {
-      const req = create(ObserveRequestSchema, { urls });
-      const ctx = {
-        transport: "grpc-http" as const,
+      const obsReq = create(ObserveRequestSchema, { urls });
+      const req: GrpcHttpPreSendRequest = {
         url: new URL(`${this.baseUrl}${SERVICE_PREFIX}Observe`),
         headers: new Headers({ "Content-Type": "application/json" }),
-        body: JSON.stringify(toJson(ObserveRequestSchema, req)) as
-          | BodyInit
-          | null,
+        body: JSON.stringify(toJson(ObserveRequestSchema, obsReq)),
       };
-      await runRequest(this.middleware, ctx);
-      resp = await fetch(ctx.url, {
+      if (this.preSend) await this.preSend(req);
+      resp = await fetch(req.url, {
         method: "POST",
-        headers: ctx.headers,
-        body: ctx.body,
+        headers: req.headers,
+        body: req.body,
         signal: abort.signal,
       });
     } catch (e) {
