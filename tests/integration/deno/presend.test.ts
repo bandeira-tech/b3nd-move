@@ -12,7 +12,6 @@ import { assertEquals } from "@std/assert";
 import { HttpClient } from "../../../src/http/client.ts";
 import { GrpcHttpClient } from "../../../src/grpc/http/client.ts";
 import { WebSocketClient } from "../../../src/ws/client.ts";
-import { startHttpServer } from "../../factories/http.ts";
 import { startGrpcServer } from "../../factories/grpc.ts";
 import { startWsServer } from "../../factories/ws.ts";
 import { memoryRig } from "../../rigs/memory.ts";
