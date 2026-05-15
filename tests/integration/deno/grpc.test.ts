@@ -1,24 +1,30 @@
 /**
  * gRPC-HTTP — in-Deno integration: real `grpcHttpApi` + real
- * `GrpcHttpClient` against a `MemoryStore`-backed rig. Registers the
- * contract twice so JSON and binary share assertions but exercise
- * different codec branches.
+ * `GrpcHttpClient` against `stubRig` (canned responses). Drives
+ * `runMoveSuite` twice — once with JSON codec, once with binary —
+ * so both encode/decode branches are exercised over the wire.
  */
 
 /// <reference lib="deno.ns" />
 
-import { pinContract } from "../../suites/pin-contract.ts";
+import { runMoveSuite } from "../../suites/move-suite.ts";
 import { startGrpcServer } from "../../factories/grpc.ts";
-import { memoryRig } from "../../rigs/memory.ts";
+import { stubRig } from "../../rigs/stub.ts";
 import { GrpcHttpClient } from "../../../src/grpc/http/client.ts";
 
-function register(label: string, binary: boolean): void {
-  pinContract(label, async () => {
-    const server = await startGrpcServer(memoryRig());
-    const client = new GrpcHttpClient({ url: server.url, binary });
-    return { client, cleanup: () => Promise.resolve(server.stop()) };
-  });
-}
+const server = await startGrpcServer(stubRig());
 
-register("grpc-json", false);
-register("grpc-binary", true);
+runMoveSuite("grpc-json", {
+  client: () => new GrpcHttpClient({ url: server.url, binary: false }),
+});
+
+runMoveSuite("grpc-binary", {
+  client: () => new GrpcHttpClient({ url: server.url, binary: true }),
+});
+
+Deno.test({
+  name: "[grpc] teardown",
+  sanitizeOps: false,
+  sanitizeResources: false,
+  fn: () => server.stop(),
+});

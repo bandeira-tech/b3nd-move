@@ -50,7 +50,7 @@ await client.receive([["mutable://app/x", { name: "thing" }]]);
 const [out] = await client.read(["mutable://app/x"]);
 ```
 
-For local-dev convenience that wires `httpApi` plus a `MemoryStore`-backed rig
+For local-dev convenience that wires `httpApi` plus a `stubRig`-backed runner
 and a `Deno.serve` lifecycle in one go, use `deno task serve --http` (see
 [`dev/serve.ts`](../../dev/serve.ts)).
 

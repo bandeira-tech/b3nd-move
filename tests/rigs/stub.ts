@@ -124,8 +124,7 @@ const stubProgram: Program = async (out) => {
  * Build a Rig wired to a single `StubBackend` on all three routes,
  * with the `/__reject__/` classifier registered as a program. The
  * same backend instance serves receive, read, and observe — it is
- * stateless so sharing is fine, mirroring the `defaultRig()` shape
- * used by the in-process pinContract factories.
+ * stateless so sharing is fine.
  */
 export function stubRig(): Rig {
   const backend = new StubBackend();

@@ -5,12 +5,13 @@
  * a real MCP SDK `Client` connected to a `buildMcpServer(rig)` over
  * `InMemoryTransport`.
  *
- * MCP doesn't fit the PIN-over-network shape (tool calls + JSON text
- * content vs. typed method calls + binary payloads), so this lives
- * alongside `pinContract` rather than reusing it. Each tool gets one
- * round-trip and one shape assertion; the goal is to lock the tool
- * surface that the MCP server exposes today, not to re-prove the rig's
- * behavior.
+ * MCP doesn't fit the PIN-over-method-call shape (tool calls + JSON
+ * text content vs. typed method calls + binary payloads), so this lives
+ * alongside `move-suite` rather than reusing it. The goal is to lock
+ * the tool surface — names, argument shapes, JSON envelope, slot
+ * ordering — not to re-prove backend semantics. Factories are expected
+ * to wire `stubRig` (canned responses); the spec asserts that the
+ * MCP layer faithfully relays those responses through tool content.
  */
 
 import { assert, assertEquals } from "@std/assert";
@@ -91,51 +92,37 @@ export function mcpSpec(
     assertEquals(parsed.status, "healthy");
   });
 
-  test("b3nd_receive + b3nd_read round-trip a payload", async (client) => {
-    const uri = "mutable://mcp-spec/roundtrip";
-    const payload = { hello: "mcp", n: 7 };
-
-    const receive = await client.callTool({
-      name: "b3nd_receive",
-      arguments: { messages: [[uri, payload]] },
-    });
-    const receiveAck = JSON.parse(firstText(receive)) as Array<
-      { uri: string; accepted: boolean; error?: string }
-    >;
-    assertEquals(receiveAck.length, 1);
-    assertEquals(receiveAck[0].uri, uri);
-    assertEquals(receiveAck[0].accepted, true);
-
-    const read = await client.callTool({
-      name: "b3nd_read",
-      arguments: { urls: [uri] },
-    });
-    const readResults = JSON.parse(firstText(read)) as Array<
-      { uri: string; payload: unknown }
-    >;
-    assertEquals(readResults.length, 1);
-    assertEquals(readResults[0].uri, uri);
-    assertEquals(readResults[0].payload, payload);
-  });
-
-  test("b3nd_read returns one tuple per input url, in order", async (client) => {
-    await client.callTool({
+  test("b3nd_receive returns one ack per input message, in order", async (client) => {
+    const result = await client.callTool({
       name: "b3nd_receive",
       arguments: {
         messages: [
-          ["mutable://mcp-spec/a", "A"],
-          ["mutable://mcp-spec/b", "B"],
+          ["mutable://t/mcp/a", { v: 1 }],
+          ["mutable://t/mcp/__reject__/b", { v: 2 }],
+          ["mutable://t/mcp/c", { v: 3 }],
         ],
       },
     });
+    const acks = JSON.parse(firstText(result)) as Array<
+      { uri: string; accepted: boolean; error?: string }
+    >;
+    assertEquals(acks.length, 3);
+    assertEquals(acks.map((a) => a.uri), [
+      "mutable://t/mcp/a",
+      "mutable://t/mcp/__reject__/b",
+      "mutable://t/mcp/c",
+    ]);
+    assertEquals(acks.map((a) => a.accepted), [true, false, true]);
+  });
 
+  test("b3nd_read returns one tuple per input url, in order", async (client) => {
     const result = await client.callTool({
       name: "b3nd_read",
       arguments: {
         urls: [
-          "mutable://mcp-spec/a",
-          "mutable://mcp-spec/missing",
-          "mutable://mcp-spec/b",
+          "mutable://t/mcp/a",
+          "mutable://t/mcp/__miss__/b",
+          "mutable://t/mcp/c",
         ],
       },
     });
@@ -144,11 +131,15 @@ export function mcpSpec(
     >;
     assertEquals(outputs.length, 3);
     assertEquals(outputs.map((o) => o.uri), [
-      "mutable://mcp-spec/a",
-      "mutable://mcp-spec/missing",
-      "mutable://mcp-spec/b",
+      "mutable://t/mcp/a",
+      "mutable://t/mcp/__miss__/b",
+      "mutable://t/mcp/c",
     ]);
-    assertEquals(outputs[0].payload, "A");
-    assertEquals(outputs[2].payload, "B");
+    // Stub echoes { echo: url } on hits, null on misses — the spec
+    // checks slot ordering and that the wire carries the rig's response
+    // unchanged, not the values themselves.
+    assertEquals(outputs[0].payload, { echo: "mutable://t/mcp/a" });
+    assertEquals(outputs[1].payload, null);
+    assertEquals(outputs[2].payload, { echo: "mutable://t/mcp/c" });
   });
 }

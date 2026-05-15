@@ -49,16 +49,17 @@ wrapper; see [Local dev](#local-dev-serve-task).
 
 ```typescript
 import { connection, Rig } from "@bandeira-tech/b3nd-core";
-import { MemoryStore } from "@bandeira-tech/b3nd-stores/memory";
-import { SimpleClient } from "@bandeira-tech/b3nd-stores/adapters";
 import { httpApi } from "@bandeira-tech/b3nd-move/http/service";
 import { grpcHttpApi } from "@bandeira-tech/b3nd-move/grpc/http/service";
 
-const store = new SimpleClient(new MemoryStore());
+// Bring your own backend implementing `ProtocolInterfaceNode`
+// (b3nd-save, a custom node, etc.). Anything with `receive`/`read`/
+// `observe`/`status` plugs in here.
+const backend = /* your ProtocolInterfaceNode */;
 const rig = new Rig({
   routes: {
-    receive: [connection(store, ["*"])],
-    read: [connection(store, ["*"])],
+    receive: [connection(backend, ["*"])],
+    read: [connection(backend, ["*"])],
   },
 });
 
@@ -75,7 +76,8 @@ export default { fetch: grpcHttpApi(rig) };
 ## Local dev (`serve` task)
 
 For ad-hoc local runs there's a tiny in-repo helper that builds a
-`MemoryStore`-backed rig and starts the requested transports:
+`stubRig`-backed runner (canned echo semantics) and starts the requested
+transports:
 
 ```bash
 deno task serve -- --http               # http on :3000
