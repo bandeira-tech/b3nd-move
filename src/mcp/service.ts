@@ -47,7 +47,7 @@ const TOOLS = [
   },
   {
     name: "b3nd_status",
-    description: "Get the health and capabilities of the B3nd rig.",
+    description: "Get the status and capabilities of the B3nd rig.",
     inputSchema: {
       type: "object" as const,
       properties: {},
