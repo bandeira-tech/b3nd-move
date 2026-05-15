@@ -15,8 +15,7 @@ src/<transport>/
 
 `server.ts` wraps `service.ts` with a listener (and CORS). `client.ts` speaks
 the wire shape `service.ts` exposes. Every transport's surface collapses to
-these three files plus optional helpers (e.g. `http/sse.ts`). No barrels —
-import from the canonical file directly.
+these three files. No barrels — import from the canonical file directly.
 
 ## Cross-cutting surface
 
@@ -70,7 +69,7 @@ export default { fetch: withCors(httpApi(rig), { origin: "*" }) };
 
 ## Per-transport docs
 
-- [`http/`](./http/README.md) — HTTP + SSE
+- [`http/`](./http/README.md) — HTTP + NDJSON observe
 - [`ws/`](./ws/README.md) — WebSocket framing
 - [`grpc/http/`](./grpc/http/README.md) — gRPC-over-HTTP (JSON + binary)
 - [`grpc/proto/`](./grpc/proto/README.md) — generated wire types + converters
