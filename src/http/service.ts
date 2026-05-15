@@ -20,8 +20,8 @@
  *
  * @example
  * ```ts
- * import { Rig, connection } from "@b3nd/rig";
- * import { httpApi } from "@b3nd/rig/http";
+ * import { Rig, connection } from "@bandeira-tech/b3nd-core";
+ * import { httpApi } from "@bandeira-tech/b3nd-move/http/service";
  *
  * const c = connection(client, ["*"]);
  * const rig = new Rig({ routes: { receive: [c], read: [c], observe: [c] } });
