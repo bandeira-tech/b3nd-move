@@ -48,6 +48,7 @@ import {
   ReceiveResponseSchema,
   StatusResponseSchema,
 } from "../proto/gen/b3nd_pb.ts";
+import { ndjsonResponse } from "../../actions.ts";
 
 const SERVICE_PREFIX = "/b3nd.v1.B3ndService/";
 
@@ -183,46 +184,11 @@ async function handleObserve(rig: Rig, req: Request): Promise<Response> {
   }
   if (!body.urls?.length) return errResponse("Expected { urls: string[] }");
 
-  const abort = new AbortController();
-  req.signal.addEventListener("abort", () => abort.abort());
-  const textEnc = new TextEncoder();
-
-  const stream = new ReadableStream({
-    async start(controller) {
-      try {
-        for await (const out of rig.observe(body.urls, abort.signal)) {
-          if (abort.signal.aborted) break;
-          const proto = outputToProto(out);
-          controller.enqueue(
-            textEnc.encode(
-              JSON.stringify(toJson(OutputProtoSchema, proto)) + "\n",
-            ),
-          );
-        }
-      } catch (e) {
-        if (!abort.signal.aborted) {
-          const msg = e instanceof Error ? e.message : String(e);
-          controller.enqueue(
-            textEnc.encode(JSON.stringify({ error: msg }) + "\n"),
-          );
-        }
-      } finally {
-        controller.close();
-      }
-    },
-    cancel() {
-      abort.abort();
-    },
-  });
-
-  return new Response(stream, {
-    status: 200,
-    headers: {
-      "Content-Type": "application/x-ndjson",
-      "Cache-Control": "no-cache",
-      "Connection": "keep-alive",
-    },
-  });
+  return ndjsonResponse(
+    (signal) => rig.observe(body.urls, signal),
+    (frame) => toJson(OutputProtoSchema, outputToProto(frame)),
+    req.signal,
+  );
 }
 
 async function handleStatus(rig: Rig, enc: Encoding): Promise<Response> {
