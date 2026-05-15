@@ -32,17 +32,16 @@ streams, use HTTP/WS.
 
 - `service.ts` (`buildMcpServer(rig, opts)`) returns a bare MCP `Server`
   instance — connect it to any MCP transport (stdio, sockets, in-memory).
-- `server.ts` (`mcpServer({ name, version })`) wraps it as a `ServerResolver`
-  that connects over `StdioServerTransport`. Use this for CLI tools and Claude
-  Desktop-style integrations.
+- `server.ts` (`mcpServer(rig, { name, version })`) wraps it as a
+  `TransportServer` that connects over `StdioServerTransport`. Use this for CLI
+  tools and Claude Desktop-style integrations.
 
 ## Usage
 
 ```typescript
-import { createServers } from "@bandeira-tech/b3nd-move/factory";
 import { mcpServer } from "@bandeira-tech/b3nd-move/mcp/server";
 
-const [server] = createServers(rig, [mcpServer({ name: "my-b3nd-node" })]);
+const server = mcpServer(rig, { name: "my-b3nd-node" });
 await server.start(); // blocks on stdio until the LLM host disconnects
 ```
 
@@ -62,7 +61,5 @@ await server.connect(serverTransport);
 
 - `mcpServer()` only supports stdio. For other transports, drop down to
   `buildMcpServer` and wire the transport yourself.
-- `composition.cors` from `createServers` is ignored for MCP (stdio has no
-  origin).
 - The tool definitions live as `const` data in `service.ts` — they're the
   surface contract the LLM sees. Changes affect prompt phrasing on the LLM side.

@@ -1,75 +1,64 @@
 /**
  * @module
- * WebSocket transport as a ServerResolver (Deno-only).
+ * WebSocket transport bound to `Deno.serve` (Deno-only).
  *
- * Wraps `wsApi()` with `withCors()` + `Deno.serve`. CORS can be set per
- * server (`wsServer({ cors })`) or once at composition level
- * (`createServers(rig, [...], { cors })`), with per-server taking
- * precedence.
+ * Wraps `wsApi()` with `Deno.serve`. CORS is intentionally not a knob here —
+ * WebSocket handshakes are not subject to CORS in browsers, and any HTTP
+ * preflight you need can be added by wrapping `wsApi(rig)` yourself.
  *
  * @example
  * ```typescript
- * import { Rig, createServers } from "@bandeira-tech/b3nd-move";
- * import { wsServer } from "@bandeira-tech/b3nd-move/ws";
+ * import { wsServer } from "@bandeira-tech/b3nd-move/ws/server";
  *
- * const servers = createServers(rig, [wsServer({ port: 8080 })], {
- *   cors: "*",
- * });
- * await Promise.all(servers.map((s) => s.start()));
+ * const server = wsServer(rig, { port: 8080 });
+ * await server.start();
  * ```
  */
 
 import type { Rig } from "@bandeira-tech/b3nd-core";
-import { withCors } from "../cors.ts";
-import type {
-  ServerComposition,
-  ServerResolver,
-  TransportServer,
-} from "../factory.ts";
 import { wsApi } from "./service.ts";
+
+export interface TransportServer {
+  readonly transport: string;
+  readonly address: string;
+  start(): Promise<void>;
+  stop(): Promise<void>;
+}
 
 export interface WsServerOptions {
   /** Port to listen on. Default: 8080. */
   port?: number;
   /** Hostname to bind. Default: "0.0.0.0". */
   hostname?: string;
-  /** CORS origin. Overrides composition `cors`. Falsy = no CORS. */
-  cors?: string;
 }
 
-export function wsServer(options?: WsServerOptions): ServerResolver {
+export function wsServer(
+  rig: Rig,
+  options?: WsServerOptions,
+): TransportServer {
+  const port = options?.port ?? 8080;
+  const hostname = options?.hostname ?? "0.0.0.0";
+
+  const handler = wsApi(rig);
+
+  let server: Deno.HttpServer | null = null;
+
   return {
     transport: "ws",
-    create(rig: Rig, composition?: ServerComposition): TransportServer {
-      const port = options?.port ?? 8080;
-      const hostname = options?.hostname ?? "0.0.0.0";
-      const corsOrigin = options?.cors ?? composition?.cors;
-
-      const baseHandler = wsApi(rig);
-      const handler = corsOrigin
-        ? withCors(baseHandler, { origin: corsOrigin })
-        : baseHandler;
-
-      let server: Deno.HttpServer | null = null;
-
-      return {
-        transport: "ws",
-        address: `ws://${hostname}:${port}`,
-        start() {
-          server = Deno.serve({ port, hostname }, handler);
-          return Promise.resolve();
-        },
-        async stop() {
-          // Close active WS connections first — Deno.HttpServer.shutdown
-          // waits for in-flight requests but WS connections are
-          // long-lived and would otherwise block forever.
-          await baseHandler.closeAll();
-          if (server) {
-            await server.shutdown();
-            server = null;
-          }
-        },
-      };
+    address: `ws://${hostname}:${port}`,
+    start() {
+      server = Deno.serve({ port, hostname }, handler);
+      return Promise.resolve();
+    },
+    async stop() {
+      // Close active WS connections first — Deno.HttpServer.shutdown
+      // waits for in-flight requests but WS connections are
+      // long-lived and would otherwise block forever.
+      await handler.closeAll();
+      if (server) {
+        await server.shutdown();
+        server = null;
+      }
     },
   };
 }

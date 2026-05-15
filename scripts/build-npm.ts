@@ -8,8 +8,6 @@
  * The npm build ships ONLY the universal slices that run on Node and in
  * browsers:
  *
- *   • `./factory`            — `createServers` + types
- *   • `./cors`               — `withCors`
  *   • `./http/service`       — `httpApi(rig)` (pure fetch handler)
  *   • `./http/client`        — `HttpClient`
  *   • `./grpc/http/service`  — `grpcHttpApi(rig)` (pure fetch handler)
@@ -32,8 +30,6 @@ await emptyDir("./npm");
 
 await build({
   entryPoints: [
-    { name: "./factory", path: "./src/factory.ts" },
-    { name: "./cors", path: "./src/cors.ts" },
     { name: "./http/service", path: "./src/http/service.ts" },
     { name: "./http/client", path: "./src/http/client.ts" },
     { name: "./grpc/http/service", path: "./src/grpc/http/service.ts" },

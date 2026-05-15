@@ -1,68 +1,60 @@
 /**
  * @module
- * gRPC-HTTP transport as a ServerResolver (Deno-only).
+ * gRPC-HTTP transport bound to `Deno.serve` (Deno-only).
+ *
+ * Wraps `grpcHttpApi()` with `Deno.serve`. CORS is intentionally not a knob
+ * here — wrap `grpcHttpApi(rig)` and `Deno.serve` yourself if you need
+ * middleware, or use a higher-level SDK that bundles the conveniences.
  *
  * @example
  * ```typescript
- * import { createServers } from "@bandeira-tech/b3nd-core";
  * import { grpcHttpServer } from "@bandeira-tech/b3nd-move/grpc/http/server";
  *
- * const servers = createServers(rig, [grpcHttpServer({ port: 50051 })], {
- *   cors: "*",
- * });
- * await Promise.all(servers.map((s) => s.start()));
+ * const server = grpcHttpServer(rig, { port: 50051 });
+ * await server.start();
  * ```
  */
 
 import type { Rig } from "@bandeira-tech/b3nd-core";
-import { withCors } from "../../cors.ts";
-import type {
-  ServerComposition,
-  ServerResolver,
-  TransportServer,
-} from "../../factory.ts";
 import { grpcHttpApi } from "./service.ts";
+
+export interface TransportServer {
+  readonly transport: string;
+  readonly address: string;
+  start(): Promise<void>;
+  stop(): Promise<void>;
+}
 
 export interface GrpcHttpServerOptions {
   /** Port to listen on. Default: 50051. */
   port?: number;
   /** Hostname to bind. Default: "0.0.0.0". */
   hostname?: string;
-  /** CORS origin. Overrides composition `cors`. Falsy = no CORS. */
-  cors?: string;
 }
 
 export function grpcHttpServer(
+  rig: Rig,
   options?: GrpcHttpServerOptions,
-): ServerResolver {
+): TransportServer {
+  const port = options?.port ?? 50051;
+  const hostname = options?.hostname ?? "0.0.0.0";
+
+  const handler = grpcHttpApi(rig);
+
+  let server: Deno.HttpServer | null = null;
+
   return {
     transport: "grpc-http",
-    create(rig: Rig, composition?: ServerComposition): TransportServer {
-      const port = options?.port ?? 50051;
-      const hostname = options?.hostname ?? "0.0.0.0";
-      const corsOrigin = options?.cors ?? composition?.cors;
-
-      const baseHandler = grpcHttpApi(rig);
-      const handler = corsOrigin
-        ? withCors(baseHandler, { origin: corsOrigin })
-        : baseHandler;
-
-      let server: Deno.HttpServer | null = null;
-
-      return {
-        transport: "grpc-http",
-        address: `http://${hostname}:${port}`,
-        start() {
-          server = Deno.serve({ port, hostname }, handler);
-          return Promise.resolve();
-        },
-        async stop() {
-          if (server) {
-            await server.shutdown();
-            server = null;
-          }
-        },
-      };
+    address: `http://${hostname}:${port}`,
+    start() {
+      server = Deno.serve({ port, hostname }, handler);
+      return Promise.resolve();
+    },
+    async stop() {
+      if (server) {
+        await server.shutdown();
+        server = null;
+      }
     },
   };
 }

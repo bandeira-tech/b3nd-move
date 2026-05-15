@@ -10,7 +10,7 @@
 
 import type { Rig } from "@bandeira-tech/b3nd-core/rig";
 import { grpcHttpApi } from "../../src/grpc/http/service.ts";
-import { withCors } from "../../src/cors.ts";
+import { withCors } from "./cors.ts";
 import type { HttpServerOptions, ServerHandle } from "./http.ts";
 
 export function startGrpcServer(
@@ -18,7 +18,7 @@ export function startGrpcServer(
   opts: HttpServerOptions = {},
 ): Promise<ServerHandle> {
   const handler = opts.cors
-    ? withCors(grpcHttpApi(rig), { origin: "*" })
+    ? withCors(grpcHttpApi(rig), "*")
     : grpcHttpApi(rig);
   const server = Deno.serve(
     { port: 0, hostname: "127.0.0.1", onListen: () => {} },

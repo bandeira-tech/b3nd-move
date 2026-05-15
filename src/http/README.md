@@ -34,8 +34,8 @@ URI paths are reconstructed from the URL after the prefix (e.g.
 
 - `service.ts` (`httpApi(rig)`) is the pure fetch handler — pair with any
   runtime (Hono, Express, `node:http`, Workers).
-- `server.ts` (`httpServer({ port })`) wraps it with `Deno.serve` + CORS and
-  returns a `ServerResolver`.
+- `server.ts` (`httpServer(rig, { port })`) wraps it with `Deno.serve` and
+  returns a `TransportServer` with `start`/`stop`.
 - `client.ts` (`HttpClient`) speaks the routes above; implements
   `ProtocolInterfaceNode`.
 
@@ -43,12 +43,9 @@ URI paths are reconstructed from the URL after the prefix (e.g.
 
 ```typescript
 // server side (Deno)
-import { createServers } from "@bandeira-tech/b3nd-move/factory";
 import { httpServer } from "@bandeira-tech/b3nd-move/http/server";
 
-const [server] = createServers(rig, [httpServer({ port: 3000 })], {
-  cors: "*",
-});
+const server = httpServer(rig, { port: 3000 });
 await server.start();
 
 // client side (anywhere fetch works)
@@ -60,20 +57,20 @@ const [out] = await client.read(["mutable://app/x"]);
 ```
 
 For Node / Bun / Workers, skip `server.ts` and feed `service.ts` to your host
-runtime:
+runtime — that's also where you add CORS, auth, or any other middleware:
 
 ```typescript
 import { httpApi } from "@bandeira-tech/b3nd-move/http/service";
-import { withCors } from "@bandeira-tech/b3nd-move/cors";
 
-export default { fetch: withCors(httpApi(rig), { origin: "*" }) };
+export default { fetch: httpApi(rig) };
 ```
 
 ## Notes
 
 - `HttpApiOptions.statusMeta` is merged into status responses.
-- `httpServer` honors `composition.cors` from `createServers`; per-server `cors`
-  overrides it.
+- `httpServer` is a no-frills `Deno.serve` convenience. It does not add CORS —
+  wrap `httpApi(rig)` and call `Deno.serve` yourself if you need middleware in
+  front of the handler.
 - SSE keepalive: `service.ts` installs a 30s interval on observe streams.
   Cleanup binds to stream `cancel`; if a host runtime fires test sanitizers
   before stream cancel resolves, you may see a false-positive op leak (see

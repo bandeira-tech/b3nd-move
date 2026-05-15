@@ -1,71 +1,67 @@
 # src
 
 The moving layer for B3nd. Each transport directory follows the same three-file
-convention; the two files at this level are the cross-cutting infrastructure
-that every transport plugs into.
+convention.
 
 ## Convention
 
 ```
 src/<transport>/
-  server.ts   ← runtime-bound resolver (Deno.serve, stdio, …)
+  server.ts   ← runtime-bound (Deno.serve, stdio, …)
   service.ts  ← portable handler (works in any fetch / SDK runtime)
   client.ts   ← ProtocolInterfaceNode over the wire
 ```
 
-`server.ts` wraps `service.ts` with a listener (and CORS). `client.ts` speaks
+`server.ts` is a thin Deno-bound wrapper around `service.ts`. `client.ts` speaks
 the wire shape `service.ts` exposes. Every transport's surface collapses to
 these three files plus optional helpers (e.g. `http/sse.ts`). No barrels —
 import from the canonical file directly.
 
-## Cross-cutting surface
-
-| File         | Exports                                                                   | Runtime |
-| ------------ | ------------------------------------------------------------------------- | ------- |
-| `factory.ts` | `createServers`, `ServerResolver`, `TransportServer`, `ServerComposition` | any     |
-| `cors.ts`    | `withCors`, `CorsOptions`                                                 | any     |
-
 ## Concepts
 
-**`ServerResolver`** is the contract every transport's `server.ts` implements:
-`(Rig, ServerComposition?) → TransportServer`. It mirrors `BackendResolver` on
-the storage side:
+**`TransportServer`** is the lifecycle shape every `server.ts` returns:
 
+```typescript
+interface TransportServer {
+  readonly transport: string;
+  readonly address: string;
+  start(): Promise<void>;
+  stop(): Promise<void>;
+}
 ```
-BackendResolver  : URL  → Store           (storage)
-ServerResolver   : Rig  → TransportServer (moving)
-```
 
-**`createServers`** doesn't start anything — it just maps resolvers over a rig.
-Lifecycle (`start` / `stop`) is per-server.
+Each `server.ts` exports a single function — `httpServer(rig, opts?)`,
+`wsServer(rig, opts?)`, etc. — that constructs and returns a `TransportServer`.
+There is no shared factory or composition layer; if you want to spin up several
+transports together, call them in a loop.
 
-**`ServerComposition`** flows cross-cutting concerns (currently just `cors`)
-into every resolver in the group. Per-server options win over composition
-defaults.
+**Cross-cutting concerns are out of scope.** CORS, auth wrappers, multi-server
+orchestration — none of it lives here. Wrap the portable `service` handlers
+yourself, or reach for a higher-level SDK. The move layer exists to do encoding
+/ transport / decoding and nothing else.
 
 ## Usage
 
 ```typescript
-import { createServers } from "@bandeira-tech/b3nd-move/factory";
 import { httpServer } from "@bandeira-tech/b3nd-move/http/server";
 import { wsServer } from "@bandeira-tech/b3nd-move/ws/server";
 
-const servers = createServers(rig, [
-  httpServer({ port: 3000 }),
-  wsServer({ port: 8080 }),
-], { cors: "*" });
+const servers = [
+  httpServer(rig, { port: 3000 }),
+  wsServer(rig, { port: 8080 }),
+];
 
 await Promise.all(servers.map((s) => s.start()));
 ```
 
-For runtimes without `Deno.serve` (Node, Bun, Cloudflare), skip the resolvers
-and wrap the portable `service` directly:
+For runtimes without `Deno.serve` (Node, Bun, Cloudflare), skip `server.ts`
+entirely and wrap the portable `service` handler directly:
 
 ```typescript
 import { httpApi } from "@bandeira-tech/b3nd-move/http/service";
-import { withCors } from "@bandeira-tech/b3nd-move/cors";
 
-export default { fetch: withCors(httpApi(rig), { origin: "*" }) };
+// Add CORS / auth / etc. with your runtime's own middleware.
+export default { fetch: httpApi(rig) };
 ```
 
 ## Per-transport docs
@@ -75,4 +71,3 @@ export default { fetch: withCors(httpApi(rig), { origin: "*" }) };
 - [`grpc/http/`](./grpc/http/README.md) — gRPC-over-HTTP (JSON + binary)
 - [`grpc/proto/`](./grpc/proto/README.md) — generated wire types + converters
 - [`mcp/`](./mcp/README.md) — Model Context Protocol (stdio)
-- [`testing/`](./testing/README.md) — PIN contract + MCP spec harness

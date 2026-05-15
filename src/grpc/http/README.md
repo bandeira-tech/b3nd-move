@@ -43,7 +43,8 @@ stream.
 
 - `service.ts` (`grpcHttpApi(rig)`) is a pure `(Request) ⇒ Response` — works in
   any fetch-capable runtime.
-- `server.ts` (`grpcHttpServer({ port })`) wraps it with `Deno.serve` + CORS.
+- `server.ts` (`grpcHttpServer(rig, { port })`) wraps it with `Deno.serve` and
+  returns a `TransportServer` with `start`/`stop`.
 - `client.ts` (`GrpcHttpClient`) implements `ProtocolInterfaceNode`; works in
   browsers, Deno, Bun, Node 18+.
 
@@ -54,13 +55,10 @@ with the generated `B3ndService` descriptor — see
 ## Usage
 
 ```typescript
-import { createServers } from "@bandeira-tech/b3nd-move/factory";
 import { grpcHttpServer } from "@bandeira-tech/b3nd-move/grpc/http/server";
 import { GrpcHttpClient } from "@bandeira-tech/b3nd-move/grpc/http/client";
 
-const [server] = createServers(rig, [grpcHttpServer({ port: 50051 })], {
-  cors: "*",
-});
+const server = grpcHttpServer(rig, { port: 50051 });
 await server.start();
 
 const client = new GrpcHttpClient({

@@ -37,20 +37,18 @@ end-of-stream) or by `observe-cancel` from the client.
 - `service.ts` (`wsApi(rig)`) is a fetch handler that upgrades to WS. Tied to
   Deno only because it uses `Deno.upgradeWebSocket`. Exposes a `closeAll()`
   lifecycle hook so the server can drain sockets before shutdown.
-- `server.ts` (`wsServer({ port })`) wraps it with `Deno.serve` + CORS.
+- `server.ts` (`wsServer(rig, { port })`) wraps it with `Deno.serve` and returns
+  a `TransportServer` with `start`/`stop`.
 - `client.ts` (`WebSocketClient`) speaks the protocol above with configurable
   reconnection.
 
 ## Usage
 
 ```typescript
-import { createServers } from "@bandeira-tech/b3nd-move/factory";
 import { wsServer } from "@bandeira-tech/b3nd-move/ws/server";
 import { WebSocketClient } from "@bandeira-tech/b3nd-move/ws/client";
 
-const [server] = createServers(rig, [wsServer({ port: 8080 })], {
-  cors: "*",
-});
+const server = wsServer(rig, { port: 8080 });
 await server.start();
 
 const client = new WebSocketClient({
@@ -70,7 +68,9 @@ for await (
 ## Notes
 
 - `wsApi` returns 404 for non-upgrade requests — it does only the WS path.
-  Compose with `withCors` if browsers hit it directly.
+  WebSocket handshakes are not subject to CORS, so `wsServer` is a no-frills
+  `Deno.serve` wrapper. If you need CORS for a sibling HTTP endpoint, run it on
+  a separate handler.
 - `WsApi.closeAll()` drains sockets gracefully. `wsServer` calls it before
   `server.shutdown()` because `Deno.HttpServer.shutdown` waits for in-flight
   requests and WS connections are long-lived.
