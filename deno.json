@@ -30,7 +30,7 @@
     "esbuild": "npm:esbuild@^0.24.0"
   },
   "tasks": {
-    "check": "deno check src/errors.ts src/http/service.ts src/http/client.ts src/ws/service.ts src/ws/client.ts src/grpc/http/service.ts src/grpc/http/client.ts src/grpc/proto/convert.ts src/grpc/proto/gen/b3nd_pb.ts src/mcp/service.ts dev/serve.ts dev/main.ts tests/suites/pin-contract.ts tests/suites/mcp-spec.ts tests/suites/move-suite.ts",
+    "check": "deno check src/errors.ts src/http/service.ts src/http/client.ts src/ws/service.ts src/ws/client.ts src/grpc/http/service.ts src/grpc/http/client.ts src/grpc/proto/convert.ts src/grpc/proto/gen/b3nd_pb.ts src/mcp/service.ts dev/serve.ts dev/main.ts tests/suites/mcp-spec.ts tests/suites/move-suite.ts",
     "test": "deno test --allow-all src/",
     "test:integration:deno": "deno test --allow-all tests/integration/deno/",
     "test:integration:http": "deno test --allow-all tests/integration/browser/http.test.ts",

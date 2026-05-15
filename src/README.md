@@ -41,7 +41,7 @@ export default { fetch: grpcHttpApi(rig) };
 // Node — pair with @hono/node-server, express, node:http, …
 ```
 
-For an in-repo example that builds a `MemoryStore`-backed rig and starts several
+For an in-repo example that builds a `stubRig`-backed runner and starts several
 transports at once, see [`dev/serve.ts`](../dev/serve.ts) and the
 [`serve` task](../README.md#local-dev-serve-task).
 

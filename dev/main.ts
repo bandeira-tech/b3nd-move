@@ -1,9 +1,10 @@
 /**
  * `deno task serve` entry point.
  *
- * Builds an in-process Map-backed Rig and starts the requested transports.
- * Local-dev only — production deployments build their own rig and
- * runner.
+ * Builds a `stubRig`-backed runner — canned echo semantics — and starts
+ * the requested transports. Useful for poking the wire from outside
+ * Deno (curl, Postman, browser dev tools); not a real backend.
+ * Production deployments build their own rig and runner.
  *
  * Usage:
  *   deno task serve --http               # http on :3000
@@ -15,8 +16,8 @@
 
 /// <reference lib="deno.ns" />
 
-import { connection, Rig } from "@bandeira-tech/b3nd-core/rig";
-import { MemoryBackend } from "../tests/rigs/memory.ts";
+import type { Rig } from "@bandeira-tech/b3nd-core/rig";
+import { stubRig } from "../tests/rigs/stub.ts";
 import { serve, type ServerConfig, type TransportServer } from "./serve.ts";
 
 const HELP = `
@@ -105,10 +106,7 @@ function parseArgs(argv: string[]): ParsedArgs {
 }
 
 function buildRig(): Rig {
-  const route = connection(new MemoryBackend(), ["*"]);
-  return new Rig({
-    routes: { receive: [route], read: [route], observe: [route] },
-  });
+  return stubRig();
 }
 
 function applyHostname(

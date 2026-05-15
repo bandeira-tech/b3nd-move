@@ -8,7 +8,7 @@
  * directly rather than a `{ url, stop }` pair, and the caller doesn't
  * construct the client itself.
  *
- * Used by `mcpSpec` (the MCP analog of `pinContract`).
+ * Used by `mcpSpec` (the MCP analog of `moveSuite`).
  */
 
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";

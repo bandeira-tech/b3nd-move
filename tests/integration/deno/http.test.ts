@@ -1,18 +1,26 @@
 /**
  * HTTP — in-Deno integration: real `httpApi` + real `HttpClient`
- * against an in-process Map-backed rig. Drives the shared
- * `pinContract` round-trip suite.
+ * against `stubRig` (canned responses). Drives `runMoveSuite` to
+ * assert wire fidelity — that calls reach the rig with the expected
+ * shape and that responses survive the encode/transport/decode round.
  */
 
 /// <reference lib="deno.ns" />
 
-import { pinContract } from "../../suites/pin-contract.ts";
+import { runMoveSuite } from "../../suites/move-suite.ts";
 import { startHttpServer } from "../../factories/http.ts";
-import { testRig } from "../../rigs/memory.ts";
+import { stubRig } from "../../rigs/stub.ts";
 import { HttpClient } from "../../../src/http/client.ts";
 
-pinContract("http", async () => {
-  const server = await startHttpServer(testRig());
-  const client = new HttpClient({ url: server.url });
-  return { client, cleanup: () => Promise.resolve(server.stop()) };
-}, { sanitizeOps: false, sanitizeResources: false });
+const server = await startHttpServer(stubRig());
+
+runMoveSuite("http", {
+  client: () => new HttpClient({ url: server.url }),
+});
+
+Deno.test({
+  name: "[http] teardown",
+  sanitizeOps: false,
+  sanitizeResources: false,
+  fn: () => server.stop(),
+});
