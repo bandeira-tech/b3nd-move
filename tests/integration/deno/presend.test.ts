@@ -17,7 +17,11 @@ import { startWsServer } from "../../factories/ws.ts";
 import { memoryRig } from "../../rigs/memory.ts";
 
 Deno.test("HttpClient preSend — stamps headers and query params on every call", async () => {
-  const seen: { auth?: string | null; trace?: string | null; region?: string | null }[] = [];
+  const seen: {
+    auth?: string | null;
+    trace?: string | null;
+    region?: string | null;
+  }[] = [];
   const ac = new AbortController();
   const server = Deno.serve(
     { port: 0, signal: ac.signal, onListen: () => {} },
