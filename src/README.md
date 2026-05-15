@@ -1,68 +1,49 @@
 # src
 
-The moving layer for B3nd. Each transport directory follows the same three-file
+The moving layer for B3nd. Each transport directory follows the same two-file
 convention.
 
 ## Convention
 
 ```
 src/<transport>/
-  server.ts   ← runtime-bound (Deno.serve, stdio, …)
   service.ts  ← portable handler (works in any fetch / SDK runtime)
   client.ts   ← ProtocolInterfaceNode over the wire
 ```
 
-`server.ts` is a thin Deno-bound wrapper around `service.ts`. `client.ts` speaks
-the wire shape `service.ts` exposes. Every transport's surface collapses to
-these three files plus optional helpers (e.g. `http/sse.ts`). No barrels —
-import from the canonical file directly.
+`client.ts` speaks the wire shape `service.ts` exposes. Every transport's
+surface collapses to these two files plus optional helpers (e.g.
+`http/sse.ts`). No barrels — import from the canonical file directly.
 
-## Concepts
+**Runtime binding lives outside `src/`.** Spinning up `Deno.serve`, plumbing
+stdio, draining WebSocket connections — none of that is part of the published
+package. Pair `service.ts` with whatever your host runtime offers, or use
+`dev/serve.ts` (and `deno task serve`) for local-dev convenience. Production
+runners and SDKs build their own equivalents.
 
-**`TransportServer`** is the lifecycle shape every `server.ts` returns:
-
-```typescript
-interface TransportServer {
-  readonly transport: string;
-  readonly address: string;
-  start(): Promise<void>;
-  stop(): Promise<void>;
-}
-```
-
-Each `server.ts` exports a single function — `httpServer(rig, opts?)`,
-`wsServer(rig, opts?)`, etc. — that constructs and returns a `TransportServer`.
-There is no shared factory or composition layer; if you want to spin up several
-transports together, call them in a loop.
-
-**Cross-cutting concerns are out of scope.** CORS, auth wrappers, multi-server
-orchestration — none of it lives here. Wrap the portable `service` handlers
-yourself, or reach for a higher-level SDK. The move layer exists to do encoding
-/ transport / decoding and nothing else.
+**Cross-cutting concerns are out of scope too.** CORS, auth wrappers, multi-
+server orchestration — wrap the `service` handlers yourself, or reach for a
+higher-level SDK. The move layer exists to do encoding / transport / decoding
+and nothing else.
 
 ## Usage
 
 ```typescript
-import { httpServer } from "@bandeira-tech/b3nd-move/http/server";
-import { wsServer } from "@bandeira-tech/b3nd-move/ws/server";
-
-const servers = [
-  httpServer(rig, { port: 3000 }),
-  wsServer(rig, { port: 8080 }),
-];
-
-await Promise.all(servers.map((s) => s.start()));
-```
-
-For runtimes without `Deno.serve` (Node, Bun, Cloudflare), skip `server.ts`
-entirely and wrap the portable `service` handler directly:
-
-```typescript
 import { httpApi } from "@bandeira-tech/b3nd-move/http/service";
+import { grpcHttpApi } from "@bandeira-tech/b3nd-move/grpc/http/service";
 
-// Add CORS / auth / etc. with your runtime's own middleware.
-export default { fetch: httpApi(rig) };
+// Deno
+Deno.serve({ port: 3000 }, httpApi(rig));
+
+// Cloudflare Workers / Bun
+export default { fetch: grpcHttpApi(rig) };
+
+// Node — pair with @hono/node-server, express, node:http, …
 ```
+
+For an in-repo example that builds a `MemoryStore`-backed rig and starts
+several transports at once, see [`dev/serve.ts`](../dev/serve.ts) and the
+[`serve` task](../README.md#local-dev-serve-task).
 
 ## Per-transport docs
 

@@ -1,21 +1,17 @@
 {
   "name": "@bandeira-tech/b3nd-move",
   "version": "0.14.0",
-  "description": "B3nd Move — encoding, transport, decoding, and rig orchestration. Server and client halves for each transport (HTTP, WebSocket, gRPC-HTTP, MCP).",
+  "description": "B3nd Move — encoding, transport, decoding. Portable service handlers and clients for each transport (HTTP, WebSocket, gRPC-HTTP, MCP).",
   "exports": {
     "./errors": "./src/errors.ts",
-    "./http/server": "./src/http/server.ts",
     "./http/service": "./src/http/service.ts",
     "./http/client": "./src/http/client.ts",
-    "./ws/server": "./src/ws/server.ts",
     "./ws/service": "./src/ws/service.ts",
     "./ws/client": "./src/ws/client.ts",
-    "./grpc/http/server": "./src/grpc/http/server.ts",
     "./grpc/http/service": "./src/grpc/http/service.ts",
     "./grpc/http/client": "./src/grpc/http/client.ts",
     "./grpc/proto/types": "./src/grpc/proto/gen/b3nd_pb.ts",
     "./grpc/proto/convert": "./src/grpc/proto/convert.ts",
-    "./mcp/server": "./src/mcp/server.ts",
     "./mcp/service": "./src/mcp/service.ts"
   },
   "imports": {
@@ -36,13 +32,14 @@
     "esbuild": "npm:esbuild@^0.24.0"
   },
   "tasks": {
-    "check": "deno check src/errors.ts src/http/server.ts src/http/service.ts src/http/client.ts src/ws/server.ts src/ws/service.ts src/ws/client.ts src/grpc/http/server.ts src/grpc/http/service.ts src/grpc/http/client.ts src/grpc/proto/convert.ts src/grpc/proto/gen/b3nd_pb.ts src/mcp/server.ts src/mcp/service.ts tests/suites/pin-contract.ts tests/suites/mcp-spec.ts tests/suites/move-suite.ts",
+    "check": "deno check src/errors.ts src/http/service.ts src/http/client.ts src/ws/service.ts src/ws/client.ts src/grpc/http/service.ts src/grpc/http/client.ts src/grpc/proto/convert.ts src/grpc/proto/gen/b3nd_pb.ts src/mcp/service.ts dev/serve.ts dev/main.ts tests/suites/pin-contract.ts tests/suites/mcp-spec.ts tests/suites/move-suite.ts",
     "test": "deno test --allow-all src/",
     "test:integration:deno": "deno test --allow-all tests/integration/deno/",
     "test:integration:http": "deno test --allow-all tests/integration/browser/http.test.ts",
     "test:integration:ws": "deno test --allow-all tests/integration/browser/ws.test.ts",
     "test:integration:grpc": "deno test --allow-all tests/integration/browser/grpc.test.ts",
     "test:integration:grpc-binary": "deno test --allow-all tests/integration/browser/grpc-binary.test.ts",
+    "serve": "deno run -A dev/main.ts",
     "build:npm": "deno run -A scripts/build-npm.ts"
   },
   "compilerOptions": {

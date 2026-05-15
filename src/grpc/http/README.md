@@ -6,11 +6,10 @@ both — encoding is decided by `Content-Type`.
 
 ## Surface
 
-| File         | Exports                                   | Runtime |
-| ------------ | ----------------------------------------- | ------- |
-| `server.ts`  | `grpcHttpServer`, `GrpcHttpServerOptions` | Deno    |
-| `service.ts` | `grpcHttpApi`                             | any     |
-| `client.ts`  | `GrpcHttpClient`, `GrpcHttpClientConfig`  | any     |
+| File         | Exports                                  | Runtime |
+| ------------ | ---------------------------------------- | ------- |
+| `service.ts` | `grpcHttpApi`                            | any     |
+| `client.ts`  | `GrpcHttpClient`, `GrpcHttpClientConfig` | any     |
 
 ## Concepts
 
@@ -39,27 +38,24 @@ Observe always streams NDJSON for compatibility with the JSON wire form; this
 means a binary client and a JSON client subscribe to the exact same event
 stream.
 
-**The triplet.**
+**The pair.**
 
 - `service.ts` (`grpcHttpApi(rig)`) is a pure `(Request) ⇒ Response` — works in
   any fetch-capable runtime.
-- `server.ts` (`grpcHttpServer(rig, { port })`) wraps it with `Deno.serve` and
-  returns a `TransportServer` with `start`/`stop`.
 - `client.ts` (`GrpcHttpClient`) implements `ProtocolInterfaceNode`; works in
   browsers, Deno, Bun, Node 18+.
 
-Web apps that already use the connect-rpc ecosystem can drive the same server
+Web apps that already use the connect-rpc ecosystem can drive the same handler
 with the generated `B3ndService` descriptor — see
 [`../proto/`](../proto/README.md).
 
 ## Usage
 
 ```typescript
-import { grpcHttpServer } from "@bandeira-tech/b3nd-move/grpc/http/server";
+import { grpcHttpApi } from "@bandeira-tech/b3nd-move/grpc/http/service";
 import { GrpcHttpClient } from "@bandeira-tech/b3nd-move/grpc/http/client";
 
-const server = grpcHttpServer(rig, { port: 50051 });
-await server.start();
+Deno.serve({ port: 50051 }, grpcHttpApi(rig));
 
 const client = new GrpcHttpClient({
   url: "http://localhost:50051",
@@ -75,3 +71,5 @@ await client.receive([["mutable://app/x", { name: "thing" }]]);
   `grpchttp-binary` factories.
 - Conversion between proto messages and b3nd's `Output` / `ReceiveResult` /
   `StatusResult` types lives in [`../proto/convert.ts`](../proto/convert.ts).
+- For local-dev convenience use `deno task serve -- --grpc` (see
+  [`dev/serve.ts`](../../../dev/serve.ts)).

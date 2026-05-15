@@ -2,7 +2,7 @@
 
 Encoding, transport, decoding. The moving layer for B3nd.
 
-A B3nd node has two sides facing the wire: a **server** that takes incoming
+A B3nd node has two sides facing the wire: a **service** that takes incoming
 bytes, decodes them, drives a `Rig` from `@bandeira-tech/b3nd-core`, and encodes
 the response — and a **client** that does the inverse from the other end.
 `b3nd-move` ships both halves for each supported transport, in one canonical
@@ -11,18 +11,18 @@ place, with no re-export indirection between them and your code.
 ```
 wire bytes  ──►  decode  ──►  Rig (core)  ──►  encode  ──►  wire bytes
     ▲                                                            │
-    └───────────── client.ts ◄───────────── server.ts ◄──────────┘
+    └───────────── client.ts ◄───────────── service.ts ◄─────────┘
                          (the moving layer)
 ```
 
 Pick a transport, import the side you need:
 
-| Transport      | Server                       | Client                       | Pure handler                  |
-| -------------- | ---------------------------- | ---------------------------- | ----------------------------- |
-| HTTP           | `b3nd-move/http/server`      | `b3nd-move/http/client`      | `b3nd-move/http/service`      |
-| WebSocket      | `b3nd-move/ws/server`        | `b3nd-move/ws/client`        | `b3nd-move/ws/service`        |
-| gRPC-over-HTTP | `b3nd-move/grpc/http/server` | `b3nd-move/grpc/http/client` | `b3nd-move/grpc/http/service` |
-| MCP (stdio)    | `b3nd-move/mcp/server`       | —                            | `b3nd-move/mcp/service`       |
+| Transport      | Client                       | Pure handler                  |
+| -------------- | ---------------------------- | ----------------------------- |
+| HTTP           | `b3nd-move/http/client`      | `b3nd-move/http/service`      |
+| WebSocket      | `b3nd-move/ws/client`        | `b3nd-move/ws/service`        |
+| gRPC-over-HTTP | `b3nd-move/grpc/http/client` | `b3nd-move/grpc/http/service` |
+| MCP (stdio)    | —                            | `b3nd-move/mcp/service`       |
 
 Plus the proto pieces:
 
@@ -31,33 +31,28 @@ Plus the proto pieces:
 | `b3nd-move/grpc/proto/types`   | generated wire types + schemas + `B3ndService` |
 | `b3nd-move/grpc/proto/convert` | proto ↔ b3nd converters                        |
 
-## The three layers
+## The two layers
 
-- **server.ts** — the runtime-bound half. A direct `transport(rig, opts?)`
-  function that wraps a `service` handler with `Deno.serve` (or stdio for MCP)
-  and returns a `start`/`stop` `TransportServer`. Deno-only.
 - **service.ts** — the portable half. A pure `(Request) => Response` (or factory
-  like `buildMcpServer(rig)`). Runs anywhere fetch runs: Node, Bun, Cloudflare
-  Workers, browsers as request handlers.
+  like `buildMcpServer(rig)`). Runs anywhere fetch runs: Deno, Node, Bun,
+  Cloudflare Workers, browsers as request handlers.
 - **client.ts** — a `ProtocolInterfaceNode` over the wire. Works in any
   fetch-capable environment.
 
-Each layer lives in exactly one file. No barrels. Cross-cutting concerns (CORS,
-multi-server composition, etc.) are intentionally not part of this package —
-wrap a `service` handler yourself, or reach for a higher-level SDK that bundles
-the conveniences.
+Each layer lives in exactly one file. No barrels. Runtime binding (`Deno.serve`,
+stdio, framework adapters) is **not** in this package — pair a `service`
+handler with whatever your host runtime offers, or use a higher-level SDK /
+runner that wraps it. For local dev this repo ships `dev/serve.ts` plus a
+`deno task serve` wrapper; see [Local dev](#local-dev-serve-task).
 
-## Quick start (Deno)
+## Quick start (any runtime)
 
 ```typescript
-import {
-  connection,
-  MemoryStore,
-  Rig,
-  SimpleClient,
-} from "@bandeira-tech/b3nd-core";
-import { httpServer } from "@bandeira-tech/b3nd-move/http/server";
-import { grpcHttpServer } from "@bandeira-tech/b3nd-move/grpc/http/server";
+import { connection, Rig } from "@bandeira-tech/b3nd-core";
+import { MemoryStore } from "@bandeira-tech/b3nd-stores/memory";
+import { SimpleClient } from "@bandeira-tech/b3nd-stores/adapters";
+import { httpApi } from "@bandeira-tech/b3nd-move/http/service";
+import { grpcHttpApi } from "@bandeira-tech/b3nd-move/grpc/http/service";
 
 const store = new SimpleClient(new MemoryStore());
 const rig = new Rig({
@@ -67,26 +62,32 @@ const rig = new Rig({
   },
 });
 
-const servers = [
-  httpServer(rig, { port: 3000 }),
-  grpcHttpServer(rig, { port: 50051 }),
-];
+// Deno
+Deno.serve({ port: 3000 }, httpApi(rig));
 
-await Promise.all(servers.map((s) => s.start()));
-```
-
-## Quick start (Node / Bun / Cloudflare)
-
-Use the portable `service` handlers — no `Deno.serve`:
-
-```typescript
-import { httpApi } from "@bandeira-tech/b3nd-move/http/service";
-import { grpcHttpApi } from "@bandeira-tech/b3nd-move/grpc/http/service";
-
-// Plug into Hono, Express, node:http, a Cloudflare Worker, …
-// Add CORS / auth / etc. with whatever middleware your runtime uses.
+// Cloudflare Workers / Bun
 export default { fetch: grpcHttpApi(rig) };
+
+// Node — pair with @hono/node-server, express, node:http, …
+// Add CORS / auth / etc. with whatever middleware your runtime offers.
 ```
+
+## Local dev (`serve` task)
+
+For ad-hoc local runs there's a tiny in-repo helper that builds a
+`MemoryStore`-backed rig and starts the requested transports:
+
+```bash
+deno task serve -- --http               # http on :3000
+deno task serve -- --http=4000 --ws     # http on :4000, ws on :8080
+deno task serve -- --grpc=50051 --hostname=127.0.0.1
+deno task serve -- --mcp                # MCP on stdio (must be alone)
+```
+
+The helper lives at [`dev/serve.ts`](./dev/serve.ts) and is intentionally
+outside `src/`. Production runners and SDKs build their own equivalents tuned
+to their host runtime; this is just so contributors and demos have one obvious
+spot to reach for.
 
 ## Quick start (client)
 

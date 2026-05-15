@@ -7,7 +7,6 @@ frames, server-pushed observe events.
 
 | File         | Exports                                                                             | Runtime |
 | ------------ | ----------------------------------------------------------------------------------- | ------- |
-| `server.ts`  | `wsServer`, `WsServerOptions`                                                       | Deno    |
 | `service.ts` | `wsApi`, `WsApi`                                                                    | Deno    |
 | `client.ts`  | `WebSocketClient`, `WebSocketClientConfig`, `WebSocketRequest`, `WebSocketResponse` | any     |
 
@@ -32,24 +31,27 @@ outbound → { id, success: true,  data }
 Observe streams are terminated by a frame with `data: null` (server
 end-of-stream) or by `observe-cancel` from the client.
 
-**The triplet.**
+**The pair.**
 
 - `service.ts` (`wsApi(rig)`) is a fetch handler that upgrades to WS. Tied to
   Deno only because it uses `Deno.upgradeWebSocket`. Exposes a `closeAll()`
-  lifecycle hook so the server can drain sockets before shutdown.
-- `server.ts` (`wsServer(rig, { port })`) wraps it with `Deno.serve` and returns
-  a `TransportServer` with `start`/`stop`.
+  lifecycle hook so callers can drain sockets before shutting down the host
+  HTTP server (`Deno.HttpServer.shutdown` waits for in-flight requests, and
+  WS connections are long-lived).
 - `client.ts` (`WebSocketClient`) speaks the protocol above with configurable
   reconnection.
 
 ## Usage
 
 ```typescript
-import { wsServer } from "@bandeira-tech/b3nd-move/ws/server";
+import { wsApi } from "@bandeira-tech/b3nd-move/ws/service";
 import { WebSocketClient } from "@bandeira-tech/b3nd-move/ws/client";
 
-const server = wsServer(rig, { port: 8080 });
-await server.start();
+const handler = wsApi(rig);
+const server = Deno.serve({ port: 8080 }, handler);
+// On shutdown: drain WS first, then stop the HTTP server.
+//   await handler.closeAll();
+//   await server.shutdown();
 
 const client = new WebSocketClient({
   url: "ws://localhost:8080",
@@ -67,12 +69,12 @@ for await (
 
 ## Notes
 
-- `wsApi` returns 404 for non-upgrade requests — it does only the WS path.
-  WebSocket handshakes are not subject to CORS, so `wsServer` is a no-frills
-  `Deno.serve` wrapper. If you need CORS for a sibling HTTP endpoint, run it on
-  a separate handler.
-- `WsApi.closeAll()` drains sockets gracefully. `wsServer` calls it before
-  `server.shutdown()` because `Deno.HttpServer.shutdown` waits for in-flight
-  requests and WS connections are long-lived.
+- `wsApi` returns 404 for non-upgrade requests — it does only the WS path. If
+  you need a sibling HTTP endpoint on the same host, run it on a separate
+  handler.
+- `WsApi.closeAll()` drains sockets gracefully. Always call it before
+  `server.shutdown()` for the same reason `dev/serve.ts` does.
+- For local-dev convenience that wires this up for you, use
+  `deno task serve -- --ws` (see [`dev/serve.ts`](../../dev/serve.ts)).
 - The wire protocol matches `b3nd-core`'s `WebSocketClient` lineage — changing
   it is a breaking wire change.
