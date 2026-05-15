@@ -29,10 +29,10 @@ streams, use HTTP/WS.
 
 **Just the service.**
 
-`service.ts` (`buildMcpServer(rig, opts)`) returns a bare MCP `Server`
-instance — connect it to any MCP transport (stdio, sockets, in-memory). The
-move layer ships only the service; runtime binding (stdio for Claude Desktop,
-sockets for custom integrations, in-memory for tests) is the caller's choice.
+`service.ts` (`buildMcpServer(rig, opts)`) returns a bare MCP `Server` instance
+— connect it to any MCP transport (stdio, sockets, in-memory). The move layer
+ships only the service; runtime binding (stdio for Claude Desktop, sockets for
+custom integrations, in-memory for tests) is the caller's choice.
 
 ## Usage
 

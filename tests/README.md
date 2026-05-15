@@ -103,12 +103,12 @@ in `rig.receive`'s return).
 
 The move-suite drives every transport with the same conventions:
 
-| Op              | Convention                                                                                                                                                      |
-| --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `receive(msgs)` | `[{accepted: true}, …]`; URIs containing `/__reject__/` → `{accepted: false, error: "rejected by stub"}` (rejected at the program)                              |
-| `read(urls)`    | `[[url, {echo: url}], …]`; URIs containing `/__miss__/` → `[url, null]`; URIs ending in `/` synthesize a 3-child listing (used by the HTTP SSE observe backlog) |
-| `observe(urls)` | 3 frames per subscribed pattern: `[pattern, [` ${pattern}/${i}`]]`, then end                                                                                    |
-| `status()`      | `{status: "healthy", message: "stub", fns: ["receive","read","observe","status"]}`                                                                              |
+| Op              | Convention                                                                                                                         |
+| --------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `receive(msgs)` | `[{accepted: true}, …]`; URIs containing `/__reject__/` → `{accepted: false, error: "rejected by stub"}` (rejected at the program) |
+| `read(urls)`    | `[[url, {echo: url}], …]`; URIs containing `/__miss__/` → `[url, null]`; URIs ending in `/` synthesize a 3-child listing           |
+| `observe(urls)` | 3 frames per subscribed pattern: `[pattern, [` ${pattern}/${i}`]]`, then end                                                       |
+| `status()`      | `{status: "healthy", message: "stub", fns: ["receive","read","observe","status"]}`                                                 |
 
 Every test exercises **batched inputs AND batched outputs** so the encode/
 decode paths get exercised in their multi-item shape — that's where transport

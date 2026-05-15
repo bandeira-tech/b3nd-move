@@ -40,10 +40,10 @@ Plus the proto pieces:
   fetch-capable environment.
 
 Each layer lives in exactly one file. No barrels. Runtime binding (`Deno.serve`,
-stdio, framework adapters) is **not** in this package — pair a `service`
-handler with whatever your host runtime offers, or use a higher-level SDK /
-runner that wraps it. For local dev this repo ships `dev/serve.ts` plus a
-`deno task serve` wrapper; see [Local dev](#local-dev-serve-task).
+stdio, framework adapters) is **not** in this package — pair a `service` handler
+with whatever your host runtime offers, or use a higher-level SDK / runner that
+wraps it. For local dev this repo ships `dev/serve.ts` plus a `deno task serve`
+wrapper; see [Local dev](#local-dev-serve-task).
 
 ## Quick start (any runtime)
 
@@ -85,9 +85,9 @@ deno task serve -- --mcp                # MCP on stdio (must be alone)
 ```
 
 The helper lives at [`dev/serve.ts`](./dev/serve.ts) and is intentionally
-outside `src/`. Production runners and SDKs build their own equivalents tuned
-to their host runtime; this is just so contributors and demos have one obvious
-spot to reach for.
+outside `src/`. Production runners and SDKs build their own equivalents tuned to
+their host runtime; this is just so contributors and demos have one obvious spot
+to reach for.
 
 ## Quick start (client)
 

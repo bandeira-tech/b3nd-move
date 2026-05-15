@@ -35,9 +35,9 @@ end-of-stream) or by `observe-cancel` from the client.
 
 - `service.ts` (`wsApi(rig)`) is a fetch handler that upgrades to WS. Tied to
   Deno only because it uses `Deno.upgradeWebSocket`. Exposes a `closeAll()`
-  lifecycle hook so callers can drain sockets before shutting down the host
-  HTTP server (`Deno.HttpServer.shutdown` waits for in-flight requests, and
-  WS connections are long-lived).
+  lifecycle hook so callers can drain sockets before shutting down the host HTTP
+  server (`Deno.HttpServer.shutdown` waits for in-flight requests, and WS
+  connections are long-lived).
 - `client.ts` (`WebSocketClient`) speaks the protocol above with configurable
   reconnection.
 

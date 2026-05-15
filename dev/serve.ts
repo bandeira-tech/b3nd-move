@@ -26,10 +26,7 @@ import type { Rig } from "@bandeira-tech/b3nd-core";
 import { httpApi } from "../src/http/service.ts";
 import { wsApi } from "../src/ws/service.ts";
 import { grpcHttpApi } from "../src/grpc/http/service.ts";
-import {
-  buildMcpServer,
-  type McpServerOptions,
-} from "../src/mcp/service.ts";
+import { buildMcpServer, type McpServerOptions } from "../src/mcp/service.ts";
 
 export interface TransportServer {
   readonly transport: string;

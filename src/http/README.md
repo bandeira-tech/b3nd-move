@@ -1,33 +1,30 @@
 # http
 
-HTTP transport for B3nd. JSON over `fetch`, with Server-Sent Events for observe
-streams.
+HTTP transport for B3nd. JSON over `fetch`, with NDJSON streaming for observe.
 
 ## Surface
 
-| File         | Exports                                         | Runtime |
-| ------------ | ----------------------------------------------- | ------- |
-| `service.ts` | `httpApi`, `HttpApiOptions`                     | any     |
-| `client.ts`  | `HttpClient`, `HttpClientConfig`                | any     |
-| `sse.ts`     | `openSseStream`, `SseEvent`, `SseStreamOptions` | any     |
-| `*.test.ts`  | (tests — client, list, x-extension)             | Deno    |
+| File         | Exports                          | Runtime |
+| ------------ | -------------------------------- | ------- |
+| `service.ts` | `httpApi`, `HttpApiOptions`      | any     |
+| `client.ts`  | `HttpClient`, `HttpClientConfig` | any     |
+| `*.test.ts`  | (tests — list, x-extension)      | Deno    |
 
 ## Concepts
 
-**Wire shape.** Plain HTTP under `/api/v1/`:
+**Wire shape.** Every route mirrors the `ProtocolInterfaceNode` method it fronts
+— the request body is exactly the argument PIN takes:
 
-| Method | Path                        | Maps to                      |
-| ------ | --------------------------- | ---------------------------- |
-| `GET`  | `/api/v1/status`            | `rig.status()`               |
-| `POST` | `/api/v1/receive`           | `rig.receive([[uri, body]])` |
-| `POST` | `/api/v1/read`              | `rig.read(urls)`             |
-| `GET`  | `/api/v1/observe/<pattern>` | `rig.observe(pattern)` (SSE) |
+| Method | Path              | Body                 | Maps to             |
+| ------ | ----------------- | -------------------- | ------------------- |
+| `GET`  | `/api/v1/status`  | —                    | `rig.status()`      |
+| `POST` | `/api/v1/receive` | `[[uri, payload],…]` | `rig.receive(msgs)` |
+| `POST` | `/api/v1/read`    | `string[]`           | `rig.read(urls)`    |
+| `POST` | `/api/v1/observe` | `string[]`           | `rig.observe(urls)` |
 
-URI paths are reconstructed from the URL after the prefix (e.g.
-`/api/v1/read/mutable/app/x` → `mutable://app/x`).
-
-**Observe.** Server emits SSE; `HttpClient.observe()` consumes via
-`openSseStream` (in `sse.ts`), which handles reconnection and event parsing.
+**Observe.** `POST /api/v1/observe` returns an `application/x-ndjson` stream;
+each line is a JSON-encoded `[pattern, uris[]]` frame straight from
+`rig.observe()`. `HttpClient.observe()` parses the lines and yields frames.
 
 **The pair.**
 
@@ -54,7 +51,7 @@ const [out] = await client.read(["mutable://app/x"]);
 ```
 
 For local-dev convenience that wires `httpApi` plus a `MemoryStore`-backed rig
-and a `Deno.serve` lifecycle in one go, use `deno task serve -- --http` (see
+and a `Deno.serve` lifecycle in one go, use `deno task serve --http` (see
 [`dev/serve.ts`](../../dev/serve.ts)).
 
 ## Notes
@@ -62,7 +59,3 @@ and a `Deno.serve` lifecycle in one go, use `deno task serve -- --http` (see
 - `HttpApiOptions.statusMeta` is merged into status responses.
 - CORS, auth, and any other middleware happen at the runtime layer — wrap
   `httpApi(rig)` yourself before handing it to `Deno.serve` / Hono / etc.
-- SSE keepalive: `service.ts` installs a 30s interval on observe streams.
-  Cleanup binds to stream `cancel`; if a host runtime fires test sanitizers
-  before stream cancel resolves, you may see a false-positive op leak (see
-  `testing/tests/http.test.ts`).

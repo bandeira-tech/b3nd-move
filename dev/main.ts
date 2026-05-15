@@ -70,12 +70,18 @@ function parseArgs(argv: string[]): ParsedArgs {
     }
     if (arg === "--http" || arg.startsWith("--http=")) {
       const port = parsePortFlag(arg, "--http");
-      out.configs.push({ transport: "http", ...(port !== undefined && { port }) });
+      out.configs.push({
+        transport: "http",
+        ...(port !== undefined && { port }),
+      });
       continue;
     }
     if (arg === "--ws" || arg.startsWith("--ws=")) {
       const port = parsePortFlag(arg, "--ws");
-      out.configs.push({ transport: "ws", ...(port !== undefined && { port }) });
+      out.configs.push({
+        transport: "ws",
+        ...(port !== undefined && { port }),
+      });
       continue;
     }
     if (arg === "--grpc" || arg.startsWith("--grpc=")) {

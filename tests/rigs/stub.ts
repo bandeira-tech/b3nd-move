@@ -18,8 +18,6 @@
  *     - url contains "/__miss__/"   → [url, null]
  *     - url ends with "/"           → synthesized listing of 3 children:
  *                                       [url, [[`${url}0`, {echo}], …]]
- *                                     (used by the HTTP SSE observe
- *                                     endpoint to source its backlog)
  *     - otherwise                   → [url, { echo: url }]
  *
  *   observe(urls):
@@ -61,9 +59,6 @@ class StubBackend implements ProtocolInterfaceNode {
     return Promise.resolve(
       urls.map((url): Output<T> => {
         if (url.endsWith("/")) {
-          // The HTTP SSE observe endpoint sources its backlog from a
-          // trailing-slash read. Synthesize 3 children so the browser
-          // observe test sees 3 emitted events per subscribed pattern.
           const children: Output[] = [];
           for (let i = 0; i < 3; i++) {
             const child = `${url}${i}`;
