@@ -14,18 +14,27 @@ import type {
 } from "@bandeira-tech/b3nd-core/types";
 import { RequestError, TimeoutError, TransportError } from "../errors.ts";
 
+/**
+ * Pre-send hook for WebSocket frames. Receives the envelope about to
+ * go on the wire; mutate fields in place (sign, stamp, etc.).
+ */
+export type WebSocketPreSend = (
+  envelope: Record<string, unknown>,
+) => void | Promise<void>;
+
 /** Configuration for `WebSocketClient`. */
 export interface WebSocketClientConfig {
-  /** WebSocket server URL. */
-  url: string;
-  /** Optional authentication configuration. */
-  auth?: {
-    type: "bearer" | "basic" | "custom";
-    token?: string;
-    username?: string;
-    password?: string;
-    custom?: Record<string, unknown>;
-  };
+  /**
+   * WebSocket server URL. Pass a function to compute the URL fresh per
+   * handshake — useful when an auth token in the query string rotates.
+   */
+  url: string | (() => string | Promise<string>);
+  /**
+   * Pre-send hook. Runs before every outbound frame; mutate the
+   * envelope object in place. Compose by chaining function calls
+   * inside the hook.
+   */
+  preSend?: WebSocketPreSend;
   /** Optional reconnection configuration. */
   reconnect?: {
     enabled: boolean;
@@ -54,6 +63,7 @@ export interface WebSocketResponse {
 
 export class WebSocketClient implements ProtocolInterfaceNode {
   private config: WebSocketClientConfig;
+  private preSend: WebSocketPreSend | undefined;
   private ws: WebSocket | null = null;
   private connected = false;
   private reconnectAttempts = 0;
@@ -87,6 +97,7 @@ export class WebSocketClient implements ProtocolInterfaceNode {
         ...config.reconnect,
       },
     };
+    this.preSend = config.preSend;
   }
 
   /**
@@ -132,25 +143,15 @@ export class WebSocketClient implements ProtocolInterfaceNode {
   /**
    * Establish WebSocket connection
    */
-  private connect(): Promise<void> {
+  private async connect(): Promise<void> {
+    const urlSource = this.config.url;
+    const resolvedUrl = typeof urlSource === "function"
+      ? await urlSource()
+      : urlSource;
+
     return new Promise<void>((resolve, reject) => {
       try {
-        const url = new URL(this.config.url);
-
-        // Add auth to URL if needed
-        if (this.config.auth) {
-          switch (this.config.auth.type) {
-            case "bearer":
-              url.searchParams.set("token", this.config.auth.token || "");
-              break;
-            case "basic":
-              url.username = this.config.auth.username || "";
-              url.password = this.config.auth.password || "";
-              break;
-          }
-        }
-
-        this.ws = new WebSocket(url.toString());
+        this.ws = new WebSocket(resolvedUrl);
         this.ws.addEventListener("open", () => {
           this.connected = true;
           this.reconnectAttempts = 0;
@@ -289,16 +290,19 @@ export class WebSocketClient implements ProtocolInterfaceNode {
   ): Promise<T> {
     await this.ensureConnected();
 
+    const id = crypto.randomUUID();
+    const envelope: Record<string, unknown> = { id, type, payload };
+    if (this.preSend) await this.preSend(envelope);
+
     return new Promise<T>((resolve, reject) => {
-      const id = crypto.randomUUID();
-      const request: WebSocketRequest = { id, type, payload };
+      const requestId = envelope.id as string;
 
       const timeout = setTimeout(() => {
-        this.pendingRequests.delete(id);
+        this.pendingRequests.delete(requestId);
         reject(new TimeoutError("ws", this.config.timeout!, type));
       }, this.config.timeout);
 
-      this.pendingRequests.set(id, {
+      this.pendingRequests.set(requestId, {
         resolve: (response) => {
           if (response.success) {
             resolve(response.data as T);
@@ -316,9 +320,9 @@ export class WebSocketClient implements ProtocolInterfaceNode {
       });
 
       try {
-        this.ws?.send(JSON.stringify(request));
+        this.ws?.send(JSON.stringify(envelope));
       } catch (error) {
-        this.pendingRequests.delete(id);
+        this.pendingRequests.delete(requestId);
         clearTimeout(timeout);
         reject(
           new TransportError(
@@ -389,15 +393,15 @@ export class WebSocketClient implements ProtocolInterfaceNode {
       }
     });
 
-    const onAbort = () => {
+    const onAbort = async () => {
       try {
-        this.ws?.send(
-          JSON.stringify({
-            id,
-            type: "observe-cancel",
-            payload: {},
-          } as WebSocketRequest),
-        );
+        const cancelEnvelope: Record<string, unknown> = {
+          id,
+          type: "observe-cancel",
+          payload: {},
+        };
+        if (this.preSend) await this.preSend(cancelEnvelope);
+        this.ws?.send(JSON.stringify(cancelEnvelope));
       } catch {
         // Ignore — connection may already be closed.
       }
@@ -411,13 +415,13 @@ export class WebSocketClient implements ProtocolInterfaceNode {
     signal.addEventListener("abort", onAbort, { once: true });
 
     try {
-      this.ws!.send(
-        JSON.stringify({
-          id,
-          type: "observe",
-          payload: { urls },
-        } as WebSocketRequest),
-      );
+      const openEnvelope: Record<string, unknown> = {
+        id,
+        type: "observe",
+        payload: { urls },
+      };
+      if (this.preSend) await this.preSend(openEnvelope);
+      this.ws!.send(JSON.stringify(openEnvelope));
       while (true) {
         while (queue.length > 0) yield queue.shift()!;
         if (signal.aborted || ended) return;

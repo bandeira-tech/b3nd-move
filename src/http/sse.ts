@@ -32,6 +32,8 @@ export interface SseStreamOptions {
   maxReconnectMs?: number;
   /** Initial reconnect delay in ms. Default: 1000. */
   initialReconnectMs?: number;
+  /** Extra headers to send on the initial request and every reconnect. */
+  headers?: HeadersInit;
 }
 
 /**
@@ -61,11 +63,10 @@ export async function* openSseStream(
 
   while (!signal?.aborted) {
     try {
-      const headers: Record<string, string> = {
-        Accept: "text/event-stream",
-      };
+      const headers = new Headers(options?.headers);
+      headers.set("Accept", "text/event-stream");
       if (lastId) {
-        headers["Last-Event-ID"] = lastId;
+        headers.set("Last-Event-ID", lastId);
       }
 
       const response = await fetch(url, { headers, signal });

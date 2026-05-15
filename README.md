@@ -96,6 +96,55 @@ await client.receive([["mutable://app/item", { name: "thing" }]]);
 const [out] = await client.read(["mutable://app/item"]);
 ```
 
+## Auth & pre-send hooks
+
+Every client takes a single `preSend` function — there is no middleware
+abstraction. Compose behaviors with plain function calls.
+
+```typescript
+import { HttpClient } from "@bandeira-tech/b3nd-move/http/client";
+import { WebSocketClient } from "@bandeira-tech/b3nd-move/ws/client";
+import { GrpcHttpClient } from "@bandeira-tech/b3nd-move/grpc/http/client";
+
+new HttpClient({
+  url,
+  preSend: (r) => r.headers.set("Authorization", `Bearer ${await tokens.get()}`),
+});
+
+new GrpcHttpClient({
+  url,
+  preSend: (r) => r.headers.set("Authorization", `Bearer ${await tokens.get()}`),
+});
+
+// WebSocket: preSend runs per frame. Handshake auth goes in the URL —
+// pass a function if it needs to be computed fresh per (re)connect.
+new WebSocketClient({
+  url: async () => `wss://node?token=${await tokens.get()}`,
+  preSend: (env) => { env.requestId = crypto.randomUUID(); },
+});
+```
+
+The hook shape per client:
+
+| Client            | `preSend` argument                                    |
+| ----------------- | ----------------------------------------------------- |
+| `HttpClient`      | `{ url: URL, headers: Headers, body: BodyInit \| null }` |
+| `GrpcHttpClient`  | `{ url: URL, headers: Headers, body: BodyInit \| null }` |
+| `WebSocketClient` | `envelope: Record<string, unknown>` (mutated in place) |
+
+Composition is just function composition — no framework needed:
+
+```typescript
+const auth  = (r) => r.headers.set("Authorization", `Bearer ${getToken()}`);
+const trace = (r) => r.headers.set("X-Trace", crypto.randomUUID());
+
+new HttpClient({ url, preSend: async (r) => { await auth(r); trace(r); } });
+```
+
+Browser `WebSocket` cannot send custom headers, which is why WS auth goes
+in the handshake URL or subprotocols — build the URL with the credentials
+you want before opening the socket.
+
 ## How rigs compose with transports
 
 Downstream code (CLIs, daemons, browser apps) builds a `Rig` once and aims

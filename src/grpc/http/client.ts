@@ -64,6 +64,21 @@ import {
   StatusResponseSchema,
 } from "../proto/gen/b3nd_pb.ts";
 
+/** The request about to go on the wire. Mutate any field. */
+export interface GrpcHttpPreSendRequest {
+  url: URL;
+  headers: Headers;
+  body: BodyInit | null;
+}
+
+/**
+ * Pre-send hook for gRPC-HTTP requests. Runs after the default URL,
+ * headers, and body are built; mutate the fields in place.
+ */
+export type GrpcHttpPreSend = (
+  req: GrpcHttpPreSendRequest,
+) => void | Promise<void>;
+
 export interface GrpcHttpClientConfig {
   /** Base URL of the gRPC-HTTP server (e.g. "http://localhost:50051"). */
   url: string;
@@ -71,6 +86,12 @@ export interface GrpcHttpClientConfig {
   binary?: boolean;
   /** Request timeout in milliseconds. Default: 30000. */
   timeout?: number;
+  /**
+   * Pre-send hook. Receives the in-flight request; mutate `url`,
+   * `headers`, or `body` before it leaves. Use this for auth, tracing,
+   * signing, etc.
+   */
+  preSend?: GrpcHttpPreSend;
 }
 
 const SERVICE_PREFIX = "/b3nd.v1.B3ndService/";
@@ -79,6 +100,7 @@ export class GrpcHttpClient implements ProtocolInterfaceNode {
   private baseUrl: string;
   private binary: boolean;
   private timeout: number;
+  private preSend: GrpcHttpPreSend | undefined;
   readonly url: string;
 
   constructor(config: GrpcHttpClientConfig) {
@@ -86,20 +108,27 @@ export class GrpcHttpClient implements ProtocolInterfaceNode {
     this.url = this.baseUrl;
     this.binary = config.binary ?? false;
     this.timeout = config.timeout ?? 30000;
+    this.preSend = config.preSend;
   }
 
   private async rpc(method: string, body: BodyInit): Promise<Response> {
     const abort = new AbortController();
     const id = setTimeout(() => abort.abort(), this.timeout);
     try {
-      const resp = await fetch(`${this.baseUrl}${SERVICE_PREFIX}${method}`, {
-        method: "POST",
-        headers: {
+      const req: GrpcHttpPreSendRequest = {
+        url: new URL(`${this.baseUrl}${SERVICE_PREFIX}${method}`),
+        headers: new Headers({
           "Content-Type": this.binary
             ? "application/proto"
             : "application/json",
-        },
+        }),
         body,
+      };
+      if (this.preSend) await this.preSend(req);
+      const resp = await fetch(req.url, {
+        method: "POST",
+        headers: req.headers,
+        body: req.body,
         signal: abort.signal,
       });
       if (!resp.ok) {
@@ -172,11 +201,17 @@ export class GrpcHttpClient implements ProtocolInterfaceNode {
 
     let resp: Response;
     try {
-      const req = create(ObserveRequestSchema, { urls });
-      resp = await fetch(`${this.baseUrl}${SERVICE_PREFIX}Observe`, {
+      const obsReq = create(ObserveRequestSchema, { urls });
+      const req: GrpcHttpPreSendRequest = {
+        url: new URL(`${this.baseUrl}${SERVICE_PREFIX}Observe`),
+        headers: new Headers({ "Content-Type": "application/json" }),
+        body: JSON.stringify(toJson(ObserveRequestSchema, obsReq)),
+      };
+      if (this.preSend) await this.preSend(req);
+      resp = await fetch(req.url, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(toJson(ObserveRequestSchema, req)),
+        headers: req.headers,
+        body: req.body,
         signal: abort.signal,
       });
     } catch (e) {
