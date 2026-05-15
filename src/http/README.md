@@ -4,12 +4,11 @@ HTTP transport for B3nd. JSON over `fetch`, with NDJSON streaming for observe.
 
 ## Surface
 
-| File         | Exports                                     | Runtime |
-| ------------ | ------------------------------------------- | ------- |
-| `server.ts`  | `httpServer`, `HttpServerOptions`           | Deno    |
-| `service.ts` | `httpApi`, `HttpApiOptions`                 | any     |
-| `client.ts`  | `HttpClient`, `HttpClientConfig`            | any     |
-| `*.test.ts`  | (tests — client, server, list, x-extension) | Deno    |
+| File         | Exports                          | Runtime |
+| ------------ | -------------------------------- | ------- |
+| `service.ts` | `httpApi`, `HttpApiOptions`      | any     |
+| `client.ts`  | `HttpClient`, `HttpClientConfig` | any     |
+| `*.test.ts`  | (tests — list, x-extension)      | Deno    |
 
 ## Concepts
 
@@ -27,26 +26,21 @@ HTTP transport for B3nd. JSON over `fetch`, with NDJSON streaming for observe.
 each line is a JSON-encoded `[pattern, uris[]]` frame straight from
 `rig.observe()`. `HttpClient.observe()` parses the lines and yields frames.
 
-**The triplet.**
+**The pair.**
 
 - `service.ts` (`httpApi(rig)`) is the pure fetch handler — pair with any
-  runtime (Hono, Express, `node:http`, Workers).
-- `server.ts` (`httpServer({ port })`) wraps it with `Deno.serve` + CORS and
-  returns a `ServerResolver`.
+  runtime (Deno, Hono, Express, `node:http`, Workers).
 - `client.ts` (`HttpClient`) speaks the routes above; implements
   `ProtocolInterfaceNode`.
 
 ## Usage
 
 ```typescript
-// server side (Deno)
-import { createServers } from "@bandeira-tech/b3nd-move/factory";
-import { httpServer } from "@bandeira-tech/b3nd-move/http/server";
+// server side — pair with whatever your runtime offers
+import { httpApi } from "@bandeira-tech/b3nd-move/http/service";
 
-const [server] = createServers(rig, [httpServer({ port: 3000 })], {
-  cors: "*",
-});
-await server.start();
+Deno.serve({ port: 3000 }, httpApi(rig));
+// or: export default { fetch: httpApi(rig) };
 
 // client side (anywhere fetch works)
 import { HttpClient } from "@bandeira-tech/b3nd-move/http/client";
@@ -56,18 +50,12 @@ await client.receive([["mutable://app/x", { name: "thing" }]]);
 const [out] = await client.read(["mutable://app/x"]);
 ```
 
-For Node / Bun / Workers, skip `server.ts` and feed `service.ts` to your host
-runtime:
-
-```typescript
-import { httpApi } from "@bandeira-tech/b3nd-move/http/service";
-import { withCors } from "@bandeira-tech/b3nd-move/cors";
-
-export default { fetch: withCors(httpApi(rig), { origin: "*" }) };
-```
+For local-dev convenience that wires `httpApi` plus a `MemoryStore`-backed rig
+and a `Deno.serve` lifecycle in one go, use `deno task serve --http` (see
+[`dev/serve.ts`](../../dev/serve.ts)).
 
 ## Notes
 
 - `HttpApiOptions.statusMeta` is merged into status responses.
-- `httpServer` honors `composition.cors` from `createServers`; per-server `cors`
-  overrides it.
+- CORS, auth, and any other middleware happen at the runtime layer — wrap
+  `httpApi(rig)` yourself before handing it to `Deno.serve` / Hono / etc.

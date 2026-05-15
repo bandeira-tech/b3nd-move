@@ -7,7 +7,6 @@ MCP tools so LLM clients can read and write through the same surface.
 
 | File         | Exports                              | Runtime |
 | ------------ | ------------------------------------ | ------- |
-| `server.ts`  | `mcpServer`                          | Deno    |
 | `service.ts` | `buildMcpServer`, `McpServerOptions` | any     |
 
 There's no `client.ts` here — MCP clients are written by the LLM host (Claude
@@ -28,25 +27,27 @@ over `InMemoryTransport`.
 `observe` is intentionally absent — MCP tools are request/response. If you need
 streams, use HTTP/WS.
 
-**The pair.**
+**Just the service.**
 
-- `service.ts` (`buildMcpServer(rig, opts)`) returns a bare MCP `Server`
-  instance — connect it to any MCP transport (stdio, sockets, in-memory).
-- `server.ts` (`mcpServer({ name, version })`) wraps it as a `ServerResolver`
-  that connects over `StdioServerTransport`. Use this for CLI tools and Claude
-  Desktop-style integrations.
+`service.ts` (`buildMcpServer(rig, opts)`) returns a bare MCP `Server` instance
+— connect it to any MCP transport (stdio, sockets, in-memory). The move layer
+ships only the service; runtime binding (stdio for Claude Desktop, sockets for
+custom integrations, in-memory for tests) is the caller's choice.
 
 ## Usage
 
 ```typescript
-import { createServers } from "@bandeira-tech/b3nd-move/factory";
-import { mcpServer } from "@bandeira-tech/b3nd-move/mcp/server";
+import { buildMcpServer } from "@bandeira-tech/b3nd-move/mcp/service";
+import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 
-const [server] = createServers(rig, [mcpServer({ name: "my-b3nd-node" })]);
-await server.start(); // blocks on stdio until the LLM host disconnects
+const server = buildMcpServer(rig, { name: "my-b3nd-node" });
+await server.connect(new StdioServerTransport());
 ```
 
-For non-stdio transports (in-memory tests, sockets), build the server directly:
+For local-dev convenience that wires the stdio dance for you, use
+`deno task serve -- --mcp` (see [`dev/serve.ts`](../../dev/serve.ts)).
+
+For in-memory tests:
 
 ```typescript
 import { buildMcpServer } from "@bandeira-tech/b3nd-move/mcp/service";
@@ -60,9 +61,5 @@ await server.connect(serverTransport);
 
 ## Notes
 
-- `mcpServer()` only supports stdio. For other transports, drop down to
-  `buildMcpServer` and wire the transport yourself.
-- `composition.cors` from `createServers` is ignored for MCP (stdio has no
-  origin).
 - The tool definitions live as `const` data in `service.ts` — they're the
   surface contract the LLM sees. Changes affect prompt phrasing on the LLM side.

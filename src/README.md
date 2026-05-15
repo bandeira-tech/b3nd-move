@@ -1,71 +1,49 @@
 # src
 
-The moving layer for B3nd. Each transport directory follows the same three-file
-convention; the two files at this level are the cross-cutting infrastructure
-that every transport plugs into.
+The moving layer for B3nd. Each transport directory follows the same two-file
+convention.
 
 ## Convention
 
 ```
 src/<transport>/
-  server.ts   ← runtime-bound resolver (Deno.serve, stdio, …)
   service.ts  ← portable handler (works in any fetch / SDK runtime)
   client.ts   ← ProtocolInterfaceNode over the wire
 ```
 
-`server.ts` wraps `service.ts` with a listener (and CORS). `client.ts` speaks
-the wire shape `service.ts` exposes. Every transport's surface collapses to
-these three files. No barrels — import from the canonical file directly.
+`client.ts` speaks the wire shape `service.ts` exposes. Every transport's
+surface collapses to these two files. No barrels — import from the canonical
+file directly.
 
-## Cross-cutting surface
+**Runtime binding lives outside `src/`.** Spinning up `Deno.serve`, plumbing
+stdio, draining WebSocket connections — none of that is part of the published
+package. Pair `service.ts` with whatever your host runtime offers, or use
+`dev/serve.ts` (and `deno task serve`) for local-dev convenience. Production
+runners and SDKs build their own equivalents.
 
-| File         | Exports                                                                   | Runtime |
-| ------------ | ------------------------------------------------------------------------- | ------- |
-| `factory.ts` | `createServers`, `ServerResolver`, `TransportServer`, `ServerComposition` | any     |
-| `cors.ts`    | `withCors`, `CorsOptions`                                                 | any     |
-
-## Concepts
-
-**`ServerResolver`** is the contract every transport's `server.ts` implements:
-`(Rig, ServerComposition?) → TransportServer`. It mirrors `BackendResolver` on
-the storage side:
-
-```
-BackendResolver  : URL  → Store           (storage)
-ServerResolver   : Rig  → TransportServer (moving)
-```
-
-**`createServers`** doesn't start anything — it just maps resolvers over a rig.
-Lifecycle (`start` / `stop`) is per-server.
-
-**`ServerComposition`** flows cross-cutting concerns (currently just `cors`)
-into every resolver in the group. Per-server options win over composition
-defaults.
+**Cross-cutting concerns are out of scope too.** CORS, auth wrappers, multi-
+server orchestration — wrap the `service` handlers yourself, or reach for a
+higher-level SDK. The move layer exists to do encoding / transport / decoding
+and nothing else.
 
 ## Usage
 
 ```typescript
-import { createServers } from "@bandeira-tech/b3nd-move/factory";
-import { httpServer } from "@bandeira-tech/b3nd-move/http/server";
-import { wsServer } from "@bandeira-tech/b3nd-move/ws/server";
-
-const servers = createServers(rig, [
-  httpServer({ port: 3000 }),
-  wsServer({ port: 8080 }),
-], { cors: "*" });
-
-await Promise.all(servers.map((s) => s.start()));
-```
-
-For runtimes without `Deno.serve` (Node, Bun, Cloudflare), skip the resolvers
-and wrap the portable `service` directly:
-
-```typescript
 import { httpApi } from "@bandeira-tech/b3nd-move/http/service";
-import { withCors } from "@bandeira-tech/b3nd-move/cors";
+import { grpcHttpApi } from "@bandeira-tech/b3nd-move/grpc/http/service";
 
-export default { fetch: withCors(httpApi(rig), { origin: "*" }) };
+// Deno
+Deno.serve({ port: 3000 }, httpApi(rig));
+
+// Cloudflare Workers / Bun
+export default { fetch: grpcHttpApi(rig) };
+
+// Node — pair with @hono/node-server, express, node:http, …
 ```
+
+For an in-repo example that builds a `MemoryStore`-backed rig and starts several
+transports at once, see [`dev/serve.ts`](../dev/serve.ts) and the
+[`serve` task](../README.md#local-dev-serve-task).
 
 ## Per-transport docs
 
@@ -74,4 +52,3 @@ export default { fetch: withCors(httpApi(rig), { origin: "*" }) };
 - [`grpc/http/`](./grpc/http/README.md) — gRPC-over-HTTP (JSON + binary)
 - [`grpc/proto/`](./grpc/proto/README.md) — generated wire types + converters
 - [`mcp/`](./mcp/README.md) — Model Context Protocol (stdio)
-- [`testing/`](./testing/README.md) — PIN contract + MCP spec harness
