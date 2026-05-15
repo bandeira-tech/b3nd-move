@@ -55,8 +55,12 @@ Deno.test("GrpcHttpClient — batch read preserves slot order", async () => {
       "mutable://test/b",
     ]);
     assertEquals(results.length, 2);
-    assertEquals(results[0], ["mutable://test/a", { echo: "mutable://test/a" }]);
-    assertEquals(results[1], ["mutable://test/b", { echo: "mutable://test/b" }]);
+    assertEquals(results[0], ["mutable://test/a", {
+      echo: "mutable://test/a",
+    }]);
+    assertEquals(results[1], ["mutable://test/b", {
+      echo: "mutable://test/b",
+    }]);
   });
 });
 

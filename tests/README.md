@@ -6,16 +6,16 @@ machinery. `src/` is now purely production code.
 
 Two integration runtime pairings, covered side by side, against the same rig:
 
-| Pairing     | Server                  | Client                            | Rig       | Suite                |
-| ----------- | ----------------------- | --------------------------------- | --------- | -------------------- |
-| **Deno**    | real transport, in Deno | real client, in Deno              | `stubRig` | `moveSuite`/`mcpSpec`|
-| **Browser** | real transport, in Deno | real client, in headless Chromium | `stubRig` | `moveSuite`          |
+| Pairing     | Server                  | Client                            | Rig       | Suite                 |
+| ----------- | ----------------------- | --------------------------------- | --------- | --------------------- |
+| **Deno**    | real transport, in Deno | real client, in Deno              | `stubRig` | `moveSuite`/`mcpSpec` |
+| **Browser** | real transport, in Deno | real client, in headless Chromium | `stubRig` | `moveSuite`           |
 
-b3nd-move's job is encode → wire → decode. The tests assert that calls reach
-the rig with the expected shape and that the rig's response survives the
-round. They do **not** assert storage semantics — those are a backend concern,
-not this package's. So every test runs against `stubRig` (deterministic canned
-responses) and asserts that the wire delivers those responses unchanged.
+b3nd-move's job is encode → wire → decode. The tests assert that calls reach the
+rig with the expected shape and that the rig's response survives the round. They
+do **not** assert storage semantics — those are a backend concern, not this
+package's. So every test runs against `stubRig` (deterministic canned responses)
+and asserts that the wire delivers those responses unchanged.
 
 ## Layout
 
