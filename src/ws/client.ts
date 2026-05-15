@@ -12,6 +12,7 @@ import type {
   ReceiveResult,
   StatusResult,
 } from "@bandeira-tech/b3nd-core/types";
+import { RequestError, TimeoutError, TransportError } from "../errors.ts";
 
 /**
  * Pre-send hook for WebSocket frames. Receives the envelope about to
@@ -111,7 +112,10 @@ export class WebSocketClient implements ProtocolInterfaceNode {
       // Wait for connection to complete
       return new Promise<void>((resolve, reject) => {
         const timeout = setTimeout(
-          () => reject(new Error("Connection timeout")),
+          () =>
+            reject(
+              new TimeoutError("ws", this.config.timeout!, "connect"),
+            ),
           this.config.timeout,
         );
 
@@ -124,7 +128,7 @@ export class WebSocketClient implements ProtocolInterfaceNode {
             this.ws?.readyState === WebSocket.CLOSING
           ) {
             clearTimeout(timeout);
-            reject(new Error("Connection failed"));
+            reject(new TransportError("ws", "connection failed"));
           } else {
             setTimeout(checkConnection, 100);
           }
@@ -159,7 +163,7 @@ export class WebSocketClient implements ProtocolInterfaceNode {
 
         const timeout = setTimeout(() => {
           this.ws?.close();
-          reject(new Error("Connection timeout"));
+          reject(new TimeoutError("ws", this.config.timeout!, "connect"));
         }, this.config.timeout);
 
         // Clean up timeout on successful connection
@@ -167,7 +171,13 @@ export class WebSocketClient implements ProtocolInterfaceNode {
           once: true,
         });
       } catch (error) {
-        reject(error);
+        reject(
+          new TransportError(
+            "ws",
+            error instanceof Error ? error.message : String(error),
+            { cause: error },
+          ),
+        );
       }
     });
   }
@@ -214,7 +224,9 @@ export class WebSocketClient implements ProtocolInterfaceNode {
    */
   private handleClose() {
     this.connected = false;
-    this.cleanupPendingRequests(new Error("WebSocket connection closed"));
+    this.cleanupPendingRequests(
+      new TransportError("ws", "connection closed"),
+    );
 
     if (
       this.config.reconnect?.enabled &&
@@ -229,7 +241,7 @@ export class WebSocketClient implements ProtocolInterfaceNode {
    */
   private handleError(_error: Event) {
     this.connected = false;
-    this.cleanupPendingRequests(new Error("WebSocket error"));
+    this.cleanupPendingRequests(new TransportError("ws", "socket error"));
   }
 
   /**
@@ -287,7 +299,7 @@ export class WebSocketClient implements ProtocolInterfaceNode {
 
       const timeout = setTimeout(() => {
         this.pendingRequests.delete(requestId);
-        reject(new Error(`Request timeout after ${this.config.timeout}ms`));
+        reject(new TimeoutError("ws", this.config.timeout!, type));
       }, this.config.timeout);
 
       this.pendingRequests.set(requestId, {
@@ -295,7 +307,12 @@ export class WebSocketClient implements ProtocolInterfaceNode {
           if (response.success) {
             resolve(response.data as T);
           } else {
-            reject(new Error(response.error || "Request failed"));
+            reject(
+              new RequestError("ws", response.error || "request failed", {
+                body: response.error,
+                operation: type,
+              }),
+            );
           }
         },
         reject,
@@ -307,7 +324,13 @@ export class WebSocketClient implements ProtocolInterfaceNode {
       } catch (error) {
         this.pendingRequests.delete(requestId);
         clearTimeout(timeout);
-        reject(error);
+        reject(
+          new TransportError(
+            "ws",
+            error instanceof Error ? error.message : String(error),
+            { cause: error },
+          ),
+        );
       }
     });
   }

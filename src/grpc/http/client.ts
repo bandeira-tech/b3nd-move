@@ -42,6 +42,12 @@ import type {
   StatusResult,
 } from "@bandeira-tech/b3nd-core";
 import {
+  EncodingError,
+  RequestError,
+  TimeoutError,
+  TransportError,
+} from "../../errors.ts";
+import {
   outputFromProto,
   outputToProto,
   receiveResultFromProto,
@@ -126,18 +132,27 @@ export class GrpcHttpClient implements ProtocolInterfaceNode {
         signal: abort.signal,
       });
       if (!resp.ok) {
-        throw new Error(
-          `gRPC-HTTP ${method} failed (${resp.status}): ${await resp.text()}`,
+        const text = await resp.text();
+        throw new RequestError(
+          "grpc-http",
+          `${method} failed: HTTP ${resp.status}${text ? `: ${text}` : ""}`,
+          { status: resp.status, body: text, operation: method },
         );
       }
       return resp;
     } catch (e) {
+      // Already typed — propagate unchanged.
+      if (e instanceof RequestError) throw e;
       if (e instanceof Error && e.name === "AbortError") {
-        throw new Error(
-          `gRPC-HTTP ${method} timed out after ${this.timeout}ms`,
-        );
+        throw new TimeoutError("grpc-http", this.timeout, method, {
+          cause: e,
+        });
       }
-      throw e;
+      throw new TransportError(
+        "grpc-http",
+        e instanceof Error ? e.message : String(e),
+        { cause: e },
+      );
     } finally {
       clearTimeout(id);
     }
@@ -204,7 +219,11 @@ export class GrpcHttpClient implements ProtocolInterfaceNode {
       // Caller-initiated abort exits the iterator cleanly; anything else
       // propagates.
       if (signal.aborted) return;
-      throw e;
+      throw new TransportError(
+        "grpc-http",
+        e instanceof Error ? e.message : String(e),
+        { cause: e },
+      );
     }
 
     if (!resp.ok || !resp.body) {
@@ -223,7 +242,11 @@ export class GrpcHttpClient implements ProtocolInterfaceNode {
           chunk = await reader.read();
         } catch (e) {
           if (signal.aborted) return;
-          throw e;
+          throw new TransportError(
+            "grpc-http",
+            e instanceof Error ? e.message : String(e),
+            { cause: e },
+          );
         }
         const { done, value } = chunk;
         if (done) break;
@@ -232,11 +255,26 @@ export class GrpcHttpClient implements ProtocolInterfaceNode {
         buffer = lines.pop() ?? "";
         for (const line of lines) {
           if (!line.trim()) continue;
-          const parsed = JSON.parse(line) as JsonValue;
+          let parsed: JsonValue;
+          try {
+            parsed = JSON.parse(line) as JsonValue;
+          } catch (e) {
+            throw new EncodingError(
+              "grpc-http",
+              `failed to parse observe frame: ${
+                e instanceof Error ? e.message : String(e)
+              }`,
+              { cause: e },
+            );
+          }
           if (
             typeof parsed === "object" && parsed !== null && "error" in parsed
           ) {
-            throw new Error(String((parsed as Record<string, unknown>).error));
+            const err = String((parsed as Record<string, unknown>).error);
+            throw new RequestError("grpc-http", err, {
+              body: err,
+              operation: "Observe",
+            });
           }
           yield outputFromProto<string[]>(fromJson(OutputProtoSchema, parsed));
         }

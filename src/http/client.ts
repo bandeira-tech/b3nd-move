@@ -13,6 +13,7 @@ import type {
   StatusResult,
 } from "@bandeira-tech/b3nd-core/types";
 import { routingKey } from "@bandeira-tech/b3nd-core/url";
+import { RequestError, TimeoutError, TransportError } from "../errors.ts";
 import { openSseStream } from "./sse.ts";
 
 /** The request about to go on the wire. Mutate any field. */
@@ -73,11 +74,13 @@ export class HttpClient implements ProtocolInterfaceNode {
   }
 
   /**
-   * Make an HTTP request with timeout
+   * Make an HTTP request with timeout. Wraps network/abort failures in
+   * `TransportError` / `TimeoutError` so callers can branch on cause.
    */
   private async request(
     path: string,
     options: RequestInit = {},
+    operation?: string,
   ): Promise<Response> {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), this.timeout);
@@ -105,9 +108,15 @@ export class HttpClient implements ProtocolInterfaceNode {
       return response;
     } catch (error) {
       if (error instanceof Error && error.name === "AbortError") {
-        throw new Error(`Request timeout after ${this.timeout}ms`);
+        throw new TimeoutError("http", this.timeout, operation, {
+          cause: error,
+        });
       }
-      throw error;
+      throw new TransportError(
+        "http",
+        error instanceof Error ? error.message : String(error),
+        { cause: error },
+      );
     } finally {
       clearTimeout(timeoutId);
     }
@@ -148,7 +157,7 @@ export class HttpClient implements ProtocolInterfaceNode {
       const response = await this.request("/api/v1/receive", {
         method: "POST",
         body: serializedBatch,
-      });
+      }, "receive");
 
       if (!response.ok) {
         // Request-level failure (bad JSON, malformed batch, server error).
@@ -184,13 +193,19 @@ export class HttpClient implements ProtocolInterfaceNode {
     const response = await this.request("/api/v1/read", {
       method: "POST",
       body: JSON.stringify({ urls }),
-    });
+    }, "read");
     if (!response.ok) {
       const body = await response.text();
-      throw new Error(
-        `HttpClient.read: ${response.status} ${response.statusText}${
+      throw new RequestError(
+        "http",
+        `read failed: HTTP ${response.status} ${response.statusText}${
           body ? `: ${body}` : ""
         }`,
+        {
+          status: response.status,
+          body,
+          operation: "read",
+        },
       );
     }
     // Payloads pass through as JSON-parsed values. Content semantics
@@ -284,7 +299,7 @@ export class HttpClient implements ProtocolInterfaceNode {
     try {
       const response = await this.request("/api/v1/health", {
         method: "GET",
-      });
+      }, "status");
 
       if (!response.ok) {
         return {
@@ -305,7 +320,7 @@ export class HttpClient implements ProtocolInterfaceNode {
       try {
         const schemaResponse = await this.request("/api/v1/schema", {
           method: "GET",
-        });
+        }, "schema");
         if (schemaResponse.ok) {
           const schemaResult = await schemaResponse.json();
           if (schemaResult.schema && Array.isArray(schemaResult.schema)) {

@@ -9,6 +9,8 @@
  * Supports auto-reconnect with `Last-Event-ID` and exponential backoff.
  */
 
+import { RequestError, TransportError } from "../errors.ts";
+
 /** A single parsed SSE event. */
 export interface SseEvent {
   /** Single uri (back-compat shape — server may still emit this). */
@@ -70,11 +72,15 @@ export async function* openSseStream(
       const response = await fetch(url, { headers, signal });
 
       if (!response.ok) {
-        throw new Error(`SSE connect failed: ${response.status}`);
+        throw new RequestError(
+          "sse",
+          `connect failed: HTTP ${response.status}`,
+          { status: response.status, operation: "observe" },
+        );
       }
 
       if (!response.body) {
-        throw new Error("SSE response has no body");
+        throw new TransportError("sse", "response has no body");
       }
 
       // Reset backoff on successful connection
