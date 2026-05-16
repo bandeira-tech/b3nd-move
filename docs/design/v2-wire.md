@@ -1,228 +1,210 @@
-# v2 wire — URI-as-URL-identity, opaque payloads
+# v2 wire — first pass (HTTP only)
 
-**Status:** proposal — not implemented. **Owners:** rafb43, claude **Tracks:**
-b3nd-move, b3nd-core, downstream b3nd-save (unchanged)
+**Status:** ready to implement. Scope intentionally narrow: HTTP only, land it
+next to v1, see the shape in real code, then iterate. WS, gRPC, MCP, deprecation
+strategy — all deferred to follow-ups.
 
-## Why
+**Prereq landed:** `Output<T>` is now the canonical PIN tuple (b3nd-core),
+`Message` is gone. Type contract change is behind us.
 
-Today the move layer parses every payload to read any URI. JSON forces
-whole-batch decode; even gRPC's `bytes payload` rides inside a single
-`ReceiveRequest` proto that has to parse end-to-end. That couples the transport
-to the schema and prevents the natural shape of the system:
+## The idea (one paragraph)
 
-> The producing app and the consuming app share a schema. Everything in between
-> is a dumb pipe that moves `(uri, bytes)`.
+The move layer becomes a true dumb pipe: URI rides in the URL (HTTP's identity
+slot), payload rides as opaque bytes (no JSON-parsing). That matches
+`b3nd-save`'s `(uri, bytes)` storage shape, lets caching / signed-URL / auth /
+fan-out compose above as separate services without peeking at bodies, and pushes
+encode/decode to the only two places that have the schema — the producing app
+and the consuming app.
 
-`b3nd-save` already lives at this contract — `(uri, bytes)` storage,
-schema-agnostic. The move layer is the missing half. Once both halves match,
-capabilities that don't belong in either (caching, signed-upload URLs, auth,
-fan-out, replication) compose as separate services above the pipe, each
-operating on the same shared handle: the URL.
+## First-pass scope
 
-## Principles
+| In                                               | Out (for now)                                                                |
+| ------------------------------------------------ | ---------------------------------------------------------------------------- |
+| HTTP service + client at `/api/v2/*`             | WS, gRPC, MCP                                                                |
+| All four actions: status, read, receive, observe | Browser polyfills, perf benchmarks                                           |
+| Frame codec module + unit tests                  | v1 deprecation, removal                                                      |
+| Service tests against the stub rig               | Composable cache/auth/signing services (separate proposals)                  |
+| Integration test: client ↔ service round-trip    | Schema discovery (URI-namespace convention is the agreement, doc separately) |
 
-1. **URI is in the transport's identity slot.** HTTP URL, WS frame header, gRPC
-   metadata. Routing/auth/observability/sharding work without inspecting bodies.
-2. **Payloads are opaque bytes.** Move never deserializes; apps encode at one
-   edge, decode at the other.
-3. **No baked-in policy.** Caching, signed URLs, auth — these are composable
-   services that sit above this pipe. The wire ships policy-free (POST
-   everywhere read-or-write happens, GET only for genuinely static metadata like
-   `status`).
-4. **The core type stays open.** `Output<T>`'s payload remains generic so
-   non-byte uses (in-process composition, tests, structured rigs) still work.
-   Move-layer transports cast to `Output<Uint8Array>` at their boundary.
+v1 stays mounted on `/api/v1/*` and untouched. v2 lives at `/api/v2/*`. Both
+servers and clients pick a version.
+
+## Decisions (no more "open questions" for first pass)
+
+These were the things flagged for input last round; here are the calls I'm
+making so we can ship. Reversible later.
+
+| Decision                  | Choice                                                                                                           | Why                                                                  |
+| ------------------------- | ---------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
+| URL param name            | `u`                                                                                                              | terse, only one parameter on the URL anyway                          |
+| URI list framing          | url-safe-base64 of `<u16 url-len><url-utf8>` × N                                                                 | byte-safe, no separator footguns, ~no space cost                     |
+| Body framing              | `<u32 payload-len><payload>` × N                                                                                 | matches receive request and read response, single codec to test      |
+| Observe frame             | `<u16 uri-len><uri-utf8><u32 payload-len><payload>` × N stream                                                   | preserves opacity end-to-end; same byte-order/endian as body framing |
+| Endianness                | big-endian (network order)                                                                                       | one less thing to think about across runtimes                        |
+| Empty payload             | `payload-len = 0` is legal; presence semantics live above the wire                                               | wire stays policy-free                                               |
+| Per-frame size cap        | `1 << 26` (64 MiB) configurable on the service                                                                   | sane DoS protection                                                  |
+| Per-request URI count cap | `1024` configurable                                                                                              | matches what the URL-length math allows anyway                       |
+| Debuggability             | no NDJSON variant in v2; `b3nd debug` CLI does framing on the client side                                        | wire stays single-shape                                              |
+| Content-Type              | request: `application/octet-stream`; response: same for read, `application/json` for receive's `ReceiveResult[]` | bytes are bytes, metadata is metadata                                |
+| HTTP methods              | `GET /status`; `POST` everywhere else                                                                            | no cache policy baked in; that's a separate service                  |
 
 ## Wire shape
 
-URIs travel in the URL as one `?u=` parameter — a length-prefix-framed,
-url-safe-base64 list — so any URI bytes are safe and we waste no space on
-repeated `&u=`/percent-encoding. Bodies, when present, carry only
-length-prefixed opaque payload bytes, positionally matching the decoded URI
-list.
+| Action  | Method + URL                   | Request body                                   | Response                                                 |
+| ------- | ------------------------------ | ---------------------------------------------- | -------------------------------------------------------- |
+| status  | `GET  /api/v2/status`          | —                                              | JSON `StatusResult`                                      |
+| read    | `POST /api/v2/read?u=<b64>`    | —                                              | `application/octet-stream` framed payloads × N           |
+| receive | `POST /api/v2/receive?u=<b64>` | `application/octet-stream` framed payloads × N | JSON `ReceiveResult[]`                                   |
+| observe | `POST /api/v2/observe?u=<b64>` | —                                              | `application/octet-stream` framed observe frames, stream |
 
-| Action  | Method + URL                   | Body                                    | Response                                   |
-| ------- | ------------------------------ | --------------------------------------- | ------------------------------------------ |
-| status  | `GET  /api/v2/status`          | —                                       | JSON `StatusResult`                        |
-| read    | `POST /api/v2/read?u=<b64>`    | —                                       | binary frames: `<u32 len><payload>` × N    |
-| receive | `POST /api/v2/receive?u=<b64>` | binary frames: `<u32 len><payload>` × N | JSON `ReceiveResult[]` (small, structured) |
-| observe | `POST /api/v2/observe?u=<b64>` | —                                       | binary frame stream — see below            |
-
-### URL encoding: `?u=<urlsafe-b64>`
-
-The base64 decodes to a length-prefixed byte-record:
+## File plan
 
 ```
-<u16 url-byte-len><url-utf8> × N
+src/v2/
+  frame.ts          ← codec primitives (pure, no I/O)
+  frame.test.ts     ← roundtrip tests
+src/http/v2/
+  service.ts        ← (Request) => Promise<Response> at /api/v2/*
+  client.ts         ← ProtocolInterfaceNode over v2 wire
+  service.test.ts   ← unit, with stub rig
+  client.test.ts    ← unit, with a stub fetch
+tests/integration/deno/
+  http-v2.test.ts   ← real Deno.serve(httpV2Api(rig)) + httpV2Client, round-trip
+deno.json
+  + "./http/v2/service": "./src/http/v2/service.ts"
+  + "./http/v2/client":  "./src/http/v2/client.ts"
 ```
 
-Why length-prefixed inside the base64 (vs. simply comma-joined): byte-safe
-against any URI content, zero ambiguity, ~no space cost for typical URIs. `u16`
-caps a single URI at 64KiB which is plenty (longest sensible URIs are sub-KiB).
+Why `src/v2/` for the codec instead of `src/v2-frame.ts`: WS and gRPC follow-ups
+will share the codec, so it earns its own folder. Putting the HTTP-specific
+pieces in `src/http/v2/` keeps the v1 HTTP files untouched.
 
-Total URL ceiling: roughly 48KiB of URI text after base64 inflation, inside a
-64KiB browser-safe URL — hundreds of URIs per request.
+## Codec (one module, two functions per direction)
 
-### Body framing (receive request, read response)
+```ts
+// src/v2/frame.ts
 
-```
-<u32 payload-byte-len><payload> × N
-```
+/** url-safe-base64 of <u16 len><url-utf8> × N */
+export function encodeUriList(uris: string[]): string;
+export function decodeUriList(param: string): string[];
 
-`payload-byte-len = 0` is legal — represents a present-but-empty payload. For
-deletion / not-present, the API uses a sentinel structure at the rig/save layer;
-the wire doesn't need a special encoding for it because read responses are
-positional.
+/** <u32 len><payload> × N — used for receive request body and read response */
+export function encodePayloads(payloads: Uint8Array[]): Uint8Array;
+export function decodePayloads(body: Uint8Array): Uint8Array[];
 
-Content-Type:
+/** <u16 uri-len><uri><u32 payload-len><payload> — used for one observe frame */
+export function encodeObserveFrame(out: Output<Uint8Array>): Uint8Array;
 
-- request: `application/octet-stream` (we're not negotiating schema here)
-- response: `application/octet-stream` for read; `application/json` for
-  receive's `ReceiveResult[]` (small, structured metadata, not payload)
-
-### Observe response
-
-Each frame is a length-prefixed binary record carrying `<uri, payload>`:
-
-```
-<u16 uri-len><uri-utf8><u32 payload-len><payload>
+/** Streaming decoder. Yields frames as they complete. */
+export async function* decodeObserveFrames(
+  body: ReadableStream<Uint8Array>,
+): AsyncIterable<Output<Uint8Array>>;
 ```
 
-terminated by frame-len=0 / connection close. This preserves opacity end-to-end
-and matches the receive framing style.
+All length-prefixed. All big-endian. Two limits parameter for `decode*`
+(maxFrameBytes, maxCount) so callers can pass server config in. No internal
+state, no allocation surprises — these are the only thing the move layer needs
+to be correct about, and they're trivially testable in isolation.
 
-Open question — see below — on whether to keep an NDJSON variant for
-debuggability.
+## Per-action behavior
 
-## Type contracts
+**status.** `GET /api/v2/status` → `JSON.stringify(await rig.status())`. 200 if
+healthy, 503 otherwise. Same `statusMeta` option as v1.
 
-In `b3nd-core`:
+**read.** `decodeUriList(u)` → `rig.read(uris)` → `encodePayloads` over
+`outputs.map(o => o[1] ?? new Uint8Array())`. Response carries one payload slot
+per requested URI in order. Null-payload (miss) shows up as length-0 — the
+client wraps each slot in `Output<Uint8Array>` by pairing it back with the
+request's URI list.
 
-- **`Message` is deprecated**; remove from move-layer surfaces. The canonical
-  tuple is `Output<T>` for both inputs (receive) and outputs (read, observe
-  frames).
-- `Output<T = unknown> = [uri: string, payload: T | null]` — payload generic
-  stays open. **Do not** narrow the core type to `Uint8Array`; the wire is just
-  one consumer of `Output` and shouldn't force its representation upstream.
-- `ProtocolInterfaceNode` keeps `Output<T>` everywhere — same generic story.
-- Move-layer service/client signatures concretize to `Output<Uint8Array>` at the
-  wire boundary. Apps cast: an app that speaks proto on top of move sends
-  `Output<Uint8Array>` containing pre-serialized proto bytes; an in-process rig
-  composition that never crosses move can keep `Output<MyDecodedType>`.
+**receive.** `decodeUriList(u)` and `decodePayloads(body)` zipped into
+`Output<Uint8Array>[]` → `rig.receive(...)` → JSON `ReceiveResult[]`. URI-count
+and payload-count mismatch → 400.
 
-## Per-transport changes
+**observe.** `decodeUriList(u)` → for-await `rig.observe(uris, signal)` → stream
+`encodeObserveFrame(frame)` per match → close on iterator end or request abort.
+Same abort wiring as v1 `ndjsonResponse`; might factor out an
+`octetStreamResponse` helper if it's clean.
 
-### HTTP (`src/http/{service,client}.ts`)
+## Client surface
 
-- Routes change to `/api/v2/*` as in the table.
-- Client builds URL with `u=<framed-b64>`; serializes/deserializes payload
-  frames; never JSON-parses payload bytes.
-- Service does the inverse.
-- `httpApi` keeps its `(Request) => Promise<Response>` signature.
+`HttpV2Client implements ProtocolInterfaceNode<Uint8Array>`:
 
-### WS (`src/ws/{service,client}.ts`)
+```ts
+class HttpV2Client {
+  receive(outputs: Output<Uint8Array>[]): Promise<ReceiveResult[]>;
+  read(urls: string[]): Promise<Output<Uint8Array>[]>;
+  observe(
+    urls: string[],
+    signal: AbortSignal,
+  ): AsyncIterable<Output<Uint8Array>>;
+  status(): Promise<StatusResult>;
+}
+```
 
-- Per-message envelope becomes two frames over the same `id`:
-  1. text frame: `{ id, type, uris: <b64-framed list> }`
-  2. binary frame: receive payloads / read response — concatenated
-     length-prefixed records
-- Observe streams binary frames per match (header text frame at subscribe, then
-  binary frames per event, plus a final empty terminator text frame with
-  `data: null`).
-- `observe-cancel` unchanged.
+Same shape as v1 `HttpClient`, just typed as `Uint8Array` payloads at the
+boundary. Same `url`, `timeout`, `preSend` config. Errors translate to the
+existing typed hierarchy (`TransportError`, `RequestError`, `TimeoutError`).
 
-Why two frames vs. one: WS is a frame protocol and binary frames don't nest.
-Keeping the routing metadata on a text frame and bytes on a binary frame matches
-how every other WS-binary system does it.
+## Tests
 
-### gRPC-HTTP (`src/grpc/http/{service,client}.ts`)
+1. **Codec.** Roundtrip random URIs, payloads, mixed-empty payloads, max-size
+   enforcement, malformed-input rejection. Pure.
+2. **Service.** Each action against the stub rig (which already lives in
+   `tests/rigs/stub.ts`). Asserts the wire shape — read bytes match
+   `encodePayloads(...)`.
+3. **Client.** Each action against a stub fetch that asserts URL and body shape,
+   returns canned bytes.
+4. **Integration.** `Deno.serve(httpV2Api(rig))` + `new HttpV2Client(...)` doing
+   the existing move-suite scenarios on `Output<Uint8Array>`.
 
-- Proto schema reshapes:
-  - `ReceiveRequest { repeated string uris; repeated bytes payloads }`
-  - `ReadRequest { repeated string uris }`
-  - `ReadResponse { repeated bytes payloads }`
-  - `ObserveRequest { repeated string uris }`
-  - `ObserveFrame { string uri; bytes payload }` — streamed
-- Already byte-aligned; this is mostly a clean-up of the wrappers.
+Goal: integration suite passes. That's when v2 is "real."
 
-### MCP (`src/mcp/service.ts`)
+## What composes above (still, but explicitly out of first pass)
 
-- MCP isn't a generic data plane — it's a tool surface for AI clients and is
-  allowed to keep structured-JSON payloads. **Out of scope** for v2 wire.
-  Document the asymmetry.
+- Cache service — owns a GET surface, proxies to v2 POST.
+- Signed-URL service — short-lived per-URI URLs that terminate into v2.
+- Auth service — inspects URL, decides, forwards.
+- Fan-out / replication — multi-target writer over v2.
 
-## What composes above
-
-These don't go in the move layer. They become wire-able service kinds that
-someone runs in front of (or beside) `httpApi(rig)`:
-
-- **Cache service** — owns a GET surface, proxies to v2 POST, decides
-  cacheability. The pipe stays cache-policy-free.
-- **Signed-URL service** — owns short-lived per-URI URLs for upload / download.
-  Hands clients a URL; that URL terminates into the v2 wire.
-- **Auth service** — inspects URL, decides yes/no, forwards to v2.
-- **Replication / fan-out** — multi-target writer that takes v2 receive, fans
-  out to multiple downstream pipes.
-
-Each of these reads only the URL; none parse payload bytes. That's the whole
-point — every middlebox shares the same cheap routing primitive.
-
-## Cross-repo ripple
-
-| Repo      | Change                                                                        | Risk |
-| --------- | ----------------------------------------------------------------------------- | ---- |
-| b3nd-core | Retire `Message`; rig methods take `Output[]`; payload type stays generic.    | Med  |
-| b3nd-move | All four transports' service + client + tests rewritten for v2 wire.          | High |
-| b3nd-save | No change — already `(uri, bytes)`. Alignment becomes the proof point.        | None |
-| Apps      | Encode/decode moves to app boundaries; previously-implicit JSON now explicit. | Med  |
-
-## Migration
-
-- **Path-versioned**: `/api/v2/...` lives next to `/api/v1/...` while both
-  server and clients migrate. Servers can mount both; clients pin a version.
-- **No coexistence on the same path** — the routing primitive changes (URL
-  identity), so a single route can't speak both.
-- **Drop v1** at the next minor that ships v2 stably (the project is early
-  enough that we don't need a long deprecation window — verify with downstream
-  consumers before cutting).
-
-## Open questions
-
-1. **NDJSON variant for observe / read responses?** Binary is opaque-preserving
-   but ungrepable. Option: keep a `?debug=1` mode that emits
-   NDJSON-of-`{uri, b64}` for inspection. Cheaper option: a
-   `b3nd debug read URI` CLI that does the framing on the client side. Probably
-   the CLI.
-2. **URL param name.** `u` (terse) vs. `urls` (self-documenting). Leaning `u`.
-3. **Receive request: per-frame size cap?** Server should reject framed records
-   above some max-payload-bytes to protect against pathological clients. What's
-   the default? 16 MiB?
-4. **gRPC: unary vs. streaming for observe?** Server-streaming RPC is the
-   natural fit and aligns frame-by-frame with the HTTP binary stream.
-5. **Status payload itself opaque?** No — `StatusResult` is server metadata, not
-   domain content. Keep structured JSON.
-6. **Codec discovery.** The pipe doesn't negotiate schema. The agreement between
-   producer and consumer is out-of-band, usually by URI namespace convention
-   (e.g. `b3nd://proto/v1/Foo/...` implies `Foo` proto). Document that
-   convention separately; not part of this proposal.
+None of these need any move-layer change. They get the same URL handle and never
+read payload bytes. Each gets its own proposal when it's its turn.
 
 ## Sequencing
 
-1. **Land #18** — small actions.ts refactor. Independent of v2; ships either
-   way.
-2. **b3nd-core v0.18** — `Output`-typed PIN/Rig, `Message` removed. Tested in
-   isolation against in-process rigs.
-3. **b3nd-move HTTP v2** — service + client + tests behind `/api/v2/*`. Both
-   versions live side-by-side until WS + gRPC catch up.
-4. **b3nd-move WS v2** — service + client parity.
-5. **b3nd-move gRPC v2** — proto reshape + service + client parity.
-6. **Cut b3nd-move v0.15** with v2 wire on all transports, v1 still reachable.
-7. **Cut v0.16** (or v1.0) removing v1 once downstreams confirm.
+1. **This PR: design doc** (you're reading it).
+2. **Codec PR** — `src/v2/frame.ts` + tests. Tiny, easy to review, no wire
+   change. Confidence-builder.
+3. **HTTP service PR** — `src/http/v2/service.ts` + tests, mounted at
+   `/api/v2/*`. v1 untouched.
+4. **HTTP client PR** — `src/http/v2/client.ts` + tests.
+5. **Integration test PR** — round-trip suite. Gates "v2 is real."
+6. Then we look at what we've got, decide the WS/gRPC shape based on actual
+   feedback from using v2, and iterate from there.
 
-## What this does _not_ try to do
+Each step is small, reviewable, reversible. None of them touch v1.
 
-- HTTP-cache semantics (composable cache service, separate proposal).
-- Auth / capability tokens (composable auth service, separate proposal).
-- Signed upload URLs (composable signing service, separate proposal).
-- Schema discovery / codec negotiation (out-of-band, URI convention).
-- Stream resumption / replay (rig-level concern, not wire).
+## What's deferred (and why each is fine to defer)
+
+- **WS v2 + gRPC v2** — same idea, different framing details. Doing HTTP first
+  proves the codec; WS adds binary frames, gRPC mostly collapses into proto
+  changes. Both straightforward once HTTP is done.
+- **MCP** — different shape of consumer (AI tools), structured JSON is the right
+  interface there. Not part of the data-plane story.
+- **v1 deprecation** — happens when downstreams have moved, not on a fixed
+  clock.
+- **Composable services (cache, auth, signing)** — each is its own design, each
+  is independent of move v2's wire choice.
+- **Schema discovery / codec conventions** — out-of-band agreement between
+  producer/consumer apps. Doc separately when there's a real case study.
+
+## How we know first pass worked
+
+- Integration suite green.
+- A toy "encode proto → send → store → fetch → decode proto" app on top of v2
+  works end-to-end without move ever importing the proto schema.
+- We have an opinion about WS/gRPC v2 that's grounded in actual v2 HTTP code,
+  not speculation.
+
+If those three hold, we keep going. If something feels off, we change it before
+WS/gRPC follow it.
