@@ -1,21 +1,21 @@
 # `tests/` — Integration tests + shared test infra
 
 Everything outside production code lives here: the integration tests, the shared
-rigs and transport factories, the named test-set suites, and the browser runner
+rig and transport factories, the named test-set suites, and the browser runner
 machinery. `src/` is now purely production code.
 
-Two integration runtime pairings, covered side by side:
+Two integration runtime pairings, covered side by side, against the same rig:
 
-| Pairing     | Server                  | Client                            | Rig                                | Suite                                  |
-| ----------- | ----------------------- | --------------------------------- | ---------------------------------- | -------------------------------------- |
-| **Deno**    | real transport, in Deno | real client, in Deno              | `memoryRig()` (real `MemoryStore`) | `pinContract` / `mcpSpec` (round-trip) |
-| **Browser** | real transport, in Deno | real client, in headless Chromium | `stubRig()` (deterministic echo)   | `moveSuite` (per-operation, batched)   |
+| Pairing     | Server                  | Client                            | Rig       | Suite                 |
+| ----------- | ----------------------- | --------------------------------- | --------- | --------------------- |
+| **Deno**    | real transport, in Deno | real client, in Deno              | `stubRig` | `moveSuite`/`mcpSpec` |
+| **Browser** | real transport, in Deno | real client, in headless Chromium | `stubRig` | `moveSuite`           |
 
-Both share the same **factories** (real transport boot) and the same **PIN
-interface** as the boundary they're testing across. The Deno-side rig verifies
-that values round-trip through real storage; the browser-side rig verifies that
-values cross the wire and the cross-runtime boundary faithfully, decoupled from
-any storage behavior.
+b3nd-move's job is encode → wire → decode. The tests assert that calls reach the
+rig with the expected shape and that the rig's response survives the round. They
+do **not** assert storage semantics — those are a backend concern, not this
+package's. So every test runs against `stubRig` (deterministic canned responses)
+and asserts that the wire delivers those responses unchanged.
 
 ## Layout
 
@@ -26,13 +26,11 @@ tests/
 │   ├── ws.ts                 # startWsServer(rig)             → { url, stop }
 │   ├── grpc.ts               # startGrpcServer(rig, { cors? })→ { url, stop }
 │   └── mcp.ts                # startMcpInProcess(rig)          → { client, cleanup }
-├── rigs/                     # build rigs
-│   ├── memory.ts             # memoryRig()  — SimpleClient + MemoryStore
-│   └── stub.ts               # stubRig()    — deterministic echo PIN
+├── rigs/
+│   └── stub.ts               # stubRig() — deterministic PIN, canned responses
 ├── suites/                   # named test-set generators
-│   ├── pin-contract.ts       # round-trip PIN contract, takes ServerFactory
 │   ├── mcp-spec.ts           # MCP tool surface contract
-│   └── move-suite.ts         # browser, per-operation, batch on both sides
+│   └── move-suite.ts         # per-operation, batch on both sides
 ├── browser/                  # browser harness machinery
 │   ├── runner.ts             # esbuild + @astral/astral driver
 │   ├── harness.html          # page template (server URL injected)
@@ -46,7 +44,7 @@ tests/
     ├── deno/                 # real rig + real client, both in Deno
     │   ├── http.test.ts
     │   ├── ws.test.ts
-    │   ├── grpc.test.ts      # registers contract twice: json + binary
+    │   ├── grpc.test.ts      # registers move-suite twice: json + binary
     │   └── mcp.test.ts
     └── browser/              # real server, stub rig, browser client
         ├── http.test.ts
@@ -117,25 +115,25 @@ bugs usually live (off-by-one slot mapping, lost ordering, dropped misses).
 ## Sharing infra with per-module unit tests
 
 Per-module tests (`src/ws/observe.test.ts`, `src/grpc/http/client.test.ts`,
-etc.) can import the shared rigs and factories to avoid hand-rolling in-test
+etc.) can import the shared rig and factories to avoid hand-rolling in-test
 setups:
 
 ```ts
 import { startHttpServer } from "../../../tests/factories/http.ts";
-import { memoryRig } from "../../../tests/rigs/memory.ts";
+import { stubRig } from "../../../tests/rigs/stub.ts";
 
-const server = await startHttpServer(memoryRig());
+const server = await startHttpServer(stubRig());
 ```
 
-The factories and rigs are publish-excluded along with the rest of `tests/`, so
+The factories and rig are publish-excluded along with the rest of `tests/`, so
 they exist only at workspace scope.
 
 ## Adding a new transport
 
 1. Add `tests/factories/<name>.ts` exporting `start<Name>Server(rig)` →
    `{ url, stop }`.
-2. Add an in-Deno test at `tests/integration/deno/<name>.test.ts` that composes
-   `start<Name>Server(memoryRig())` + a fresh client and runs `pinContract`.
+2. Add an in-Deno test at `tests/integration/deno/<name>.test.ts` that boots
+   `start<Name>Server(stubRig())` and runs `runMoveSuite`.
 3. Add a browser harness at `tests/browser/harnesses/<name>.ts`:
    ```ts
    import { serverUrl, setupHarness } from "../deno-stub.ts";

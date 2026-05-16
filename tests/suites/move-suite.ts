@@ -40,7 +40,6 @@
 
 import { assertEquals } from "@std/assert";
 import type {
-  Message,
   Output,
   ProtocolInterfaceNode,
 } from "@bandeira-tech/b3nd-core/types";
@@ -74,9 +73,9 @@ export function runMoveSuite(suiteName: string, config: MoveSuiteConfig) {
 
   // ── receive: batch in, batch out ────────────────────────────────
 
-  t("receive: 5-message batch, all accepted, preserves order", async () => {
+  t("receive: 5-output batch, all accepted, preserves order", async () => {
     const client = await Promise.resolve(config.client());
-    const msgs: Message[] = [
+    const msgs: Output[] = [
       ["mutable://t/recv/a", { v: 1 }],
       ["mutable://t/recv/b", { v: 2 }],
       ["mutable://t/recv/c", { v: 3 }],
@@ -91,10 +90,10 @@ export function runMoveSuite(suiteName: string, config: MoveSuiteConfig) {
   });
 
   t(
-    "receive: 5-message batch with mixed accept/reject, slot ordering",
+    "receive: 5-output batch with mixed accept/reject, slot ordering",
     async () => {
       const client = await Promise.resolve(config.client());
-      const msgs: Message[] = [
+      const msgs: Output[] = [
         ["mutable://t/mixed/a", { v: 1 }],
         ["mutable://t/mixed/__reject__/b", { v: 2 }],
         ["mutable://t/mixed/c", { v: 3 }],

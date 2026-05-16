@@ -12,7 +12,6 @@
  */
 
 import type {
-  Message,
   Output,
   ProtocolInterfaceNode,
   ReceiveResult,
@@ -140,22 +139,22 @@ export class HttpClient implements ProtocolInterfaceNode {
   }
 
   /**
-   * Receive a batch of messages.
+   * Receive a batch of outputs.
    *
-   * @param msgs Array of Message tuples `[uri, payload]`.
-   * @returns One `ReceiveResult` per input message, in input order.
+   * @param msgs Array of `Output` tuples `[uri, payload]`.
+   * @returns One `ReceiveResult` per input output, in input order.
    */
-  async receive(msgs: Message[]): Promise<ReceiveResult[]> {
+  async receive(msgs: Output[]): Promise<ReceiveResult[]> {
     // Pre-validate URIs — return error results for invalid ones without sending
     const results: (ReceiveResult | null)[] = msgs.map(([uri]) => {
       if (!uri || typeof uri !== "string") {
-        return { accepted: false, error: "Message URI is required" };
+        return { accepted: false, error: "Output URI is required" };
       }
       return null;
     });
 
     const validIndices: number[] = [];
-    const validMsgs: Message[] = [];
+    const validMsgs: Output[] = [];
     for (let i = 0; i < msgs.length; i++) {
       if (results[i] === null) {
         validIndices.push(i);

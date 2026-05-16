@@ -20,8 +20,8 @@
  *
  * @example
  * ```ts
- * import { Rig, connection } from "@b3nd/rig";
- * import { httpApi } from "@b3nd/rig/http";
+ * import { Rig, connection } from "@bandeira-tech/b3nd-core";
+ * import { httpApi } from "@bandeira-tech/b3nd-move/http/service";
  *
  * const c = connection(client, ["*"]);
  * const rig = new Rig({ routes: { receive: [c], read: [c], observe: [c] } });
@@ -38,6 +38,7 @@
  */
 
 import type { Rig } from "@bandeira-tech/b3nd-core/rig";
+import { ndjsonResponse, validateOutputs, validateUrls } from "../actions.ts";
 
 // ── Types ──
 
@@ -95,29 +96,11 @@ export function httpApi(
           400,
         );
       }
-      if (
-        !Array.isArray(body) || body.length === 0 ||
-        !body.every((m) => Array.isArray(m) && m.length === 2)
-      ) {
-        return json(
-          [{ accepted: false, error: "Expected [[uri, payload], ...]" }],
-          400,
-        );
-      }
-      const batch: [string, unknown][] = [];
-      for (const [uri, rawPayload] of body as [unknown, unknown][]) {
-        if (!uri || typeof uri !== "string") {
-          return json(
-            [{ accepted: false, error: "URI is required" }],
-            400,
-          );
-        }
-        batch.push([uri, rawPayload]);
-      }
-      const results = await rig.receive(batch);
+      const v = validateOutputs(body);
+      if (!v.ok) return json([{ accepted: false, error: v.error }], 400);
       // 200 means the server processed the batch; per-slot accept/reject
       // lives in the body. Non-2xx is reserved for request-level failures.
-      return json(results, 200);
+      return json(await rig.receive(v.value), 200);
     }
 
     // ── Read (batch) ──
@@ -132,14 +115,10 @@ export function httpApi(
       } catch {
         return json({ error: "Invalid JSON body" }, 400);
       }
-      if (
-        !Array.isArray(body) || body.length === 0 ||
-        !body.every((u) => typeof u === "string")
-      ) {
-        return json({ error: "Expected string[]" }, 400);
-      }
+      const v = validateUrls(body);
+      if (!v.ok) return json({ error: v.error }, 400);
       try {
-        return json(await rig.read(body as string[]));
+        return json(await rig.read(v.value));
       } catch (err) {
         return json(
           { error: err instanceof Error ? err.message : String(err) },
@@ -159,50 +138,14 @@ export function httpApi(
       } catch {
         return json({ error: "Invalid JSON body" }, 400);
       }
-      if (
-        !Array.isArray(body) || body.length === 0 ||
-        !body.every((u) => typeof u === "string")
-      ) {
-        return json({ error: "Expected string[]" }, 400);
-      }
-      const urls = body as string[];
-
-      const abort = new AbortController();
-      req.signal.addEventListener("abort", () => abort.abort());
-      const enc = new TextEncoder();
-
-      const stream = new ReadableStream({
-        async start(controller) {
-          try {
-            for await (const frame of rig.observe(urls, abort.signal)) {
-              if (abort.signal.aborted) break;
-              controller.enqueue(enc.encode(JSON.stringify(frame) + "\n"));
-            }
-          } catch (e) {
-            if (!abort.signal.aborted) {
-              const msg = e instanceof Error ? e.message : String(e);
-              controller.enqueue(
-                enc.encode(JSON.stringify({ error: msg }) + "\n"),
-              );
-            }
-          } finally {
-            controller.close();
-          }
-        },
-        cancel() {
-          abort.abort();
-        },
-      });
-
-      return new Response(stream, {
-        status: 200,
-        headers: {
-          "Content-Type": "application/x-ndjson",
-          "Cache-Control": "no-cache",
-          "Connection": "keep-alive",
-          "X-Accel-Buffering": "no",
-        },
-      });
+      const v = validateUrls(body);
+      if (!v.ok) return json({ error: v.error }, 400);
+      return ndjsonResponse(
+        (signal) => rig.observe(v.value, signal),
+        (frame) => frame,
+        req.signal,
+        { "X-Accel-Buffering": "no" },
+      );
     }
 
     // ── Not found ──
