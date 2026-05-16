@@ -11,7 +11,7 @@
  *              `{ id, success: false, error }`
  *
  * Per-type payload shapes:
- *   - `receive`        payload = `Message[]`                → data = `ReceiveResult[]`
+ *   - `receive`        payload = `Output[]`                 → data = `ReceiveResult[]`
  *   - `read`           payload = `{ urls: string[] }`       → data = `Output[]`
  *   - `observe`        payload = `{ urls: string[] }`       → multiple frames, each
  *                                                             `data = Output<string[]>`;
@@ -32,7 +32,7 @@
 
 import type { Rig } from "@bandeira-tech/b3nd-core/rig";
 import type { WebSocketRequest, WebSocketResponse } from "./client.ts";
-import { validateMessages, validateUrls } from "../actions.ts";
+import { validateOutputs, validateUrls } from "../actions.ts";
 
 /**
  * Fetch handler with a `closeAll` lifecycle hook.
@@ -90,7 +90,7 @@ export function wsApi(rig: Rig): WsApi {
       try {
         switch (type) {
           case "receive": {
-            const v = validateMessages(payload);
+            const v = validateOutputs(payload);
             if (!v.ok) {
               send({ id, success: false, error: v.error });
               return;

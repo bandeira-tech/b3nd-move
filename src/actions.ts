@@ -13,7 +13,7 @@
  * {@link ndjsonResponse} for its observe stream.
  */
 
-import type { Message } from "@bandeira-tech/b3nd-core/types";
+import type { Output } from "@bandeira-tech/b3nd-core/types";
 
 /** Action names, also used verbatim as the WebSocket envelope `type`. */
 export type ActionName = "status" | "receive" | "read" | "observe";
@@ -24,10 +24,10 @@ export type Validation<T> =
   | { ok: false; error: string };
 
 /**
- * Validate a `receive` body of the canonical bare-arg shape: `Message[]`,
+ * Validate a `receive` body of the canonical bare-arg shape: `Output[]`,
  * i.e. a non-empty array of `[uri, payload]` tuples with string `uri`.
  */
-export function validateMessages(body: unknown): Validation<Message[]> {
+export function validateOutputs(body: unknown): Validation<Output[]> {
   if (
     !Array.isArray(body) || body.length === 0 ||
     !body.every((m) => Array.isArray(m) && m.length === 2)
@@ -39,7 +39,7 @@ export function validateMessages(body: unknown): Validation<Message[]> {
       return { ok: false, error: "URI is required" };
     }
   }
-  return { ok: true, value: body as Message[] };
+  return { ok: true, value: body as Output[] };
 }
 
 /** Validate a non-empty `string[]` — shared by `read` and `observe`. */
