@@ -30,9 +30,9 @@
  * requests but WS connections are long-lived.
  */
 
-import type { Message } from "@bandeira-tech/b3nd-core/types";
 import type { Rig } from "@bandeira-tech/b3nd-core/rig";
 import type { WebSocketRequest, WebSocketResponse } from "./client.ts";
+import { validateMessages, validateUrls } from "../actions.ts";
 
 /**
  * Fetch handler with a `closeAll` lifecycle hook.
@@ -90,31 +90,23 @@ export function wsApi(rig: Rig): WsApi {
       try {
         switch (type) {
           case "receive": {
-            const msgs = payload as Message[];
-            if (!Array.isArray(msgs) || msgs.length === 0) {
-              send({
-                id,
-                success: false,
-                error: "Expected [[uri, payload], ...]",
-              });
+            const v = validateMessages(payload);
+            if (!v.ok) {
+              send({ id, success: false, error: v.error });
               return;
             }
-            const results = await rig.receive(msgs);
-            send({ id, success: true, data: results });
+            send({ id, success: true, data: await rig.receive(v.value) });
             return;
           }
           case "read": {
-            const { urls } = payload as { urls: string[] };
-            if (!Array.isArray(urls) || urls.length === 0) {
-              send({
-                id,
-                success: false,
-                error: "Expected { urls: string[] }",
-              });
+            const v = validateUrls(
+              (payload as { urls?: unknown } | null)?.urls,
+            );
+            if (!v.ok) {
+              send({ id, success: false, error: v.error });
               return;
             }
-            const outputs = await rig.read(urls);
-            send({ id, success: true, data: outputs });
+            send({ id, success: true, data: await rig.read(v.value) });
             return;
           }
           case "status": {
@@ -123,19 +115,17 @@ export function wsApi(rig: Rig): WsApi {
             return;
           }
           case "observe": {
-            const { urls } = payload as { urls: string[] };
-            if (!Array.isArray(urls) || urls.length === 0) {
-              send({
-                id,
-                success: false,
-                error: "Expected { urls: string[] }",
-              });
+            const v = validateUrls(
+              (payload as { urls?: unknown } | null)?.urls,
+            );
+            if (!v.ok) {
+              send({ id, success: false, error: v.error });
               return;
             }
             const abort = new AbortController();
             observes.set(id, abort);
             try {
-              for await (const frame of rig.observe(urls, abort.signal)) {
+              for await (const frame of rig.observe(v.value, abort.signal)) {
                 if (abort.signal.aborted) break;
                 send({ id, success: true, data: frame });
               }
