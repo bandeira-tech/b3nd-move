@@ -39,7 +39,6 @@
 
 import { connection, Rig } from "@bandeira-tech/b3nd-core/rig";
 import type {
-  Message,
   Output,
   Program,
   ProtocolInterfaceNode,
@@ -49,9 +48,9 @@ import type {
 
 class StubBackend implements ProtocolInterfaceNode {
   // The rig already rejects /__reject__/ at the program stage, so this
-  // backend never sees those messages. Every message that reaches the
+  // backend never sees those outputs. Every output that reaches the
   // backend is accepted unconditionally.
-  receive(msgs: Message[]): Promise<ReceiveResult[]> {
+  receive(msgs: Output[]): Promise<ReceiveResult[]> {
     return Promise.resolve(msgs.map(() => ({ accepted: true })));
   }
 

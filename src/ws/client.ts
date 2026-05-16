@@ -6,7 +6,6 @@
  */
 
 import type {
-  Message,
   Output,
   ProtocolInterfaceNode,
   ReceiveResult,
@@ -336,12 +335,12 @@ export class WebSocketClient implements ProtocolInterfaceNode {
   }
 
   /**
-   * Receive a batch of messages (unified interface)
-   * Sends "receive" message type with encoded batch payload
-   * @param msgs - Array of Message tuples [uri, payload]
-   * @returns ReceiveResult[] — one result per message
+   * Receive a batch of outputs (unified interface).
+   * Sends a "receive" frame with the encoded batch payload.
+   * @param msgs - Array of `Output` tuples [uri, payload]
+   * @returns ReceiveResult[] — one result per output
    */
-  async receive(msgs: Message[]): Promise<ReceiveResult[]> {
+  async receive(msgs: Output[]): Promise<ReceiveResult[]> {
     try {
       const results = await this.sendRequest<ReceiveResult[]>(
         "receive",

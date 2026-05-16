@@ -35,7 +35,6 @@ import {
 } from "@bufbuild/protobuf";
 import type { JsonValue } from "@bufbuild/protobuf";
 import type {
-  Message,
   Output,
   ProtocolInterfaceNode,
   ReceiveResult,
@@ -158,7 +157,7 @@ export class GrpcHttpClient implements ProtocolInterfaceNode {
     }
   }
 
-  async receive(msgs: Message[]): Promise<ReceiveResult[]> {
+  async receive(msgs: Output[]): Promise<ReceiveResult[]> {
     if (msgs.length === 0) return [];
     const req = create(ReceiveRequestSchema, {
       messages: msgs.map((m) => outputToProto(m)),

@@ -38,7 +38,7 @@
  */
 
 import type { Rig } from "@bandeira-tech/b3nd-core/rig";
-import { ndjsonResponse, validateMessages, validateUrls } from "../actions.ts";
+import { ndjsonResponse, validateOutputs, validateUrls } from "../actions.ts";
 
 // ── Types ──
 
@@ -96,7 +96,7 @@ export function httpApi(
           400,
         );
       }
-      const v = validateMessages(body);
+      const v = validateOutputs(body);
       if (!v.ok) return json([{ accepted: false, error: v.error }], 400);
       // 200 means the server processed the batch; per-slot accept/reject
       // lives in the body. Non-2xx is reserved for request-level failures.
