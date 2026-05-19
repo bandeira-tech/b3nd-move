@@ -29,30 +29,6 @@ Deno.serve({ port: 3000 }, httpGetContentApi(rig, {
 That's the whole surface — one route, one hook, one mapping decision at
 instantiation time. Everything below is reference.
 
-## Why this exists
-
-`httpApi` exposes `rig.read` as `POST /api/v1/read` with a JSON-encoded
-`Output[]` body. That's fine for SDK-to-SDK calls but actively in the way when:
-
-- A browser wants to embed content (`<img src=...>`, `<a download>`).
-- A CDN should cache the response by URL.
-- A consumer wants a real `Content-Type` instead of an opaque `application/json`
-  envelope around base64 bytes.
-
-`http-get-content` is the specialized GET facet that solves this: same rig, one
-URI per request, host-controlled response shape.
-
-## Surface
-
-| File                      | Exports                                                                                      |
-| ------------------------- | -------------------------------------------------------------------------------------------- |
-| `service.ts`              | `httpGetContentApi`, `HttpGetContentApiOptions`, `PayloadResponseMap`, `ContentResponseInit` |
-| `payload-response-map.ts` | `payloadResponseMap` (helper namespace)                                                      |
-
-The two files are split because they evolve on different cadences — the route
-shape is locked at `GET /api/v1/content/<encoded-uri>`; the helper set grows
-over time.
-
 ## Route
 
 ```text
@@ -112,6 +88,30 @@ httpGetContentApi(rig, {
   },
 });
 ```
+
+## Surface
+
+| File                      | Exports                                                                                      |
+| ------------------------- | -------------------------------------------------------------------------------------------- |
+| `service.ts`              | `httpGetContentApi`, `HttpGetContentApiOptions`, `PayloadResponseMap`, `ContentResponseInit` |
+| `payload-response-map.ts` | `payloadResponseMap` (helper namespace)                                                      |
+
+The two files are split because they evolve on different cadences — the route
+shape is locked at `GET /api/v1/content/<encoded-uri>`; the helper set grows
+over time.
+
+## Why this exists
+
+`httpApi` exposes `rig.read` as `POST /api/v1/read` with a JSON-encoded
+`Output[]` body. That's fine for SDK-to-SDK calls but actively in the way when:
+
+- A browser wants to embed content (`<img src=...>`, `<a download>`).
+- A CDN should cache the response by URL.
+- A consumer wants a real `Content-Type` instead of an opaque `application/json`
+  envelope around base64 bytes.
+
+`http-get-content` is the specialized GET facet that solves this: same rig, one
+URI per request, host-controlled response shape.
 
 ## Notes
 
