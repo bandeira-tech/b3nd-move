@@ -11,7 +11,8 @@ import type {
   ReceiveResult,
   StatusResult,
 } from "@bandeira-tech/b3nd-core/types";
-import { httpGetContentApi, payloadResponseMap as map } from "./service.ts";
+import { httpGetContentApi } from "./service.ts";
+import { payloadResponseMap as map } from "./payload-response-map.ts";
 
 class StubBackend implements ProtocolInterfaceNode {
   receive(msgs: Output[]): Promise<ReceiveResult[]> {

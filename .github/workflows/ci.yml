@@ -53,7 +53,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        transport: [http, ws, grpc, grpc-binary]
+        transport: [http, ws, grpc, grpc-binary, http-get-content]
     steps:
       - uses: actions/checkout@v4
       - uses: denoland/setup-deno@v2
