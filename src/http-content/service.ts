@@ -133,14 +133,15 @@ export function httpGetContentApi(
 // ── Composable helpers ──
 
 function json(): PayloadResponseMap {
-  return async (_req, [, payload]) => ({
-    body: JSON.stringify(payload),
-    headers: { "Content-Type": "application/json" },
-  });
+  return (_req, [, payload]) =>
+    Promise.resolve({
+      body: JSON.stringify(payload),
+      headers: { "Content-Type": "application/json" },
+    });
 }
 
 function raw(contentType: string): PayloadResponseMap {
-  return async (_req, [, payload]) => {
+  return (_req, [, payload]) => {
     if (
       !(payload instanceof Uint8Array) &&
       !(payload instanceof ArrayBuffer) &&
@@ -150,10 +151,10 @@ function raw(contentType: string): PayloadResponseMap {
         `raw(${contentType}): payload must be Uint8Array, ArrayBuffer, or string`,
       );
     }
-    return {
+    return Promise.resolve({
       body: payload as BodyInit,
       headers: { "Content-Type": contentType },
-    };
+    });
   };
 }
 
@@ -161,7 +162,7 @@ function fromField(
   name: string,
   opts: { contentType: string },
 ): PayloadResponseMap {
-  return async (_req, [, payload]) => {
+  return (_req, [, payload]) => {
     if (payload == null || typeof payload !== "object") {
       throw new TypeError(`fromField(${name}): payload must be an object`);
     }
@@ -169,15 +170,15 @@ function fromField(
     if (value == null) {
       throw new TypeError(`fromField(${name}): missing field "${name}"`);
     }
-    return {
+    return Promise.resolve({
       body: value as BodyInit,
       headers: { "Content-Type": opts.contentType },
-    };
+    });
   };
 }
 
 function fixed(init: ContentResponseInit): PayloadResponseMap {
-  return async () => init;
+  return () => Promise.resolve(init);
 }
 
 function extensionOf(uri: string): string {
