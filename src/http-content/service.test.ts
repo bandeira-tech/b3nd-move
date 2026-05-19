@@ -61,20 +61,20 @@ Deno.test("non-GET → 405", async () => {
   assertEquals(r.headers.get("Allow"), "GET");
 });
 
-Deno.test("path outside prefix → 404", async () => {
+Deno.test("path outside prefix → 400", async () => {
   const api = httpGetContentApi(buildRig(), {
     payloadResponseMap: map.json(),
   });
   const r = await api(req("/other/thing"));
-  assertEquals(r.status, 404);
+  assertEquals(r.status, 400);
 });
 
-Deno.test("empty URI after prefix → 404", async () => {
+Deno.test("empty URI after prefix → 400", async () => {
   const api = httpGetContentApi(buildRig(), {
     payloadResponseMap: map.json(),
   });
   const r = await api(req("/api/v1/content/"));
-  assertEquals(r.status, 404);
+  assertEquals(r.status, 400);
 });
 
 Deno.test("json() — default JSON response", async () => {
