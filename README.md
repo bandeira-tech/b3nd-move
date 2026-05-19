@@ -41,6 +41,20 @@ Plus the proto pieces:
 | `b3nd-move/grpc/proto/types`   | generated wire types + schemas + `B3ndService` |
 | `b3nd-move/grpc/proto/convert` | proto ↔ b3nd converters                        |
 
+And the foundational **codecs** module — symmetric `(encode, decode)` pairs over
+one wire envelope, consumed by both content facets so the write side and read
+side can't drift:
+
+| Subpath                  | Codec                                                                      |
+| ------------------------ | -------------------------------------------------------------------------- |
+| `b3nd-move/codecs/json`  | `JSON.stringify` ↔ `req.json()`                                            |
+| `b3nd-move/codecs/text`  | string + content-type ↔ `req.text()`                                       |
+| `b3nd-move/codecs/raw`   | bytes + fixed content-type ↔ `req.arrayBuffer()`                           |
+| `b3nd-move/codecs/field` | `{ [name]: bytes, [ctField]?: ct }` envelope (round-trips both directions) |
+| `b3nd-move/codecs/codec` | `Codec`, `Encoder`, `Decoder`, `ContentResponseInit` types                 |
+
+See [`src/codecs/`](./src/codecs/) for the round-trip rationale.
+
 ## The two layers
 
 - **service.ts** — the portable half. A pure `(Request) => Response` (or factory

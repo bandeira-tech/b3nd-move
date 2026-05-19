@@ -64,6 +64,11 @@ Decodes the request body into the payload that goes into
 All composable: `byContentType` takes `PayloadDecoder` leaves, leaves are
 themselves `PayloadDecoder`.
 
+The primitives (`json`, `text`, `raw`, `intoField`) are thin wrappers around the
+`decode` half of codecs in [`src/codecs/`](../codecs/). If you also serve reads
+through `http-get-content`, declare the codec once and wire `.decode` here +
+`.encode` on the GET side — the wire envelope can't drift.
+
 | Helper                                                      | Behavior                                                   |
 | ----------------------------------------------------------- | ---------------------------------------------------------- |
 | `dec.json()`                                                | `await req.json()`                                         |

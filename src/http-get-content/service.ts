@@ -37,25 +37,22 @@
 
 import type { Rig } from "@bandeira-tech/b3nd-core/rig";
 import type { Output } from "@bandeira-tech/b3nd-core/types";
+import type { ContentResponseInit, Encoder } from "../codecs/codec.ts";
 
 // ── Types ──
 
-/** Response state the hook injects; the facet assembles the `Response`. */
-export interface ContentResponseInit {
-  body: BodyInit;
-  headers?: HeadersInit;
-  /** Defaults to 200. */
-  status?: number;
-}
+// `ContentResponseInit` and the encoder type itself live in
+// `src/codecs/codec.ts` so both facets share the contract. Re-exported
+// here so existing imports from this module keep working.
+export type { ContentResponseInit } from "../codecs/codec.ts";
 
 /**
  * Decides how a successful `rig.read` output becomes an HTTP response.
  * Owns content-type, body bytes, and any extra headers in one place.
+ *
+ * Alias of {@link Encoder} from `src/codecs/codec.ts`.
  */
-export type PayloadResponseMap = (
-  req: Request,
-  output: Output,
-) => Promise<ContentResponseInit>;
+export type PayloadResponseMap = Encoder;
 
 export interface HttpGetContentApiOptions {
   /** Required. Maps `(req, output)` → response state. */
