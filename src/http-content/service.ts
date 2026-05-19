@@ -72,7 +72,7 @@ const PREFIX = "/api/v1/content/";
  * - `GET /api/v1/content/<encoded-uri>` → `rig.read([decoded-uri])` → hook → 200
  * - rig.read throws                    → 500
  * - hook throws                        → 500
- * - URI not extractable from path      → 400
+ * - missing / malformed path           → 404 / 400
  * - non-GET                            → 405
  *
  * Miss semantics (e.g. payload `null` = 404 vs payload `null` = 200 with
@@ -93,15 +93,16 @@ export function httpGetContentApi(
       });
     }
 
+    const path = new URL(req.url).pathname;
+    if (!path.startsWith(PREFIX) || path.length === PREFIX.length) {
+      return new Response("Not Found", { status: 404 });
+    }
+
     let uri: string;
     try {
-      const path = new URL(req.url).pathname;
-      if (!path.startsWith(PREFIX)) throw new Error("path");
-      const encoded = path.slice(PREFIX.length);
-      if (!encoded) throw new Error("empty");
-      uri = decodeURIComponent(encoded);
+      uri = decodeURIComponent(path.slice(PREFIX.length));
     } catch {
-      return new Response("Bad Request", { status: 400 });
+      return new Response("Bad Request: invalid URI encoding", { status: 400 });
     }
 
     let output: Output;
