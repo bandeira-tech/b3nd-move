@@ -35,14 +35,17 @@
 
 import type { Rig } from "@bandeira-tech/b3nd-core/rig";
 import type { ReceiveResult } from "@bandeira-tech/b3nd-core/types";
+import type { Decoder } from "../codecs/codec.ts";
 
 // ── Types ──
 
 /**
  * Decodes the request body into the message payload that goes into
  * `rig.receive([[uri, payload]])`. Throws on decode failure → 400.
+ *
+ * Alias of {@link Decoder} from `src/codecs/codec.ts`.
  */
-export type PayloadDecoder = (req: Request) => Promise<unknown>;
+export type PayloadDecoder = Decoder;
 
 export interface HttpPostContentApiOptions {
   /** Required. Maps the request body → message payload. */

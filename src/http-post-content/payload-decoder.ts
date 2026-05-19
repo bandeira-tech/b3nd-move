@@ -6,47 +6,52 @@
  * different cadence than the route surface — we expect helpers to grow
  * (new body shapes, new selectors) while the route stays fixed.
  *
- * - `json()` — `await req.json()`
- * - `text()` — `await req.text()`
- * - `raw()` — `new Uint8Array(await req.arrayBuffer())`
- * - `intoField(name, { keepContentType })` — wrap raw bytes into
- *   `{ [name]: bytes, contentType? }`
- * - `byContentType({ "type/sub": leaf, …, default: leaf })` — select by
- *   request `Content-Type`; leaves are themselves `PayloadDecoder`
+ * Primitives (`json`, `text`, `raw`, `intoField`) are the `decode`
+ * halves of codecs in `src/codecs/`. Use the codecs directly when you
+ * need round-trip guarantees with `http-get-content`.
  *
- * Selectors compose: leaves are decoders, so
- * `byContentType({ "application/json": json(), default: raw() })` is
- * the natural form.
+ * Selectors (`byContentType`) are facet-local — they pick which leaf
+ * runs for a given request and have no encode-side dual (response
+ * negotiation is the GET facet's domain).
  */
 
 import type { PayloadDecoder } from "./service.ts";
+import { json as jsonCodec } from "../codecs/json.ts";
+import { text as textCodec } from "../codecs/text.ts";
+import { raw as rawCodec } from "../codecs/raw.ts";
+import { field as fieldCodec } from "../codecs/field.ts";
 
+/** `await req.json()`. */
 function json(): PayloadDecoder {
-  return (req) => req.json();
+  return jsonCodec().decode;
 }
 
+/** `await req.text()` — payload is a string. */
 function text(): PayloadDecoder {
-  return (req) => req.text();
+  return textCodec().decode;
 }
 
+/** Body bytes → `Uint8Array` payload. */
 function raw(): PayloadDecoder {
-  return async (req) => new Uint8Array(await req.arrayBuffer());
+  // raw() codec needs a content-type for its encode half; decode
+  // doesn't use it, so any placeholder works.
+  return rawCodec("*").decode;
 }
 
+/**
+ * Wrap raw body bytes into `{ [name]: bytes, [contentTypeField]?: ct }`.
+ *
+ * `keepContentType: true` is a shortcut for `contentTypeField:
+ * "contentType"`. Use `contentTypeField` directly to pick a different
+ * field name (or to align with a codec on the GET side).
+ */
 function intoField(
   name: string,
-  opts: { keepContentType?: boolean } = {},
+  opts: { keepContentType?: boolean; contentTypeField?: string } = {},
 ): PayloadDecoder {
-  const { keepContentType = false } = opts;
-  return async (req) => {
-    const bytes = new Uint8Array(await req.arrayBuffer());
-    const obj: Record<string, unknown> = { [name]: bytes };
-    if (keepContentType) {
-      const ct = req.headers.get("Content-Type");
-      if (ct) obj.contentType = ct;
-    }
-    return obj;
-  };
+  const contentTypeField = opts.contentTypeField ??
+    (opts.keepContentType ? "contentType" : undefined);
+  return fieldCodec(name, { contentTypeField }).decode;
 }
 
 function matchType(actual: string, pattern: string): boolean {

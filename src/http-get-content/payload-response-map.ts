@@ -6,62 +6,50 @@
  * different cadence than the route surface — we expect helpers to grow
  * (new selectors, new body shapes) while the route shape stays fixed.
  *
- * - `json()` — `JSON.stringify(payload)` + `application/json`
- * - `raw(contentType)` — payload must be `Uint8Array | ArrayBuffer | string`
- * - `fromField(name, { contentType })` — body is `payload[name]`
- * - `fixed(init)` — pin a fully-specified response (ignores output)
- * - `byExtension({ ext: map, … })` — select by URI extension; `"*"` falls back
- * - `byPayloadField(name, { value: map, … })` — select by `payload[name]`; `"*"` falls back
+ * Primitives (`json`, `text`, `raw`, `fromField`) are the `encode`
+ * halves of codecs in `src/codecs/`. Use the codecs directly when you
+ * need round-trip guarantees with `http-post-content`.
  *
- * Selectors compose: leaves are themselves `PayloadResponseMap`, so
- * `byExtension({ png: raw("image/png"), "*": json() })` is the natural form.
+ * Selectors (`fixed`, `byExtension`, `byPayloadField`) are facet-local
+ * — they pick which leaf runs for a given output and have no
+ * decode-side dual.
  */
 
-import type { ContentResponseInit, PayloadResponseMap } from "./service.ts";
+import type { PayloadResponseMap } from "./service.ts";
+import type { ContentResponseInit } from "../codecs/codec.ts";
+import { json as jsonCodec } from "../codecs/json.ts";
+import { text as textCodec } from "../codecs/text.ts";
+import { raw as rawCodec } from "../codecs/raw.ts";
+import { field as fieldCodec } from "../codecs/field.ts";
 
+/** `JSON.stringify(payload)` + `application/json`. */
 function json(): PayloadResponseMap {
-  return (_req, [, payload]) =>
-    Promise.resolve({
-      body: JSON.stringify(payload),
-      headers: { "Content-Type": "application/json" },
-    });
+  return jsonCodec().encode;
 }
 
+/** Payload (string) → body with the given content-type (default `text/plain`). */
+function text(contentType?: string): PayloadResponseMap {
+  return textCodec(contentType).encode;
+}
+
+/** Payload (Uint8Array / ArrayBuffer / string) → body with the given content-type. */
 function raw(contentType: string): PayloadResponseMap {
-  return (_req, [, payload]) => {
-    if (
-      !(payload instanceof Uint8Array) &&
-      !(payload instanceof ArrayBuffer) &&
-      typeof payload !== "string"
-    ) {
-      throw new TypeError(
-        `raw(${contentType}): payload must be Uint8Array, ArrayBuffer, or string`,
-      );
-    }
-    return Promise.resolve({
-      body: payload as BodyInit,
-      headers: { "Content-Type": contentType },
-    });
-  };
+  return rawCodec(contentType).encode;
 }
 
+/**
+ * Body = `payload[name]`, Content-Type = `opts.contentType` (or the
+ * payload's own `contentTypeField` when configured — see
+ * `src/codecs/field.ts`).
+ */
 function fromField(
   name: string,
-  opts: { contentType: string },
+  opts: { contentType?: string; contentTypeField?: string },
 ): PayloadResponseMap {
-  return (_req, [, payload]) => {
-    if (payload == null || typeof payload !== "object") {
-      throw new TypeError(`fromField(${name}): payload must be an object`);
-    }
-    const value = (payload as Record<string, unknown>)[name];
-    if (value == null) {
-      throw new TypeError(`fromField(${name}): missing field "${name}"`);
-    }
-    return Promise.resolve({
-      body: value as BodyInit,
-      headers: { "Content-Type": opts.contentType },
-    });
-  };
+  return fieldCodec(name, {
+    defaultContentType: opts.contentType,
+    contentTypeField: opts.contentTypeField,
+  }).encode;
 }
 
 function fixed(init: ContentResponseInit): PayloadResponseMap {
@@ -109,6 +97,7 @@ function byPayloadField(
 
 export const payloadResponseMap = {
   json,
+  text,
   raw,
   fromField,
   fixed,

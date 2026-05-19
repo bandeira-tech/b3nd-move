@@ -69,14 +69,20 @@ second-guesses payload contents.
 All composable: selectors take `PayloadResponseMap` leaves, leaves are
 themselves `PayloadResponseMap`.
 
-| Helper                                         | Behavior                                              |
-| ---------------------------------------------- | ----------------------------------------------------- |
-| `map.json()`                                   | `JSON.stringify(payload)` + `application/json`        |
-| `map.raw(contentType)`                         | payload must be `Uint8Array \| ArrayBuffer \| string` |
-| `map.fromField(name, { contentType })`         | body = `payload[name]`, content-type as given         |
-| `map.fixed(init)`                              | pin a fully-specified response (ignores output)       |
-| `map.byExtension({ ext: leaf, … })`            | select by URI extension; `"*"` falls back             |
-| `map.byPayloadField(name, { value: leaf, … })` | select by `payload[name]`; `"*"` falls back           |
+The primitives (`json`, `text`, `raw`, `fromField`) are thin wrappers around the
+`encode` half of codecs in [`src/codecs/`](../codecs/). If you also serve writes
+through `http-post-content`, declare the codec once and wire `.encode` here +
+`.decode` on the POST side — the wire envelope can't drift.
+
+| Helper                                         | Behavior                                               |
+| ---------------------------------------------- | ------------------------------------------------------ |
+| `map.json()`                                   | `JSON.stringify(payload)` + `application/json`         |
+| `map.text(contentType?)`                       | payload (string) + content-type (default `text/plain`) |
+| `map.raw(contentType)`                         | payload must be `Uint8Array \| ArrayBuffer \| string`  |
+| `map.fromField(name, { contentType })`         | body = `payload[name]`, content-type as given          |
+| `map.fixed(init)`                              | pin a fully-specified response (ignores output)        |
+| `map.byExtension({ ext: leaf, … })`            | select by URI extension; `"*"` falls back              |
+| `map.byPayloadField(name, { value: leaf, … })` | select by `payload[name]`; `"*"` falls back            |
 
 Custom hooks are just functions — drop in your own where the helpers don't fit:
 
