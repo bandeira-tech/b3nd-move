@@ -17,18 +17,22 @@ wire bytes  ──►  decode  ──►  Rig (core)  ──►  encode  ──�
 
 Pick a transport, import the side you need:
 
-| Transport        | Client                       | Pure handler                         |
-| ---------------- | ---------------------------- | ------------------------------------ |
-| HTTP             | `b3nd-move/http/client`      | `b3nd-move/http/service`             |
-| WebSocket        | `b3nd-move/ws/client`        | `b3nd-move/ws/service`               |
-| gRPC-over-HTTP   | `b3nd-move/grpc/http/client` | `b3nd-move/grpc/http/service`        |
-| MCP (stdio)      | —                            | `b3nd-move/mcp/service`              |
-| HTTP GET content | —                            | `b3nd-move/http-get-content/service` |
+| Transport         | Client                       | Pure handler                          |
+| ----------------- | ---------------------------- | ------------------------------------- |
+| HTTP              | `b3nd-move/http/client`      | `b3nd-move/http/service`              |
+| WebSocket         | `b3nd-move/ws/client`        | `b3nd-move/ws/service`                |
+| gRPC-over-HTTP    | `b3nd-move/grpc/http/client` | `b3nd-move/grpc/http/service`         |
+| MCP (stdio)       | —                            | `b3nd-move/mcp/service`               |
+| HTTP GET content  | —                            | `b3nd-move/http-get-content/service`  |
+| HTTP POST content | —                            | `b3nd-move/http-post-content/service` |
 
-The last row is a **specialized facet**, not a full transport — a locked-surface
-request frontend for a narrower job (single-URI GET read with host-controlled
-response shape, for browsers / CDNs / `<img src>`). See
-[`src/http-get-content/`](./src/http-get-content/).
+The last two rows are **specialized facets**, not full transports —
+locked-surface request frontends for narrower jobs. `http-get-content` fronts
+`rig.read` for one URI with a host-controlled response shape (browsers, CDNs,
+`<img src>`); `http-post-content` fronts `rig.receive` for one URI with a
+host-controlled body decoder (browser file uploads, `curl --data-binary`). See
+[`src/http-get-content/`](./src/http-get-content/) and
+[`src/http-post-content/`](./src/http-post-content/).
 
 Plus the proto pieces:
 
