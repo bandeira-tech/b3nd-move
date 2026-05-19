@@ -36,6 +36,7 @@
 import type { Rig } from "@bandeira-tech/b3nd-core/rig";
 import type { ReceiveResult } from "@bandeira-tech/b3nd-core/types";
 import type { Decoder } from "../codecs/codec.ts";
+import { runAction } from "../actions/run.ts";
 
 // ── Types ──
 
@@ -108,7 +109,10 @@ export function httpPostContentApi(
 
     let result: ReceiveResult;
     try {
-      const results = await rig.receive([[uri, payload]]);
+      const results = await runAction(rig, {
+        action: "receive",
+        outputs: [[uri, payload]],
+      });
       result = results[0];
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);

@@ -32,7 +32,8 @@
 
 import type { Rig } from "@bandeira-tech/b3nd-core/rig";
 import type { WebSocketRequest, WebSocketResponse } from "./client.ts";
-import { validateOutputs, validateUrls } from "../actions.ts";
+import { runAction } from "../actions/run.ts";
+import { validateOutputs, validateUrls } from "../actions/validate.ts";
 
 /**
  * Fetch handler with a `closeAll` lifecycle hook.
@@ -95,7 +96,11 @@ export function wsApi(rig: Rig): WsApi {
               send({ id, success: false, error: v.error });
               return;
             }
-            send({ id, success: true, data: await rig.receive(v.value) });
+            const data = await runAction(rig, {
+              action: "receive",
+              outputs: v.value,
+            });
+            send({ id, success: true, data });
             return;
           }
           case "read": {
@@ -106,12 +111,16 @@ export function wsApi(rig: Rig): WsApi {
               send({ id, success: false, error: v.error });
               return;
             }
-            send({ id, success: true, data: await rig.read(v.value) });
+            const data = await runAction(rig, {
+              action: "read",
+              urls: v.value,
+            });
+            send({ id, success: true, data });
             return;
           }
           case "status": {
-            const status = await rig.status();
-            send({ id, success: true, data: status });
+            const data = await runAction(rig, { action: "status" });
+            send({ id, success: true, data });
             return;
           }
           case "observe": {
@@ -125,7 +134,12 @@ export function wsApi(rig: Rig): WsApi {
             const abort = new AbortController();
             observes.set(id, abort);
             try {
-              for await (const frame of rig.observe(v.value, abort.signal)) {
+              const frames = runAction(rig, {
+                action: "observe",
+                urls: v.value,
+                signal: abort.signal,
+              });
+              for await (const frame of frames) {
                 if (abort.signal.aborted) break;
                 send({ id, success: true, data: frame });
               }
