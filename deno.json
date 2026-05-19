@@ -6,6 +6,8 @@
     "./errors": "./src/errors.ts",
     "./http/service": "./src/http/service.ts",
     "./http/client": "./src/http/client.ts",
+    "./http-get-content/service": "./src/http-get-content/service.ts",
+    "./http-get-content/payload-response-map": "./src/http-get-content/payload-response-map.ts",
     "./ws/service": "./src/ws/service.ts",
     "./ws/client": "./src/ws/client.ts",
     "./grpc/http/service": "./src/grpc/http/service.ts",
@@ -30,10 +32,11 @@
     "esbuild": "npm:esbuild@^0.24.0"
   },
   "tasks": {
-    "check": "deno check src/errors.ts src/http/service.ts src/http/client.ts src/ws/service.ts src/ws/client.ts src/grpc/http/service.ts src/grpc/http/client.ts src/grpc/proto/convert.ts src/grpc/proto/gen/b3nd_pb.ts src/mcp/service.ts dev/serve.ts dev/main.ts tests/suites/mcp-spec.ts tests/suites/move-suite.ts",
+    "check": "deno check src/errors.ts src/http/service.ts src/http/client.ts src/http-get-content/service.ts src/http-get-content/payload-response-map.ts src/ws/service.ts src/ws/client.ts src/grpc/http/service.ts src/grpc/http/client.ts src/grpc/proto/convert.ts src/grpc/proto/gen/b3nd_pb.ts src/mcp/service.ts dev/serve.ts dev/main.ts tests/suites/mcp-spec.ts tests/suites/move-suite.ts",
     "test": "deno test --allow-all src/",
     "test:integration:deno": "deno test --allow-all tests/integration/deno/",
     "test:integration:http": "deno test --allow-all tests/integration/browser/http.test.ts",
+    "test:integration:http-get-content": "deno test --allow-all tests/integration/browser/http-get-content.test.ts",
     "test:integration:ws": "deno test --allow-all tests/integration/browser/ws.test.ts",
     "test:integration:grpc": "deno test --allow-all tests/integration/browser/grpc.test.ts",
     "test:integration:grpc-binary": "deno test --allow-all tests/integration/browser/grpc-binary.test.ts",
