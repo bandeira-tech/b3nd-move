@@ -156,11 +156,11 @@ Deno.test("custom prefix", async () => {
 
 Deno.test("fixed() — host-pinned response, miss → 404 policy", async () => {
   const api = httpGetContentApi(buildRig(), {
-    payloadResponseMap: (req, output) => {
+    payloadResponseMap: async (req, output) => {
       if (output[1] == null) {
         return { body: "gone", status: 404 };
       }
-      return map.json()(req, output);
+      return await map.json()(req, output);
     },
   });
   const uri = "mutable://app/__miss__/x";

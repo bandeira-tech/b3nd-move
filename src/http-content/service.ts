@@ -54,7 +54,7 @@ export interface ContentResponseInit {
 export type PayloadResponseMap = (
   req: Request,
   output: Output,
-) => ContentResponseInit | Promise<ContentResponseInit>;
+) => Promise<ContentResponseInit>;
 
 export interface HttpGetContentApiOptions {
   /** Required. Maps `(req, output)` → response state. */
@@ -138,14 +138,14 @@ export function httpGetContentApi(
 // ── Composable helpers ──
 
 function json(): PayloadResponseMap {
-  return (_req, [, payload]) => ({
+  return async (_req, [, payload]) => ({
     body: JSON.stringify(payload),
     headers: { "Content-Type": "application/json" },
   });
 }
 
 function raw(contentType: string): PayloadResponseMap {
-  return (_req, [, payload]) => {
+  return async (_req, [, payload]) => {
     if (
       !(payload instanceof Uint8Array) &&
       !(payload instanceof ArrayBuffer) &&
@@ -166,7 +166,7 @@ function fromField(
   name: string,
   opts: { contentType: string },
 ): PayloadResponseMap {
-  return (_req, [, payload]) => {
+  return async (_req, [, payload]) => {
     if (payload == null || typeof payload !== "object") {
       throw new TypeError(`fromField(${name}): payload must be an object`);
     }
@@ -182,7 +182,7 @@ function fromField(
 }
 
 function fixed(init: ContentResponseInit): PayloadResponseMap {
-  return () => init;
+  return async () => init;
 }
 
 function extensionOf(uri: string): string {
@@ -195,13 +195,13 @@ function extensionOf(uri: string): string {
 function byExtension(
   map: Record<string, PayloadResponseMap>,
 ): PayloadResponseMap {
-  return (req, output) => {
+  return async (req, output) => {
     const ext = extensionOf(output[0]);
     const chosen = map[ext] ?? map["*"];
     if (!chosen) {
       throw new Error(`byExtension: no mapping for ".${ext}" (and no "*")`);
     }
-    return chosen(req, output);
+    return await chosen(req, output);
   };
 }
 
@@ -209,7 +209,7 @@ function byPayloadField(
   name: string,
   map: Record<string, PayloadResponseMap>,
 ): PayloadResponseMap {
-  return (req, output) => {
+  return async (req, output) => {
     const [, payload] = output;
     const key = payload && typeof payload === "object"
       ? String((payload as Record<string, unknown>)[name] ?? "")
@@ -220,7 +220,7 @@ function byPayloadField(
         `byPayloadField(${name}): no mapping for "${key}" (and no "*")`,
       );
     }
-    return chosen(req, output);
+    return await chosen(req, output);
   };
 }
 
