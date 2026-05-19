@@ -55,7 +55,7 @@ Deno.test("non-GET → 405", async () => {
     payloadResponseMap: map.json(),
   });
   const r = await api(
-    req("/content/mutable%3A%2F%2Fapp%2Fx", { method: "POST" }),
+    req("/api/v1/content/mutable%3A%2F%2Fapp%2Fx", { method: "POST" }),
   );
   assertEquals(r.status, 405);
   assertEquals(r.headers.get("Allow"), "GET");
@@ -73,7 +73,7 @@ Deno.test("empty URI after prefix → 404", async () => {
   const api = httpGetContentApi(buildRig(), {
     payloadResponseMap: map.json(),
   });
-  const r = await api(req("/content/"));
+  const r = await api(req("/api/v1/content/"));
   assertEquals(r.status, 404);
 });
 
@@ -82,7 +82,7 @@ Deno.test("json() — default JSON response", async () => {
     payloadResponseMap: map.json(),
   });
   const uri = "mutable://app/thing";
-  const r = await api(req(`/content/${encodeURIComponent(uri)}`));
+  const r = await api(req(`/api/v1/content/${encodeURIComponent(uri)}`));
   assertEquals(r.status, 200);
   assertEquals(r.headers.get("Content-Type"), "application/json");
   assertEquals(await r.json(), { echo: uri, kind: "obj" });
@@ -96,7 +96,7 @@ Deno.test("byExtension + fromField — png bytes with image/png", async () => {
     }),
   });
   const uri = "mutable://app/icon.png";
-  const r = await api(req(`/content/${encodeURIComponent(uri)}`));
+  const r = await api(req(`/api/v1/content/${encodeURIComponent(uri)}`));
   assertEquals(r.status, 200);
   assertEquals(r.headers.get("Content-Type"), "image/png");
   const bytes = new Uint8Array(await r.arrayBuffer());
@@ -111,7 +111,7 @@ Deno.test("byExtension fallback to '*'", async () => {
     }),
   });
   const uri = "mutable://app/plain";
-  const r = await api(req(`/content/${encodeURIComponent(uri)}`));
+  const r = await api(req(`/api/v1/content/${encodeURIComponent(uri)}`));
   assertEquals(r.status, 200);
   assertEquals(r.headers.get("Content-Type"), "application/json");
 });
@@ -125,7 +125,7 @@ Deno.test("byPayloadField — select by payload.kind", async () => {
     }),
   });
   const r = await api(
-    req(`/content/${encodeURIComponent("mutable://app/note.txt")}`),
+    req(`/api/v1/content/${encodeURIComponent("mutable://app/note.txt")}`),
   );
   assertEquals(r.status, 200);
   assertEquals(r.headers.get("Content-Type"), "text/plain");
@@ -137,21 +137,10 @@ Deno.test("hook throw → 500", async () => {
     payloadResponseMap: map.fromField("missing", { contentType: "image/png" }),
   });
   const r = await api(
-    req(`/content/${encodeURIComponent("mutable://app/thing")}`),
+    req(`/api/v1/content/${encodeURIComponent("mutable://app/thing")}`),
   );
   assertEquals(r.status, 500);
   assertStringIncludes(await r.text(), "payloadResponseMap failed");
-});
-
-Deno.test("custom prefix", async () => {
-  const api = httpGetContentApi(buildRig(), {
-    prefix: "/x/",
-    payloadResponseMap: map.json(),
-  });
-  const uri = "mutable://app/thing";
-  const r = await api(req(`/x/${encodeURIComponent(uri)}`));
-  assertEquals(r.status, 200);
-  assertEquals((await r.json()).echo, uri);
 });
 
 Deno.test("fixed() — host-pinned response, miss → 404 policy", async () => {
@@ -164,7 +153,7 @@ Deno.test("fixed() — host-pinned response, miss → 404 policy", async () => {
     },
   });
   const uri = "mutable://app/__miss__/x";
-  const r = await api(req(`/content/${encodeURIComponent(uri)}`));
+  const r = await api(req(`/api/v1/content/${encodeURIComponent(uri)}`));
   assertEquals(r.status, 404);
   assertEquals(await r.text(), "gone");
 });

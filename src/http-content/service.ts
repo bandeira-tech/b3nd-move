@@ -11,7 +11,7 @@
  *
  * Route:
  *
- *   GET <prefix><url-encoded-uri>       → rig.read([uri])  (single)
+ *   GET /api/v1/content/<url-encoded-uri>   → rig.read([uri])  (single)
  *
  * The whole content-type / body-bytes / extra-headers decision lives in
  * one hook — `payloadResponseMap(req, output) => ContentResponseInit` —
@@ -59,13 +59,9 @@ export type PayloadResponseMap = (
 export interface HttpGetContentApiOptions {
   /** Required. Maps `(req, output)` → response state. */
   payloadResponseMap: PayloadResponseMap;
-  /**
-   * Path prefix that precedes the URL-encoded URI in the request path.
-   * Default: `"/content/"`. The remainder of the path is
-   * `decodeURIComponent`-ed and passed to `rig.read`.
-   */
-  prefix?: string;
 }
+
+const PREFIX = "/api/v1/content/";
 
 // ── API factory ──
 
@@ -73,11 +69,11 @@ export interface HttpGetContentApiOptions {
  * Create a GET-only HTTP handler that reads a single URI from the rig
  * and hands the result to `payloadResponseMap` for response shaping.
  *
- * - `GET <prefix><encoded-uri>` → `rig.read([decoded-uri])` → hook → 200
- * - rig.read throws            → 500
- * - hook throws                → 500
- * - missing / malformed path   → 404 / 400
- * - non-GET                    → 405
+ * - `GET /api/v1/content/<encoded-uri>` → `rig.read([decoded-uri])` → hook → 200
+ * - rig.read throws                    → 500
+ * - hook throws                        → 500
+ * - missing / malformed path           → 404 / 400
+ * - non-GET                            → 405
  *
  * Miss semantics (e.g. payload `null` = 404 vs payload `null` = 200 with
  * a sentinel body) are the host's call — handle them inside your
@@ -87,7 +83,6 @@ export function httpGetContentApi(
   rig: Rig,
   options: HttpGetContentApiOptions,
 ): (req: Request) => Promise<Response> {
-  const prefix = options.prefix ?? "/content/";
   const { payloadResponseMap } = options;
 
   return async (req: Request): Promise<Response> => {
@@ -99,13 +94,13 @@ export function httpGetContentApi(
     }
 
     const path = new URL(req.url).pathname;
-    if (!path.startsWith(prefix) || path.length === prefix.length) {
+    if (!path.startsWith(PREFIX) || path.length === PREFIX.length) {
       return new Response("Not Found", { status: 404 });
     }
 
     let uri: string;
     try {
-      uri = decodeURIComponent(path.slice(prefix.length));
+      uri = decodeURIComponent(path.slice(PREFIX.length));
     } catch {
       return new Response("Bad Request: invalid URI encoding", { status: 400 });
     }
