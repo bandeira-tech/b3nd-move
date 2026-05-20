@@ -12,8 +12,8 @@ import type {
   ReceiveResult,
   StatusResult,
 } from "@bandeira-tech/b3nd-core/types";
-import { BadRequest, InternalError, NotFound } from "./errors.ts";
-import { dispatchHttp, route } from "./http.ts";
+import { BadRequest, InternalError, NotFound } from "../router/errors.ts";
+import { dispatchHttp, route } from "./router.ts";
 
 class StubBackend implements ProtocolInterfaceNode {
   receive(outs: Output[]): Promise<ReceiveResult[]> {

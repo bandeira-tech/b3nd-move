@@ -8,7 +8,7 @@
 
 import type { ContentResponseInit, Encoder } from "../codecs/codec.ts";
 import { BadRequest, NotFound } from "../router/errors.ts";
-import { route } from "../router/http.ts";
+import { route } from "../http/router.ts";
 
 /** Re-exported so both `service.ts` and `route.ts` agree on the contract. */
 export type PayloadResponseMap = Encoder;

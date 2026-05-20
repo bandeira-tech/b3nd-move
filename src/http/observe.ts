@@ -12,7 +12,7 @@
 import { ndjsonResponse } from "../actions/ndjson.ts";
 import { validateUrls } from "../actions/validate.ts";
 import { BadRequest } from "../router/errors.ts";
-import { route } from "../router/http.ts";
+import { route } from "./router.ts";
 import { readJson } from "./wire.ts";
 
 export const observeRoute = route({

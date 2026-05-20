@@ -39,7 +39,7 @@
  */
 
 import type { Rig } from "@bandeira-tech/b3nd-core/rig";
-import { dispatchHttp } from "../router/http.ts";
+import { dispatchHttp } from "./router.ts";
 import { observeRoute } from "./observe.ts";
 import { readRoute } from "./read.ts";
 import { receiveRoute } from "./receive.ts";

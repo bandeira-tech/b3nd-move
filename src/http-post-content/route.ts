@@ -8,7 +8,7 @@
 
 import type { Decoder } from "../codecs/codec.ts";
 import { BadRequest } from "../router/errors.ts";
-import { route } from "../router/http.ts";
+import { route } from "../http/router.ts";
 
 /** Re-exported so both `service.ts` and `route.ts` agree on the contract. */
 export type PayloadDecoder = Decoder;

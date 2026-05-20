@@ -7,7 +7,7 @@
  * factory so the caller can pass that metadata at instantiation.
  */
 
-import { route } from "../router/http.ts";
+import { route } from "./router.ts";
 import { json } from "./wire.ts";
 
 export interface StatusRouteOptions {

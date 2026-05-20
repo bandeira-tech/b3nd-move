@@ -33,7 +33,7 @@
  */
 
 import type { Rig } from "@bandeira-tech/b3nd-core/rig";
-import { dispatchHttp } from "../router/http.ts";
+import { dispatchHttp } from "../http/router.ts";
 import { httpPostContentRoute, type PayloadDecoder } from "./route.ts";
 
 // ── Types ──

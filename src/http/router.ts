@@ -26,8 +26,8 @@ import type {
   StatusResult,
 } from "@bandeira-tech/b3nd-core/types";
 import type { ActionName } from "../actions/run.ts";
-import { HttpError } from "./errors.ts";
-import type { Route } from "./route.ts";
+import { HttpError } from "../router/errors.ts";
+import type { Route } from "../router/route.ts";
 
 /**
  * Internal alias for an HTTP-specialised `Route`. Not exported — the

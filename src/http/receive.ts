@@ -10,7 +10,7 @@
 
 import { validateOutputs } from "../actions/validate.ts";
 import { BadRequest } from "../router/errors.ts";
-import { route } from "../router/http.ts";
+import { route } from "./router.ts";
 import { json, readJson } from "./wire.ts";
 
 export const receiveRoute = route({
