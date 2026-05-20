@@ -34,9 +34,10 @@
  */
 
 import type { Rig } from "@bandeira-tech/b3nd-core/rig";
-import type { ReceiveResult } from "@bandeira-tech/b3nd-core/types";
 import type { Decoder } from "../codecs/codec.ts";
 import { runAction } from "../actions/run.ts";
+import { CONTENT_PREFIX, extractContentUri } from "../router/content-uri.ts";
+import { dispatchHttp, type HttpRoute } from "../router/http.ts";
 
 // ── Types ──
 
@@ -53,7 +54,54 @@ export interface HttpPostContentApiOptions {
   payloadDecoder: PayloadDecoder;
 }
 
-const PREFIX = "/api/v1/content/";
+// ── Route ──
+
+function buildRoute(options: HttpPostContentApiOptions): HttpRoute {
+  const { payloadDecoder } = options;
+
+  return {
+    // Claim the prefix for any method — `build` returns 405 for
+    // non-POST so the route owns its method-not-allowed envelope.
+    matches: (req) => new URL(req.url).pathname.startsWith(CONTENT_PREFIX),
+    build: async (req) => {
+      if (req.method !== "POST") {
+        return new Response("Method Not Allowed", {
+          status: 405,
+          headers: { Allow: "POST" },
+        });
+      }
+      const extracted = extractContentUri(req);
+      if (extracted instanceof Response) return extracted;
+
+      let payload: unknown;
+      try {
+        payload = await payloadDecoder(req);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        return new Response(`payloadDecoder failed: ${msg}`, { status: 400 });
+      }
+      return {
+        action: "receive",
+        outputs: [[extracted.uri, payload]],
+      };
+    },
+    respond: async (rig, _req, call) => {
+      const outputs = (call as { outputs: [string, unknown][] }).outputs;
+      let result;
+      try {
+        const results = await runAction(rig, { action: "receive", outputs });
+        result = results[0];
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        return new Response(`receive failed: ${msg}`, { status: 500 });
+      }
+      return new Response(JSON.stringify(result), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    },
+  };
+}
 
 // ── API factory ──
 
@@ -65,7 +113,8 @@ const PREFIX = "/api/v1/content/";
  * - decoder throws                      → 400
  * - rig.receive throws                  → 500
  * - URI not extractable from path       → 404 / 400
- * - non-POST                            → 405
+ * - non-POST method on the prefix       → 405 (`Allow: POST`)
+ * - any other path                      → 404
  *
  * The response body is the single `ReceiveResult` from the rig. Status
  * is 200 even when `accepted: false` — accept/reject is the rig's
@@ -77,51 +126,6 @@ export function httpPostContentApi(
   rig: Rig,
   options: HttpPostContentApiOptions,
 ): (req: Request) => Promise<Response> {
-  const { payloadDecoder } = options;
-
-  return async (req: Request): Promise<Response> => {
-    if (req.method !== "POST") {
-      return new Response("Method Not Allowed", {
-        status: 405,
-        headers: { Allow: "POST" },
-      });
-    }
-
-    const path = new URL(req.url).pathname;
-    if (!path.startsWith(PREFIX) || path.length === PREFIX.length) {
-      return new Response("Not Found", { status: 404 });
-    }
-
-    let uri: string;
-    try {
-      uri = decodeURIComponent(path.slice(PREFIX.length));
-    } catch {
-      return new Response("Bad Request: invalid URI encoding", { status: 400 });
-    }
-
-    let payload: unknown;
-    try {
-      payload = await payloadDecoder(req);
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      return new Response(`payloadDecoder failed: ${msg}`, { status: 400 });
-    }
-
-    let result: ReceiveResult;
-    try {
-      const results = await runAction(rig, {
-        action: "receive",
-        outputs: [[uri, payload]],
-      });
-      result = results[0];
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      return new Response(`receive failed: ${msg}`, { status: 500 });
-    }
-
-    return new Response(JSON.stringify(result), {
-      status: 200,
-      headers: { "Content-Type": "application/json" },
-    });
-  };
+  const routes = [buildRoute(options)];
+  return (req) => dispatchHttp(rig, routes, req);
 }

@@ -18,6 +18,10 @@
  * Observe streams one JSON-encoded `string[]` (batch of uris that
  * fired) per line, matching what `rig.observe()` yields.
  *
+ * Implementation: each route is a `HttpRoute` (see `src/router/http.ts`).
+ * The procedural if-ladder lives in the route table now — one entry per
+ * wire-shape ↔ action mapping.
+ *
  * @example
  * ```ts
  * import { Rig, connection } from "@bandeira-tech/b3nd-core";
@@ -39,8 +43,20 @@
 
 import type { Rig } from "@bandeira-tech/b3nd-core/rig";
 import { ndjsonResponse } from "../actions/ndjson.ts";
+import type { ActionCall } from "../actions/run.ts";
 import { runAction } from "../actions/run.ts";
 import { validateOutputs, validateUrls } from "../actions/validate.ts";
+import { dispatchHttp, type HttpRoute } from "../router/http.ts";
+
+// Narrow an `ActionCall` to a specific action variant. Routes know
+// which they built; this just gets TS to agree without per-site
+// inline casts.
+function narrow<A extends ActionCall["action"]>(
+  call: ActionCall,
+  _action: A,
+): Extract<ActionCall, { action: A }> {
+  return call as Extract<ActionCall, { action: A }>;
+}
 
 // ── Types ──
 
@@ -49,13 +65,122 @@ export interface HttpApiOptions {
   statusMeta?: Record<string, unknown>;
 }
 
-// ── Responses ──
+// ── Helpers ──
 
 function json(data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data), {
     status,
     headers: { "Content-Type": "application/json" },
   });
+}
+
+async function readJson(
+  req: Request,
+  onInvalid: (msg: string) => Response,
+): Promise<unknown | Response> {
+  try {
+    return await req.json();
+  } catch {
+    return onInvalid("Invalid JSON body");
+  }
+}
+
+// ── Routes ──
+
+function buildRoutes(options?: HttpApiOptions): HttpRoute[] {
+  const statusMeta = options?.statusMeta;
+
+  // GET /api/v1/status
+  const status: HttpRoute = {
+    matches: (req) =>
+      req.method === "GET" &&
+      new URL(req.url).pathname === "/api/v1/status",
+    build: () => Promise.resolve({ action: "status" }),
+    respond: async (rig) => {
+      const res = await runAction(rig, { action: "status" });
+      const body = statusMeta ? { ...res, ...statusMeta } : res;
+      return json(body, res.status === "healthy" ? 200 : 503);
+    },
+  };
+
+  // POST /api/v1/receive — body: Output[] (bare arg shape)
+  // 200 with per-slot ReceiveResult body; non-2xx is reserved for
+  // request-level failures (bad JSON, schema mismatch).
+  const receive: HttpRoute = {
+    matches: (req) =>
+      req.method === "POST" &&
+      new URL(req.url).pathname === "/api/v1/receive",
+    build: async (req) => {
+      const body = await readJson(
+        req,
+        (msg) => json([{ accepted: false, error: msg }], 400),
+      );
+      if (body instanceof Response) return body;
+      const v = validateOutputs(body);
+      if (!v.ok) return json([{ accepted: false, error: v.error }], 400);
+      return { action: "receive", outputs: v.value };
+    },
+    respond: async (rig, _req, call) => {
+      const results = await runAction(rig, narrow(call, "receive"));
+      return json(results, 200);
+    },
+  };
+
+  // POST /api/v1/read — body: string[]
+  // Output[] 1:1 with input. Content semantics are the protocol's.
+  const read: HttpRoute = {
+    matches: (req) =>
+      req.method === "POST" &&
+      new URL(req.url).pathname === "/api/v1/read",
+    build: async (req) => {
+      const body = await readJson(req, (msg) => json({ error: msg }, 400));
+      if (body instanceof Response) return body;
+      const v = validateUrls(body);
+      if (!v.ok) return json({ error: v.error }, 400);
+      return { action: "read", urls: v.value };
+    },
+    respond: async (rig, _req, call) => {
+      try {
+        return json(await runAction(rig, narrow(call, "read")));
+      } catch (err) {
+        return json(
+          { error: err instanceof Error ? err.message : String(err) },
+          500,
+        );
+      }
+    },
+  };
+
+  // POST /api/v1/observe — body: string[] → NDJSON stream of frames
+  // The action's signal is ndjsonResponse's internal abort — wires
+  // consumer cancel + request abort to the rig observer.
+  const observe: HttpRoute = {
+    matches: (req) =>
+      req.method === "POST" &&
+      new URL(req.url).pathname === "/api/v1/observe",
+    build: async (req) => {
+      const body = await readJson(req, (msg) => json({ error: msg }, 400));
+      if (body instanceof Response) return body;
+      const v = validateUrls(body);
+      if (!v.ok) return json({ error: v.error }, 400);
+      // Placeholder signal; respond replaces it with ndjsonResponse's.
+      return { action: "observe", urls: v.value, signal: req.signal };
+    },
+    respond: (rig, req, call) => {
+      const obs = narrow(call, "observe");
+      return Promise.resolve(
+        ndjsonResponse(
+          (signal) =>
+            runAction(rig, { action: "observe", urls: obs.urls, signal }),
+          (frame) => frame,
+          req.signal,
+          { "X-Accel-Buffering": "no" },
+        ),
+      );
+    },
+  };
+
+  return [status, receive, read, observe];
 }
 
 // ── API factory ──
@@ -70,94 +195,6 @@ export function httpApi(
   rig: Rig,
   options?: HttpApiOptions,
 ): (req: Request) => Promise<Response> {
-  const statusMeta = options?.statusMeta;
-
-  return async (req: Request): Promise<Response> => {
-    const url = new URL(req.url);
-    const path = url.pathname;
-    const method = req.method;
-
-    // ── Status ──
-    if (method === "GET" && path === "/api/v1/status") {
-      const res = await runAction(rig, { action: "status" });
-      const body = statusMeta ? { ...res, ...statusMeta } : res;
-      return json(body, res.status === "healthy" ? 200 : 503);
-    }
-
-    // ── Receive ──
-    // Body is a batch of message tuples: [[uri, payload], ...]. Matches
-    // what HttpClient.receive(msgs) sends and what Rig.receive(msgs) takes,
-    // so the result array shape passes straight through.
-    if (method === "POST" && path === "/api/v1/receive") {
-      let body: unknown;
-      try {
-        body = await req.json();
-      } catch {
-        return json(
-          [{ accepted: false, error: "Invalid JSON body" }],
-          400,
-        );
-      }
-      const v = validateOutputs(body);
-      if (!v.ok) return json([{ accepted: false, error: v.error }], 400);
-      // 200 means the server processed the batch; per-slot accept/reject
-      // lives in the body. Non-2xx is reserved for request-level failures.
-      const results = await runAction(rig, {
-        action: "receive",
-        outputs: v.value,
-      });
-      return json(results, 200);
-    }
-
-    // ── Read (batch) ──
-    // Body: `string[]` — the same shape `rig.read(urls)` takes. Returns
-    // `Output[]` 1:1 with input. Payloads pass through as JSON; content
-    // semantics (miss representation, binary encoding, …) are the
-    // executing client / protocol's concern.
-    if (method === "POST" && path === "/api/v1/read") {
-      let body: unknown;
-      try {
-        body = await req.json();
-      } catch {
-        return json({ error: "Invalid JSON body" }, 400);
-      }
-      const v = validateUrls(body);
-      if (!v.ok) return json({ error: v.error }, 400);
-      try {
-        return json(
-          await runAction(rig, { action: "read", urls: v.value }),
-        );
-      } catch (err) {
-        return json(
-          { error: err instanceof Error ? err.message : String(err) },
-          500,
-        );
-      }
-    }
-
-    // ── Observe ──
-    // Body: `string[]` — array of patterns to subscribe to, matching
-    // `rig.observe(urls)`. Streams NDJSON: one JSON-encoded
-    // `string[]` (batch of uris that fired) per line.
-    if (method === "POST" && path === "/api/v1/observe") {
-      let body: unknown;
-      try {
-        body = await req.json();
-      } catch {
-        return json({ error: "Invalid JSON body" }, 400);
-      }
-      const v = validateUrls(body);
-      if (!v.ok) return json({ error: v.error }, 400);
-      return ndjsonResponse(
-        (signal) =>
-          runAction(rig, { action: "observe", urls: v.value, signal }),
-        (frame) => frame,
-        req.signal,
-        { "X-Accel-Buffering": "no" },
-      );
-    }
-
-    // ── Not found ──
-    return new Response("Not Found", { status: 404 });
-  };
+  const routes = buildRoutes(options);
+  return (req) => dispatchHttp(rig, routes, req);
 }

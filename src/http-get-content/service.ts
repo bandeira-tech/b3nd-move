@@ -39,6 +39,8 @@ import type { Rig } from "@bandeira-tech/b3nd-core/rig";
 import type { Output } from "@bandeira-tech/b3nd-core/types";
 import type { ContentResponseInit, Encoder } from "../codecs/codec.ts";
 import { runAction } from "../actions/run.ts";
+import { CONTENT_PREFIX, extractContentUri } from "../router/content-uri.ts";
+import { dispatchHttp, type HttpRoute } from "../router/http.ts";
 
 // ── Types ──
 
@@ -60,7 +62,60 @@ export interface HttpGetContentApiOptions {
   payloadResponseMap: PayloadResponseMap;
 }
 
-const PREFIX = "/api/v1/content/";
+// ── Route ──
+
+function buildRoute(options: HttpGetContentApiOptions): HttpRoute {
+  const { payloadResponseMap } = options;
+
+  return {
+    // Claim the prefix for any method — `build` returns 405 for
+    // non-GET so the route owns its method-not-allowed envelope.
+    matches: (req) => new URL(req.url).pathname.startsWith(CONTENT_PREFIX),
+    build: (req) => {
+      if (req.method !== "GET") {
+        return Promise.resolve(
+          new Response("Method Not Allowed", {
+            status: 405,
+            headers: { Allow: "GET" },
+          }),
+        );
+      }
+      const extracted = extractContentUri(req);
+      if (extracted instanceof Response) return Promise.resolve(extracted);
+      return Promise.resolve({
+        action: "read",
+        urls: [extracted.uri],
+      });
+    },
+    respond: async (rig, req, call) => {
+      const urls = (call as { urls: string[] }).urls;
+      let output: Output;
+      try {
+        const results = await runAction(rig, { action: "read", urls });
+        output = results[0];
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        return new Response(`read failed: ${msg}`, { status: 500 });
+      }
+      if (!output) return new Response("Not Found", { status: 404 });
+
+      let init: ContentResponseInit;
+      try {
+        init = await payloadResponseMap(req, output);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        return new Response(`payloadResponseMap failed: ${msg}`, {
+          status: 500,
+        });
+      }
+
+      return new Response(init.body, {
+        status: init.status ?? 200,
+        headers: init.headers,
+      });
+    },
+  };
+}
 
 // ── API factory ──
 
@@ -72,7 +127,8 @@ const PREFIX = "/api/v1/content/";
  * - rig.read throws                    → 500
  * - hook throws                        → 500
  * - missing / malformed path           → 404 / 400
- * - non-GET                            → 405
+ * - non-GET method on the prefix       → 405 (`Allow: GET`)
+ * - any other path                     → 404
  *
  * Miss semantics (e.g. payload `null` = 404 vs payload `null` = 200 with
  * a sentinel body) are the host's call — handle them inside your
@@ -82,49 +138,6 @@ export function httpGetContentApi(
   rig: Rig,
   options: HttpGetContentApiOptions,
 ): (req: Request) => Promise<Response> {
-  const { payloadResponseMap } = options;
-
-  return async (req: Request): Promise<Response> => {
-    if (req.method !== "GET") {
-      return new Response("Method Not Allowed", {
-        status: 405,
-        headers: { Allow: "GET" },
-      });
-    }
-
-    const path = new URL(req.url).pathname;
-    if (!path.startsWith(PREFIX) || path.length === PREFIX.length) {
-      return new Response("Not Found", { status: 404 });
-    }
-
-    let uri: string;
-    try {
-      uri = decodeURIComponent(path.slice(PREFIX.length));
-    } catch {
-      return new Response("Bad Request: invalid URI encoding", { status: 400 });
-    }
-
-    let output: Output;
-    try {
-      const results = await runAction(rig, { action: "read", urls: [uri] });
-      output = results[0];
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      return new Response(`read failed: ${msg}`, { status: 500 });
-    }
-    if (!output) return new Response("Not Found", { status: 404 });
-
-    let init: ContentResponseInit;
-    try {
-      init = await payloadResponseMap(req, output);
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      return new Response(`payloadResponseMap failed: ${msg}`, { status: 500 });
-    }
-
-    return new Response(init.body, {
-      status: init.status ?? 200,
-      headers: init.headers,
-    });
-  };
+  const routes = [buildRoute(options)];
+  return (req) => dispatchHttp(rig, routes, req);
 }
