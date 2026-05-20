@@ -18,11 +18,10 @@
  * Observe streams one JSON-encoded `string[]` (batch of uris that
  * fired) per line, matching what `rig.observe()` yields.
  *
- * Implementation: each route is a `HttpRoute` (see `src/router/http.ts`)
- * with a declarative `on: { method, path }` matcher. `dispatchHttp`
- * walks the table — no procedural if-ladder. Wrong method on a known
- * path gets a `405` with `Allow:` from the dispatcher; unknown paths
- * get `404`.
+ * Implementation: each route is an `HttpRoute` (see `src/router/http.ts`)
+ * with four fields — `on` matcher, `action` (the rig method), `decode`
+ * (request → args), `encode` (result → Response). Action execution,
+ * signal lifecycle, and 405 handling all live in the dispatcher.
  *
  * @example
  * ```ts
@@ -45,10 +44,8 @@
 
 import type { Rig } from "@bandeira-tech/b3nd-core/rig";
 import { ndjsonResponse } from "../actions/ndjson.ts";
-import type { ActionCall } from "../actions/run.ts";
-import { runAction } from "../actions/run.ts";
 import { validateOutputs, validateUrls } from "../actions/validate.ts";
-import { dispatchHttp, type HttpRoute } from "../router/http.ts";
+import { dispatchHttp, type HttpRoute, route } from "../router/http.ts";
 
 // ── Types ──
 
@@ -77,99 +74,73 @@ async function readJson(
   }
 }
 
-// Narrow an `ActionCall` to a specific action variant. Routes know
-// which they built; this just gets TS to agree without per-site
-// inline casts.
-function narrow<A extends ActionCall["action"]>(
-  call: ActionCall,
-  _action: A,
-): Extract<ActionCall, { action: A }> {
-  return call as Extract<ActionCall, { action: A }>;
-}
-
 // ── Routes ──
 
 function buildRoutes(options?: HttpApiOptions): HttpRoute[] {
   const statusMeta = options?.statusMeta;
 
-  const status: HttpRoute = {
-    on: { method: "GET", path: "/api/v1/status" },
-    build: () => ({ action: "status" }),
-    respond: async (rig) => {
-      const res = await runAction(rig, { action: "status" });
-      const body = statusMeta ? { ...res, ...statusMeta } : res;
-      return json(body, res.status === "healthy" ? 200 : 503);
-    },
-  };
+  return [
+    route({
+      on: { method: "GET", path: "/api/v1/status" },
+      action: "status",
+      decode: () => [],
+      encode: (res) => {
+        const body = statusMeta ? { ...res, ...statusMeta } : res;
+        return json(body, res.status === "healthy" ? 200 : 503);
+      },
+    }),
 
-  // 200 with per-slot ReceiveResult body; non-2xx is reserved for
-  // request-level failures (bad JSON, schema mismatch).
-  const receive: HttpRoute = {
-    on: { method: "POST", path: "/api/v1/receive" },
-    build: async (req) => {
-      const body = await readJson(
-        req,
-        (msg) => json([{ accepted: false, error: msg }], 400),
-      );
-      if (body instanceof Response) return body;
-      const v = validateOutputs(body);
-      if (!v.ok) return json([{ accepted: false, error: v.error }], 400);
-      return { action: "receive", outputs: v.value };
-    },
-    respond: async (rig, _req, call) => {
-      const results = await runAction(rig, narrow(call, "receive"));
-      return json(results, 200);
-    },
-  };
-
-  // Output[] 1:1 with input. Content semantics are the protocol's.
-  const read: HttpRoute = {
-    on: { method: "POST", path: "/api/v1/read" },
-    build: async (req) => {
-      const body = await readJson(req, (msg) => json({ error: msg }, 400));
-      if (body instanceof Response) return body;
-      const v = validateUrls(body);
-      if (!v.ok) return json({ error: v.error }, 400);
-      return { action: "read", urls: v.value };
-    },
-    respond: async (rig, _req, call) => {
-      try {
-        return json(await runAction(rig, narrow(call, "read")));
-      } catch (err) {
-        return json(
-          { error: err instanceof Error ? err.message : String(err) },
-          500,
+    // 200 with per-slot ReceiveResult body; non-2xx is reserved for
+    // request-level failures (bad JSON, schema mismatch).
+    route({
+      on: { method: "POST", path: "/api/v1/receive" },
+      action: "receive",
+      decode: async (req) => {
+        const body = await readJson(
+          req,
+          (msg) => json([{ accepted: false, error: msg }], 400),
         );
-      }
-    },
-  };
+        if (body instanceof Response) return body;
+        const v = validateOutputs(body);
+        if (!v.ok) return json([{ accepted: false, error: v.error }], 400);
+        return [v.value];
+      },
+      encode: (results) => json(results, 200),
+    }),
 
-  // NDJSON stream of frames. Action signal is ndjsonResponse's
-  // internal abort — consumer cancel + request abort both reach the
-  // rig observer.
-  const observe: HttpRoute = {
-    on: { method: "POST", path: "/api/v1/observe" },
-    build: async (req) => {
-      const body = await readJson(req, (msg) => json({ error: msg }, 400));
-      if (body instanceof Response) return body;
-      const v = validateUrls(body);
-      if (!v.ok) return json({ error: v.error }, 400);
-      // Placeholder signal; respond replaces it with ndjsonResponse's.
-      return { action: "observe", urls: v.value, signal: req.signal };
-    },
-    respond: (rig, req, call) => {
-      const obs = narrow(call, "observe");
-      return ndjsonResponse(
-        (signal) =>
-          runAction(rig, { action: "observe", urls: obs.urls, signal }),
-        (frame) => frame,
-        req.signal,
-        { "X-Accel-Buffering": "no" },
-      );
-    },
-  };
+    // Output[] 1:1 with input. Content semantics are the protocol's.
+    route({
+      on: { method: "POST", path: "/api/v1/read" },
+      action: "read",
+      decode: async (req) => {
+        const body = await readJson(req, (msg) => json({ error: msg }, 400));
+        if (body instanceof Response) return body;
+        const v = validateUrls(body);
+        if (!v.ok) return json({ error: v.error }, 400);
+        return [v.value];
+      },
+      encode: (outs) => json(outs, 200),
+    }),
 
-  return [status, receive, read, observe];
+    // NDJSON stream. ctx.abort is wired to req.signal by the dispatcher;
+    // ndjsonResponse fires it again on consumer cancel, propagating to
+    // the rig observer.
+    route({
+      on: { method: "POST", path: "/api/v1/observe" },
+      action: "observe",
+      decode: async (req) => {
+        const body = await readJson(req, (msg) => json({ error: msg }, 400));
+        if (body instanceof Response) return body;
+        const v = validateUrls(body);
+        if (!v.ok) return json({ error: v.error }, 400);
+        return [v.value];
+      },
+      encode: (frames, ctx) =>
+        ndjsonResponse(frames, ctx.abort, undefined, {
+          "X-Accel-Buffering": "no",
+        }),
+    }),
+  ];
 }
 
 // ── API factory ──

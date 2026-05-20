@@ -35,8 +35,7 @@
 
 import type { Rig } from "@bandeira-tech/b3nd-core/rig";
 import type { Decoder } from "../codecs/codec.ts";
-import { runAction } from "../actions/run.ts";
-import { dispatchHttp, type HttpRoute } from "../router/http.ts";
+import { dispatchHttp, type HttpRoute, route } from "../router/http.ts";
 
 // ── Types ──
 
@@ -58,9 +57,10 @@ export interface HttpPostContentApiOptions {
 function buildRoute(options: HttpPostContentApiOptions): HttpRoute {
   const { payloadDecoder } = options;
 
-  return {
+  return route({
     on: { method: "POST", path: "/api/v1/content/:uri" },
-    build: async (req, params) => {
+    action: "receive",
+    decode: async (req, params) => {
       let uri: string;
       try {
         uri = decodeURIComponent(params.uri);
@@ -77,24 +77,16 @@ function buildRoute(options: HttpPostContentApiOptions): HttpRoute {
         const msg = err instanceof Error ? err.message : String(err);
         return new Response(`payloadDecoder failed: ${msg}`, { status: 400 });
       }
-      return { action: "receive", outputs: [[uri, payload]] };
+      return [[[uri, payload]]];
     },
-    respond: async (rig, _req, call) => {
-      const outputs = (call as { outputs: [string, unknown][] }).outputs;
-      let result;
-      try {
-        const results = await runAction(rig, { action: "receive", outputs });
-        result = results[0];
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        return new Response(`receive failed: ${msg}`, { status: 500 });
-      }
+    encode: (results) => {
+      const result = results[0];
       return new Response(JSON.stringify(result), {
         status: 200,
         headers: { "Content-Type": "application/json" },
       });
     },
-  };
+  });
 }
 
 // ── API factory ──

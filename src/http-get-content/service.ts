@@ -36,10 +36,8 @@
  */
 
 import type { Rig } from "@bandeira-tech/b3nd-core/rig";
-import type { Output } from "@bandeira-tech/b3nd-core/types";
 import type { ContentResponseInit, Encoder } from "../codecs/codec.ts";
-import { runAction } from "../actions/run.ts";
-import { dispatchHttp, type HttpRoute } from "../router/http.ts";
+import { dispatchHttp, type HttpRoute, route } from "../router/http.ts";
 
 // ── Types ──
 
@@ -66,9 +64,10 @@ export interface HttpGetContentApiOptions {
 function buildRoute(options: HttpGetContentApiOptions): HttpRoute {
   const { payloadResponseMap } = options;
 
-  return {
+  return route({
     on: { method: "GET", path: "/api/v1/content/:uri" },
-    build: (_req, params) => {
+    action: "read",
+    decode: (_req, params) => {
       let uri: string;
       try {
         uri = decodeURIComponent(params.uri);
@@ -77,23 +76,15 @@ function buildRoute(options: HttpGetContentApiOptions): HttpRoute {
           status: 400,
         });
       }
-      return { action: "read", urls: [uri] };
+      return [[uri]];
     },
-    respond: async (rig, req, call) => {
-      const urls = (call as { urls: string[] }).urls;
-      let output: Output;
-      try {
-        const results = await runAction(rig, { action: "read", urls });
-        output = results[0];
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        return new Response(`read failed: ${msg}`, { status: 500 });
-      }
+    encode: async (results, ctx) => {
+      const output = results[0];
       if (!output) return new Response("Not Found", { status: 404 });
 
       let init: ContentResponseInit;
       try {
-        init = await payloadResponseMap(req, output);
+        init = await payloadResponseMap(ctx.req, output);
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         return new Response(`payloadResponseMap failed: ${msg}`, {
@@ -106,7 +97,7 @@ function buildRoute(options: HttpGetContentApiOptions): HttpRoute {
         headers: init.headers,
       });
     },
-  };
+  });
 }
 
 // ── API factory ──

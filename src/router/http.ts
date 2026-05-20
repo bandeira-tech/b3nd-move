@@ -2,33 +2,31 @@
  * @module
  * HTTP route descriptor + dispatcher.
  *
- * A `HttpRoute` is the data structure that describes one wire-shape →
- * rig-action mapping. Three pieces:
+ * A `HttpRoute` declares one HTTP endpoint as four fields:
  *
- *   on        declarative matcher — method + path pattern
- *   build     parse + validate → ActionCall (or Response on bail)
- *   respond   run the action, render the response
+ *   on      declarative matcher — method + path pattern
+ *   action  which rig method this endpoint targets
+ *   decode  (req, params) → args for the rig method (or Response on bail)
+ *   encode  (result, ctx) → wire Response
  *
- * `path` patterns support `:name` placeholders for path params. The
- * dispatcher extracts them and hands `build` a `params` object:
+ * `path` patterns support `:name` placeholders captured into `params`.
+ * The dispatcher walks the table, runs the action, and hands the result
+ * to `encode`. Streaming actions (observe) return an AsyncIterable
+ * directly to encode; helpers like `ndjsonResponse` turn that into a
+ * Response without each route writing ReadableStream code.
  *
- *   on: { method: "GET", path: "/api/v1/content/:uri" }
- *   build: (req, { uri }) => …
- *
- * `respond` owns execution — the dispatcher does NOT call `runAction`
- * itself. This lets streaming actions (observe) wire the action's
- * signal to the response stream's lifecycle (NDJSON cancellation,
- * client disconnect, …) rather than carrying a stale signal baked in
- * at build time.
- *
- * The dispatcher emits standards-compliant `405 Method Not Allowed`
- * automatically when the path matches some route but its method
- * doesn't — `Allow:` header is the union of methods from all
- * path-matching routes. Routes don't ship their own 405 envelopes.
+ * `405 Method Not Allowed` is emitted automatically when the path
+ * matches some route but its method doesn't — `Allow:` header is the
+ * union of methods from all path-matching routes.
  */
 
 import type { Rig } from "@bandeira-tech/b3nd-core/rig";
-import type { ActionCall } from "../actions/run.ts";
+import type {
+  Output,
+  ReceiveResult,
+  StatusResult,
+} from "@bandeira-tech/b3nd-core/types";
+import type { ActionName } from "../actions/run.ts";
 
 /** Declarative matcher: method + path-with-`:params`. */
 export interface HttpMatcher {
@@ -46,39 +44,90 @@ export interface HttpMatcher {
 export type PathParams = Record<string, string>;
 
 /**
- * One declarative HTTP wire-shape ↔ rig-action mapping.
+ * Arguments `decode` produces for each rig action. The dispatcher
+ * spreads these into the matching rig method; for `observe` it also
+ * injects the per-request `AbortSignal`, so decoders don't carry one.
+ */
+export type ArgsFor<A extends ActionName> = A extends "status" ? readonly []
+  : A extends "receive" ? readonly [outputs: Output[]]
+  : A extends "read" ? readonly [urls: string[]]
+  : A extends "observe" ? readonly [urls: string[]]
+  : never;
+
+/**
+ * What `encode` receives for each action. Unary actions are awaited
+ * before encode runs; observe gets the live AsyncIterable so encode
+ * can stream it (typically via `ndjsonResponse(frames, ctx.abort)`).
+ */
+export type ResultFor<A extends ActionName> = A extends "status" ? StatusResult
+  : A extends "receive" ? ReceiveResult[]
+  : A extends "read" ? Output[]
+  : A extends "observe" ? AsyncIterable<readonly string[]>
+  : never;
+
+/** Per-request context handed to `encode`. */
+export interface RouteContext {
+  /** The original Request — useful for content negotiation, custom headers, etc. */
+  req: Request;
+  /**
+   * Per-request abort. Cancelled when the request signal fires; cancel
+   * it from within a streaming encoder when the consumer disconnects
+   * (see `ndjsonResponse`).
+   */
+  abort: AbortController;
+}
+
+/**
+ * One HTTP endpoint as a declarative record.
  *
  * Routes are walked in order. The first whose `on` matches the
  * request runs; later ones are ignored. Put more specific paths
  * before less specific ones if they could overlap.
  */
-export interface HttpRoute {
+export interface HttpRoute<A extends ActionName = ActionName> {
   /** Declarative matcher: method + path. */
   on: HttpMatcher;
+  /** The rig action this endpoint targets. */
+  action: A;
   /**
-   * Build the action call. `params` carries the path-param captures.
-   * Throw → 500. Return a `Response` to short-circuit — use this
-   * for validation failures so each route owns its 400 envelope
-   * shape. May be sync or async; the dispatcher awaits either way.
+   * Build the args tuple from the matched request. Throw → 500.
+   * Return a `Response` to short-circuit — use this for validation
+   * failures so each route owns its 400 envelope shape.
    */
-  build: (
+  decode: (
     req: Request,
     params: PathParams,
-  ) => ActionCall | Response | Promise<ActionCall | Response>;
+  ) => ArgsFor<A> | Response | Promise<ArgsFor<A> | Response>;
   /**
-   * Run the action against `rig` and render the response. `call` is
-   * what `build` produced. Streaming actions are this route's
-   * responsibility: respond decides how to drain the iterable. May
-   * be sync or async.
+   * Turn the rig's result into the wire response. For streaming
+   * actions (`observe`) the result is an `AsyncIterable` — hand it
+   * to `ndjsonResponse(frames, ctx.abort)` (or your own stream helper).
    */
-  respond: (
-    rig: Rig,
-    req: Request,
-    call: ActionCall,
+  encode: (
+    result: ResultFor<A>,
+    ctx: RouteContext,
   ) => Response | Promise<Response>;
 }
 
-// ── Compilation ──
+/**
+ * Type-preserving route constructor. Use this so `decode`'s args and
+ * `encode`'s result narrow from the literal `action`:
+ *
+ *   route({
+ *     on: { method: "GET", path: "/api/v1/status" },
+ *     action: "status",
+ *     decode: () => [],                  // narrowed to ArgsFor<"status">
+ *     encode: (r) => json(r, ...),       // r: StatusResult
+ *   })
+ *
+ * The return is erased to `HttpRoute` so heterogeneous routes share a
+ * single table type.
+ */
+export function route<A extends ActionName>(r: HttpRoute<A>): HttpRoute {
+  return r as unknown as HttpRoute;
+}
+
+// ── Matcher compilation ──
 
 interface Compiled {
   methods: readonly string[];
@@ -117,16 +166,12 @@ function compile(matcher: HttpMatcher): Compiled {
 
 /**
  * Walk `routes` against `req`, run the first whose method + path
- * match, and return its response.
+ * match, run the action, and return its `encode` response.
  *
  *   path doesn't match anything           → 404
  *   path matches but no method does       → 405 with `Allow:` union
- *   full match                            → build → respond
- *   build returns Response                → short-circuits
- *
- * Routes are recompiled on every call — for typical tables (<10
- * routes) the cost is negligible; factor `compile` out into the
- * factory if a hot path needs it.
+ *   decode returns Response               → short-circuits
+ *   full match                            → run action → encode
  */
 export async function dispatchHttp(
   rig: Rig,
@@ -144,9 +189,26 @@ export async function dispatchHttp(
       for (const m of c.methods) allowed.add(m);
       continue;
     }
-    const built = await route.build(req, params);
-    if (built instanceof Response) return built;
-    return await route.respond(rig, req, built);
+
+    // Per-request lifecycle. For streaming actions (observe) this is
+    // the signal the rig observer sees; for unary it's effectively
+    // ignored but still wired so encoders can opt in.
+    const abort = new AbortController();
+    const onAbort = () => abort.abort();
+    req.signal.addEventListener("abort", onAbort, { once: true });
+
+    try {
+      const args = await route.decode(req, params);
+      if (args instanceof Response) return args;
+
+      const result = await execute(rig, route.action, args, abort.signal);
+      // The action discriminant guarantees result matches `route`'s
+      // ResultFor<A>, but TS can't carry that across the existential
+      // erasure in the heterogeneous routes array.
+      return await route.encode(result as never, { req, abort });
+    } finally {
+      req.signal.removeEventListener("abort", onAbort);
+    }
   }
 
   if (allowed.size > 0) {
@@ -156,4 +218,27 @@ export async function dispatchHttp(
     });
   }
   return new Response("Not Found", { status: 404 });
+}
+
+/**
+ * Dispatch the rig method for an action. Unary actions are awaited so
+ * `encode` sees the unwrapped result; observe returns the live
+ * AsyncIterable so encoders can stream it.
+ */
+async function execute(
+  rig: Rig,
+  action: ActionName,
+  args: readonly unknown[],
+  signal: AbortSignal,
+): Promise<unknown> {
+  switch (action) {
+    case "status":
+      return await rig.status();
+    case "receive":
+      return await rig.receive(args[0] as Output[]);
+    case "read":
+      return await rig.read(args[0] as string[]);
+    case "observe":
+      return rig.observe(args[0] as string[], signal);
+  }
 }
