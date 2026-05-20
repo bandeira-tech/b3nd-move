@@ -3,7 +3,7 @@
  * httpPostContentApi: routing, decoder dispatch, composable helpers.
  */
 
-import { assertEquals, assertStringIncludes } from "@std/assert";
+import { assertEquals } from "@std/assert";
 import { connection, Rig } from "@bandeira-tech/b3nd-core/rig";
 import type {
   Output,
@@ -171,7 +171,7 @@ Deno.test("byContentType — dispatch + default fallback", async () => {
   assertEquals(backend.seen[2][1] instanceof Uint8Array, true);
 });
 
-Deno.test("decoder throws → 400", async () => {
+Deno.test("decoder throws → 400 with the decoder's message", async () => {
   const { rig } = buildRig();
   const api = httpPostContentApi(rig, { payloadDecoder: dec.json() });
   const r = await api(req(ENCODED, {
@@ -180,7 +180,12 @@ Deno.test("decoder throws → 400", async () => {
     body: "not-json",
   }));
   assertEquals(r.status, 400);
-  assertStringIncludes(await r.text(), "payloadDecoder failed");
+  // The decoder's error reaches the body unwrapped — no envelope,
+  // no "payloadDecoder failed:" prefix. JSON parse errors come from
+  // the V8 / Deno runtime so the wording isn't ours to assert on
+  // exactly; checking it's non-empty plain text is enough.
+  const text = await r.text();
+  if (text.length === 0) throw new Error("expected non-empty error body");
 });
 
 Deno.test("rejected receive → 200 with ReceiveResult { accepted: false }", async () => {

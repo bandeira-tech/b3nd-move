@@ -133,7 +133,7 @@ Deno.test("byPayloadField — select by payload.kind", async () => {
   assertEquals(await r.text(), "hello");
 });
 
-Deno.test("hook throw → 500", async () => {
+Deno.test("hook throw → 500 with the hook's message", async () => {
   const api = httpGetContentApi(buildRig(), {
     payloadResponseMap: map.fromField("missing", { contentType: "image/png" }),
   });
@@ -141,7 +141,9 @@ Deno.test("hook throw → 500", async () => {
     req(`/api/v1/content/${encodeURIComponent("mutable://app/thing")}`),
   );
   assertEquals(r.status, 500);
-  assertStringIncludes(await r.text(), "payloadResponseMap failed");
+  // The hook's error message reaches the body unwrapped — no envelope,
+  // no "payloadResponseMap failed:" prefix.
+  assertStringIncludes(await r.text(), "field(missing)");
 });
 
 Deno.test("fixed() — host-pinned response, miss → 404 policy", async () => {
