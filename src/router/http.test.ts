@@ -12,6 +12,7 @@ import type {
   ReceiveResult,
   StatusResult,
 } from "@bandeira-tech/b3nd-core/types";
+import { BadRequest, InternalError, NotFound } from "./errors.ts";
 import { dispatchHttp, type HttpRoute, route } from "./http.ts";
 
 class StubBackend implements ProtocolInterfaceNode {
@@ -141,16 +142,60 @@ Deno.test("dispatchHttp: multi-method matcher accepts both", async () => {
   assertEquals(b.status, 200);
 });
 
-Deno.test("dispatchHttp: decode returning Response short-circuits", async () => {
+Deno.test("dispatchHttp: decode throwing BadRequest → 400 + plain text", async () => {
   const r = route({
     on: { method: "GET", path: "/api/v1/x" },
     action: "status",
-    decode: () => new Response("bad", { status: 400 }),
+    decode: () => {
+      throw new BadRequest("nope");
+    },
     encode: () => new Response("never"),
   });
   const res = await dispatchHttp(buildRig(), [r], req("/api/v1/x"));
   assertEquals(res.status, 400);
-  assertEquals(await res.text(), "bad");
+  assertEquals(await res.text(), "nope");
+});
+
+Deno.test("dispatchHttp: encode throwing NotFound → 404 + plain text", async () => {
+  const r = route({
+    on: { method: "GET", path: "/api/v1/x" },
+    action: "status",
+    decode: () => [],
+    encode: () => {
+      throw new NotFound("gone");
+    },
+  });
+  const res = await dispatchHttp(buildRig(), [r], req("/api/v1/x"));
+  assertEquals(res.status, 404);
+  assertEquals(await res.text(), "gone");
+});
+
+Deno.test("dispatchHttp: arbitrary thrown error → 500 + message", async () => {
+  const r = route({
+    on: { method: "GET", path: "/api/v1/x" },
+    action: "status",
+    decode: () => {
+      throw new Error("kaboom");
+    },
+    encode: () => new Response("never"),
+  });
+  const res = await dispatchHttp(buildRig(), [r], req("/api/v1/x"));
+  assertEquals(res.status, 500);
+  assertEquals(await res.text(), "kaboom");
+});
+
+Deno.test("dispatchHttp: InternalError thrown explicitly → 500 + message", async () => {
+  const r = route({
+    on: { method: "GET", path: "/api/v1/x" },
+    action: "status",
+    decode: () => {
+      throw new InternalError("hook misbehaved");
+    },
+    encode: () => new Response("never"),
+  });
+  const res = await dispatchHttp(buildRig(), [r], req("/api/v1/x"));
+  assertEquals(res.status, 500);
+  assertEquals(await res.text(), "hook misbehaved");
 });
 
 Deno.test("dispatchHttp: encode receives unwrapped rig result", async () => {

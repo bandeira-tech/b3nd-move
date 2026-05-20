@@ -18,10 +18,10 @@
  * Observe streams one JSON-encoded `string[]` (batch of uris that
  * fired) per line, matching what `rig.observe()` yields.
  *
- * Implementation: each route is an `HttpRoute` (see `src/router/http.ts`)
- * with four fields — `on` matcher, `action` (the rig method), `decode`
- * (request → args), `encode` (result → Response). Action execution,
- * signal lifecycle, and 405 handling all live in the dispatcher.
+ * Wire-adapter failures (bad JSON, schema mismatch) throw `BadRequest`
+ * — see `src/router/errors.ts`. The dispatcher catches and renders as
+ * `Response(message, { status })` with a plain-text body. No envelope:
+ * status carries the category, body carries the message.
  *
  * @example
  * ```ts
@@ -45,6 +45,7 @@
 import type { Rig } from "@bandeira-tech/b3nd-core/rig";
 import { ndjsonResponse } from "../actions/ndjson.ts";
 import { validateOutputs, validateUrls } from "../actions/validate.ts";
+import { BadRequest } from "../router/errors.ts";
 import { dispatchHttp, type HttpRoute, route } from "../router/http.ts";
 
 // ── Types ──
@@ -63,14 +64,11 @@ function json(data: unknown, status = 200): Response {
   });
 }
 
-async function readJson(
-  req: Request,
-  onInvalid: (msg: string) => Response,
-): Promise<unknown | Response> {
+async function readJson(req: Request): Promise<unknown> {
   try {
     return await req.json();
   } catch {
-    return onInvalid("Invalid JSON body");
+    throw new BadRequest("Invalid JSON body");
   }
 }
 
@@ -90,19 +88,17 @@ function buildRoutes(options?: HttpApiOptions): HttpRoute[] {
       },
     }),
 
-    // 200 with per-slot ReceiveResult body; non-2xx is reserved for
-    // request-level failures (bad JSON, schema mismatch).
+    // 200 with per-slot ReceiveResult body. Per-slot reject is a
+    // domain outcome, not a transport failure — request-level failures
+    // (bad JSON, schema mismatch) throw `BadRequest` and surface as
+    // plain-text 400.
     route({
       on: { method: "POST", path: "/api/v1/receive" },
       action: "receive",
       decode: async (req) => {
-        const body = await readJson(
-          req,
-          (msg) => json([{ accepted: false, error: msg }], 400),
-        );
-        if (body instanceof Response) return body;
+        const body = await readJson(req);
         const v = validateOutputs(body);
-        if (!v.ok) return json([{ accepted: false, error: v.error }], 400);
+        if (!v.ok) throw new BadRequest(v.error);
         return [v.value];
       },
       encode: (results) => json(results, 200),
@@ -113,10 +109,9 @@ function buildRoutes(options?: HttpApiOptions): HttpRoute[] {
       on: { method: "POST", path: "/api/v1/read" },
       action: "read",
       decode: async (req) => {
-        const body = await readJson(req, (msg) => json({ error: msg }, 400));
-        if (body instanceof Response) return body;
+        const body = await readJson(req);
         const v = validateUrls(body);
-        if (!v.ok) return json({ error: v.error }, 400);
+        if (!v.ok) throw new BadRequest(v.error);
         return [v.value];
       },
       encode: (outs) => json(outs, 200),
@@ -129,10 +124,9 @@ function buildRoutes(options?: HttpApiOptions): HttpRoute[] {
       on: { method: "POST", path: "/api/v1/observe" },
       action: "observe",
       decode: async (req) => {
-        const body = await readJson(req, (msg) => json({ error: msg }, 400));
-        if (body instanceof Response) return body;
+        const body = await readJson(req);
         const v = validateUrls(body);
-        if (!v.ok) return json({ error: v.error }, 400);
+        if (!v.ok) throw new BadRequest(v.error);
         return [v.value];
       },
       encode: (frames, ctx) =>

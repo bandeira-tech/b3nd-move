@@ -35,6 +35,7 @@
 
 import type { Rig } from "@bandeira-tech/b3nd-core/rig";
 import type { Decoder } from "../codecs/codec.ts";
+import { BadRequest } from "../router/errors.ts";
 import { dispatchHttp, type HttpRoute, route } from "../router/http.ts";
 
 // ── Types ──
@@ -65,17 +66,16 @@ function buildRoute(options: HttpPostContentApiOptions): HttpRoute {
       try {
         uri = decodeURIComponent(params.uri);
       } catch {
-        return new Response("Bad Request: invalid URI encoding", {
-          status: 400,
-        });
+        throw new BadRequest("invalid URI encoding");
       }
 
       let payload: unknown;
       try {
         payload = await payloadDecoder(req);
       } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        return new Response(`payloadDecoder failed: ${msg}`, { status: 400 });
+        throw new BadRequest(
+          err instanceof Error ? err.message : String(err),
+        );
       }
       return [[[uri, payload]]];
     },

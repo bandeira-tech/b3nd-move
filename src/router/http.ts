@@ -27,6 +27,7 @@ import type {
   StatusResult,
 } from "@bandeira-tech/b3nd-core/types";
 import type { ActionName } from "../actions/run.ts";
+import { HttpError } from "./errors.ts";
 
 /** Declarative matcher: method + path-with-`:params`. */
 export interface HttpMatcher {
@@ -90,18 +91,22 @@ export interface HttpRoute<A extends ActionName = ActionName> {
   /** The rig action this endpoint targets. */
   action: A;
   /**
-   * Build the args tuple from the matched request. Throw → 500.
-   * Return a `Response` to short-circuit — use this for validation
-   * failures so each route owns its 400 envelope shape.
+   * Build the args tuple from the matched request. Throw an
+   * `HttpError` (e.g. `BadRequest`) for wire-adapter failures —
+   * the dispatcher catches and renders. Any other thrown value
+   * becomes a 500.
    */
   decode: (
     req: Request,
     params: PathParams,
-  ) => ArgsFor<A> | Response | Promise<ArgsFor<A> | Response>;
+  ) => ArgsFor<A> | Promise<ArgsFor<A>>;
   /**
    * Turn the rig's result into the wire response. For streaming
    * actions (`observe`) the result is an `AsyncIterable` — hand it
    * to `ndjsonResponse(frames, ctx.abort)` (or your own stream helper).
+   *
+   * Throwing an `HttpError` (e.g. `NotFound` for missing content)
+   * goes through the dispatcher's error rendering.
    */
   encode: (
     result: ResultFor<A>,
@@ -170,8 +175,13 @@ function compile(matcher: HttpMatcher): Compiled {
  *
  *   path doesn't match anything           → 404
  *   path matches but no method does       → 405 with `Allow:` union
- *   decode returns Response               → short-circuits
+ *   `decode`/`encode` throws HttpError    → status + plain-text body
+ *   `decode`/`encode` throws anything else → 500 with that message
  *   full match                            → run action → encode
+ *
+ * Errors are wire-adapter concerns (bad JSON, bad encoding, missing
+ * resource at the route layer) and never reach the rig. Throwing
+ * an `HttpError` is the way routes signal them — see `./errors.ts`.
  */
 export async function dispatchHttp(
   rig: Rig,
@@ -199,13 +209,13 @@ export async function dispatchHttp(
 
     try {
       const args = await route.decode(req, params);
-      if (args instanceof Response) return args;
-
       const result = await execute(rig, route.action, args, abort.signal);
       // The action discriminant guarantees result matches `route`'s
       // ResultFor<A>, but TS can't carry that across the existential
       // erasure in the heterogeneous routes array.
       return await route.encode(result as never, { req, abort });
+    } catch (e) {
+      return renderError(e);
     } finally {
       req.signal.removeEventListener("abort", onAbort);
     }
@@ -218,6 +228,19 @@ export async function dispatchHttp(
     });
   }
   return new Response("Not Found", { status: 404 });
+}
+
+/**
+ * Plain-text error rendering. Status carries the category; body is
+ * the human-readable message. No envelope — clients filter on
+ * `response.ok` / `response.status` before reading the body.
+ */
+function renderError(e: unknown): Response {
+  if (e instanceof HttpError) {
+    return new Response(e.message, { status: e.status });
+  }
+  const msg = e instanceof Error ? e.message : String(e);
+  return new Response(msg, { status: 500 });
 }
 
 /**
