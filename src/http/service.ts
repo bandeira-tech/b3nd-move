@@ -9,10 +9,15 @@
  *
  * Each route is its own declaration in a sibling file:
  *
- *   GET  /api/v1/status     → ./status.ts   (rig.status())
- *   POST /api/v1/receive    → ./receive.ts  (rig.receive(msgs))
- *   POST /api/v1/read       → ./read.ts     (rig.read(urls))
- *   POST /api/v1/observe    → ./observe.ts  (rig.observe(urls), NDJSON)
+ *   GET  /api/v1/status            → ./status.ts   (rig.status())
+ *   POST /api/v1/receive?u=<b64>   → ./receive.ts  (rig.receive(outputs))
+ *   POST /api/v1/read?u=<b64>      → ./read.ts     (rig.read(urls))
+ *   POST /api/v1/observe?u=<b64>   → ./observe.ts  (rig.observe(urls), NDJSON)
+ *
+ * URIs ride in the URL as `?u=<urlsafe-b64>` (see ./uri-list.ts) so
+ * routing / auth / observability can decide on a request without
+ * parsing the body. The body is only used by `receive`, where it
+ * carries the positional payload array.
  *
  * This file's only job is to assemble the table and hand it to the
  * shared dispatcher. Wire-adapter failures (bad JSON, schema mismatch)

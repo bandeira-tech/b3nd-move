@@ -1,12 +1,15 @@
 /**
  * HttpClient — HTTP implementation of ProtocolInterfaceNode.
  *
- * Speaks the wire shape served by `httpApi` in `service.ts`:
+ * Speaks the wire shape served by `httpApi` in `service.ts`. URIs
+ * ride in the URL as `?u=<b64>` (see `./uri-list.ts`) so the body
+ * carries only what's body-shaped (payloads for `receive`, nothing
+ * for `read` and `observe`):
  *
- *   GET  /api/v1/status     — status (sole status endpoint)
- *   POST /api/v1/receive    — body: [[uri, payload], ...]
- *   POST /api/v1/read       — body: string[]
- *   POST /api/v1/observe    — body: string[] → NDJSON stream of frames
+ *   GET  /api/v1/status            — status (sole status endpoint)
+ *   POST /api/v1/receive?u=<b64>   — body: unknown[] (payloads, positional)
+ *   POST /api/v1/read?u=<b64>      — no body
+ *   POST /api/v1/observe?u=<b64>   — no body, NDJSON response of frames
  *
  * No schema validation — validation happens server-side.
  */
@@ -18,6 +21,7 @@ import type {
   StatusResult,
 } from "@bandeira-tech/b3nd-core/types";
 import { RequestError, TimeoutError, TransportError } from "../errors.ts";
+import { encodeUriList } from "./uri-list.ts";
 
 /** The request about to go on the wire. Mutate any field. */
 export interface HttpPreSendRequest {
@@ -154,19 +158,22 @@ export class HttpClient implements ProtocolInterfaceNode {
     });
 
     const validIndices: number[] = [];
-    const validMsgs: Output[] = [];
+    const validUris: string[] = [];
+    const validPayloads: unknown[] = [];
     for (let i = 0; i < msgs.length; i++) {
       if (results[i] === null) {
         validIndices.push(i);
-        validMsgs.push(msgs[i]);
+        validUris.push(msgs[i][0]);
+        validPayloads.push(msgs[i][1]);
       }
     }
-    if (validMsgs.length === 0) return results as ReceiveResult[];
+    if (validUris.length === 0) return results as ReceiveResult[];
 
     try {
-      const response = await this.request("/api/v1/receive", {
+      const u = encodeUriList(validUris);
+      const response = await this.request(`/api/v1/receive?u=${u}`, {
         method: "POST",
-        body: validMsgs,
+        body: validPayloads,
       }, "receive");
 
       if (!response.ok) {
@@ -196,9 +203,9 @@ export class HttpClient implements ProtocolInterfaceNode {
 
   async read<T = unknown>(urls: string[]): Promise<Output<T>[]> {
     if (urls.length === 0) return [];
-    const response = await this.request("/api/v1/read", {
+    const u = encodeUriList(urls);
+    const response = await this.request(`/api/v1/read?u=${u}`, {
       method: "POST",
-      body: urls,
     }, "read");
     if (!response.ok) {
       const body = await response.text();
@@ -223,9 +230,9 @@ export class HttpClient implements ProtocolInterfaceNode {
   ): AsyncIterable<readonly string[]> {
     if (urls.length === 0) return;
 
+    const u = encodeUriList(urls);
     const { url, headers, body } = await this.prepare(
-      "/api/v1/observe",
-      urls,
+      `/api/v1/observe?u=${u}`,
     );
 
     let response: Response;
