@@ -12,20 +12,26 @@ HTTP transport for B3nd. JSON over `fetch`, with NDJSON streaming for observe.
 
 ## Concepts
 
-**Wire shape.** Every route mirrors the `ProtocolInterfaceNode` method it fronts
-— the request body is exactly the argument PIN takes:
+**Wire shape.** URIs ride in the URL as `?u=<b64>` so routing / auth /
+observability can decide on a request without parsing the body. The body carries
+only what's body-shaped: payloads on `receive`, nothing on `read` or `observe`.
+The `?u=` encoding is `urlsafe-base64(<u16 url-len><url-utf8> × N)` — see
+[`./uri-list.ts`](./uri-list.ts).
 
-| Method | Path              | Body                 | Maps to             |
-| ------ | ----------------- | -------------------- | ------------------- |
-| `GET`  | `/api/v1/status`  | —                    | `rig.status()`      |
-| `POST` | `/api/v1/receive` | `[[uri, payload],…]` | `rig.receive(msgs)` |
-| `POST` | `/api/v1/read`    | `string[]`           | `rig.read(urls)`    |
-| `POST` | `/api/v1/observe` | `string[]`           | `rig.observe(urls)` |
+| Method | Path                      | Body        | Maps to                |
+| ------ | ------------------------- | ----------- | ---------------------- |
+| `GET`  | `/api/v1/status`          | —           | `rig.status()`         |
+| `POST` | `/api/v1/receive?u=<b64>` | `unknown[]` | `rig.receive(outputs)` |
+| `POST` | `/api/v1/read?u=<b64>`    | —           | `rig.read(urls)`       |
+| `POST` | `/api/v1/observe?u=<b64>` | —           | `rig.observe(urls)`    |
 
-**Observe.** `POST /api/v1/observe` returns an `application/x-ndjson` stream;
-each line is a JSON-encoded `string[]` — the batch of uris that fired — straight
-from `rig.observe()`. `HttpClient.observe()` parses the lines and yields
-batches.
+`receive` body is the payload array — one slot per `u=` URI, positional. The
+route zips them into `Output[]` before calling the rig. Length mismatch → 400.
+
+**Observe.** `POST /api/v1/observe?u=…` returns an `application/x-ndjson`
+stream; each line is a JSON-encoded `string[]` — the batch of uris that fired —
+straight from `rig.observe()`. `HttpClient.observe()` parses the lines and
+yields batches.
 
 **The pair.**
 
