@@ -40,6 +40,7 @@ import {
   statusResultToResponse,
 } from "../proto/convert.ts";
 import {
+  ObserveFrameSchema,
   ObserveRequestSchema,
   OutputProtoSchema,
   ReadRequestSchema,
@@ -190,7 +191,11 @@ async function handleObserve(rig: Rig, req: Request): Promise<Response> {
 
   return ndjsonResponse(
     (signal) => runAction(rig, { action: "observe", urls: body.urls, signal }),
-    (frame) => toJson(OutputProtoSchema, outputToProto(frame)),
+    (frame) =>
+      toJson(
+        ObserveFrameSchema,
+        create(ObserveFrameSchema, { uris: [...frame] }),
+      ),
     req.signal,
   );
 }

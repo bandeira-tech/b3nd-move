@@ -34,7 +34,7 @@ class StubBackend implements ProtocolInterfaceNode {
     }));
   }
   // deno-lint-ignore require-yield
-  async *observe(): AsyncIterable<Output<string[]>> {
+  async *observe(): AsyncIterable<readonly string[]> {
     return;
   }
   status(): Promise<StatusResult> {

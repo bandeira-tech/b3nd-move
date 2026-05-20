@@ -14,7 +14,8 @@
  *   - `receive`        payload = `Output[]`                 → data = `ReceiveResult[]`
  *   - `read`           payload = `{ urls: string[] }`       → data = `Output[]`
  *   - `observe`        payload = `{ urls: string[] }`       → multiple frames, each
- *                                                             `data = Output<string[]>`;
+ *                                                             `data = string[]`
+ *                                                             (batch of fired uris);
  *                                                             terminator `data = null`
  *   - `observe-cancel` payload = `{}` (reuses observe `id`) → no reply (the active
  *                                                              observe handler emits

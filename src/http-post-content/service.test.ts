@@ -6,7 +6,6 @@
 import { assertEquals, assertStringIncludes } from "@std/assert";
 import { connection, Rig } from "@bandeira-tech/b3nd-core/rig";
 import type {
-  Message,
   Output,
   Program,
   ProtocolInterfaceNode,
@@ -22,8 +21,8 @@ import { payloadDecoder as dec } from "./payload-decoder.ts";
  * decoder produced the expected payload shape.
  */
 class StubBackend implements ProtocolInterfaceNode {
-  seen: Message[] = [];
-  receive(msgs: Message[]): Promise<ReceiveResult[]> {
+  seen: Output[] = [];
+  receive(msgs: Output[]): Promise<ReceiveResult[]> {
     this.seen.push(...msgs);
     return Promise.resolve(msgs.map(() => ({ accepted: true })));
   }
@@ -31,7 +30,7 @@ class StubBackend implements ProtocolInterfaceNode {
     return Promise.resolve([]);
   }
   // deno-lint-ignore require-yield
-  async *observe(): AsyncIterable<Output<string[]>> {
+  async *observe(): AsyncIterable<readonly string[]> {
     return;
   }
   status(): Promise<StatusResult> {

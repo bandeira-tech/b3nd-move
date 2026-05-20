@@ -53,6 +53,7 @@ import {
   statusResponseToResult,
 } from "../proto/convert.ts";
 import {
+  ObserveFrameSchema,
   ObserveRequestSchema,
   OutputProtoSchema,
   ReadRequestSchema,
@@ -191,7 +192,7 @@ export class GrpcHttpClient implements ProtocolInterfaceNode {
   async *observe(
     urls: string[],
     signal: AbortSignal,
-  ): AsyncIterable<Output<string[]>> {
+  ): AsyncIterable<readonly string[]> {
     if (urls.length === 0) return;
     const abort = new AbortController();
     const onAbort = () => abort.abort();
@@ -275,7 +276,8 @@ export class GrpcHttpClient implements ProtocolInterfaceNode {
               operation: "Observe",
             });
           }
-          yield outputFromProto<string[]>(fromJson(OutputProtoSchema, parsed));
+          const frame = fromJson(ObserveFrameSchema, parsed);
+          yield frame.uris;
         }
       }
     } finally {

@@ -30,10 +30,10 @@ class StubBackend implements ProtocolInterfaceNode {
   async *observe(
     urls: string[],
     _signal: AbortSignal,
-  ): AsyncIterable<Output<string[]>> {
+  ): AsyncIterable<readonly string[]> {
     this.seen.push({ fn: "observe", args: [urls] });
     for (const u of urls) {
-      yield [u, [`${u}/0`]];
+      yield [`${u}/0`];
     }
   }
   status(): Promise<StatusResult> {
@@ -79,10 +79,10 @@ Deno.test("runAction read → Output[]", async () => {
   assertEquals(outs[1][0], "mutable://t/b");
 });
 
-Deno.test("runAction observe → AsyncIterable streams frames", async () => {
+Deno.test("runAction observe → AsyncIterable streams uri batches", async () => {
   const { rig } = buildRig();
   const abort = new AbortController();
-  const frames: Output<string[]>[] = [];
+  const frames: (readonly string[])[] = [];
   for await (
     const frame of runAction(rig, {
       action: "observe",
@@ -97,5 +97,5 @@ Deno.test("runAction observe → AsyncIterable streams frames", async () => {
     }
   }
   assertEquals(frames.length >= 1, true);
-  assertEquals(frames[0][0], "mutable://t/p");
+  assertEquals(frames[0][0], "mutable://t/p/0");
 });

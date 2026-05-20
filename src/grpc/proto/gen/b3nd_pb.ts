@@ -10,7 +10,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file b3nd.proto.
  */
 export const file_b3nd: GenFile = /*@__PURE__*/
-  fileDesc("CgpiM25kLnByb3RvEgdiM25kLnYxIkYKC091dHB1dFByb3RvEgsKA3VyaRgBIAEoCRIPCgdwYXlsb2FkGAIgASgMEhkKEXBheWxvYWRfaXNfYmluYXJ5GAMgASgIIjgKDlJlY2VpdmVSZXF1ZXN0EiYKCG1lc3NhZ2VzGAEgAygLMhQuYjNuZC52MS5PdXRwdXRQcm90byI/Cg9SZWNlaXZlUmVzcG9uc2USLAoHcmVzdWx0cxgBIAMoCzIbLmIzbmQudjEuUmVjZWl2ZVJlc3VsdFByb3RvIjUKElJlY2VpdmVSZXN1bHRQcm90bxIQCghhY2NlcHRlZBgBIAEoCBINCgVlcnJvchgCIAEoCSIbCgtSZWFkUmVxdWVzdBIMCgR1cmxzGAEgAygJIjUKDFJlYWRSZXNwb25zZRIlCgdyZXN1bHRzGAEgAygLMhQuYjNuZC52MS5PdXRwdXRQcm90byIeCg5PYnNlcnZlUmVxdWVzdBIMCgR1cmxzGAEgAygJIg8KDVN0YXR1c1JlcXVlc3QibgoOU3RhdHVzUmVzcG9uc2USDgoGc3RhdHVzGAEgASgJEg8KB21lc3NhZ2UYAiABKAkSEwoLc2NoZW1hX2pzb24YAyABKAkSFAoMZGV0YWlsc19qc29uGAQgASgJEhAKCGZuc19qc29uGAUgASgJMvcBCgtCM25kU2VydmljZRI8CgdSZWNlaXZlEhcuYjNuZC52MS5SZWNlaXZlUmVxdWVzdBoYLmIzbmQudjEuUmVjZWl2ZVJlc3BvbnNlEjMKBFJlYWQSFC5iM25kLnYxLlJlYWRSZXF1ZXN0GhUuYjNuZC52MS5SZWFkUmVzcG9uc2USOgoHT2JzZXJ2ZRIXLmIzbmQudjEuT2JzZXJ2ZVJlcXVlc3QaFC5iM25kLnYxLk91dHB1dFByb3RvMAESOQoGU3RhdHVzEhYuYjNuZC52MS5TdGF0dXNSZXF1ZXN0GhcuYjNuZC52MS5TdGF0dXNSZXNwb25zZWIGcHJvdG8z");
+  fileDesc("CgpiM25kLnByb3RvEgdiM25kLnYxIkYKC091dHB1dFByb3RvEgsKA3VyaRgBIAEoCRIPCgdwYXlsb2FkGAIgASgMEhkKEXBheWxvYWRfaXNfYmluYXJ5GAMgASgIIjgKDlJlY2VpdmVSZXF1ZXN0EiYKCG1lc3NhZ2VzGAEgAygLMhQuYjNuZC52MS5PdXRwdXRQcm90byI/Cg9SZWNlaXZlUmVzcG9uc2USLAoHcmVzdWx0cxgBIAMoCzIbLmIzbmQudjEuUmVjZWl2ZVJlc3VsdFByb3RvIjUKElJlY2VpdmVSZXN1bHRQcm90bxIQCghhY2NlcHRlZBgBIAEoCBINCgVlcnJvchgCIAEoCSIbCgtSZWFkUmVxdWVzdBIMCgR1cmxzGAEgAygJIjUKDFJlYWRSZXNwb25zZRIlCgdyZXN1bHRzGAEgAygLMhQuYjNuZC52MS5PdXRwdXRQcm90byIeCg5PYnNlcnZlUmVxdWVzdBIMCgR1cmxzGAEgAygJIhwKDE9ic2VydmVGcmFtZRIMCgR1cmlzGAEgAygJIg8KDVN0YXR1c1JlcXVlc3QibgoOU3RhdHVzUmVzcG9uc2USDgoGc3RhdHVzGAEgASgJEg8KB21lc3NhZ2UYAiABKAkSEwoLc2NoZW1hX2pzb24YAyABKAkSFAoMZGV0YWlsc19qc29uGAQgASgJEhAKCGZuc19qc29uGAUgASgJMvgBCgtCM25kU2VydmljZRI8CgdSZWNlaXZlEhcuYjNuZC52MS5SZWNlaXZlUmVxdWVzdBoYLmIzbmQudjEuUmVjZWl2ZVJlc3BvbnNlEjMKBFJlYWQSFC5iM25kLnYxLlJlYWRSZXF1ZXN0GhUuYjNuZC52MS5SZWFkUmVzcG9uc2USOwoHT2JzZXJ2ZRIXLmIzbmQudjEuT2JzZXJ2ZVJlcXVlc3QaFS5iM25kLnYxLk9ic2VydmVGcmFtZTABEjkKBlN0YXR1cxIWLmIzbmQudjEuU3RhdHVzUmVxdWVzdBoXLmIzbmQudjEuU3RhdHVzUmVzcG9uc2ViBnByb3RvMw");
 
 /**
  * The universal addressed-content primitive — [uri, payload].
@@ -157,6 +157,25 @@ export const ObserveRequestSchema: GenMessage<ObserveRequest> = /*@__PURE__*/
   messageDesc(file_b3nd, 6);
 
 /**
+ * One observe notification frame — the batch of uris that fired.
+ *
+ * @generated from message b3nd.v1.ObserveFrame
+ */
+export type ObserveFrame = Message<"b3nd.v1.ObserveFrame"> & {
+  /**
+   * @generated from field: repeated string uris = 1;
+   */
+  uris: string[];
+};
+
+/**
+ * Describes the message b3nd.v1.ObserveFrame.
+ * Use `create(ObserveFrameSchema)` to create a new message.
+ */
+export const ObserveFrameSchema: GenMessage<ObserveFrame> = /*@__PURE__*/
+  messageDesc(file_b3nd, 7);
+
+/**
  * @generated from message b3nd.v1.StatusRequest
  */
 export type StatusRequest = Message<"b3nd.v1.StatusRequest"> & {
@@ -167,7 +186,7 @@ export type StatusRequest = Message<"b3nd.v1.StatusRequest"> & {
  * Use `create(StatusRequestSchema)` to create a new message.
  */
 export const StatusRequestSchema: GenMessage<StatusRequest> = /*@__PURE__*/
-  messageDesc(file_b3nd, 7);
+  messageDesc(file_b3nd, 8);
 
 /**
  * @generated from message b3nd.v1.StatusResponse
@@ -212,7 +231,7 @@ export type StatusResponse = Message<"b3nd.v1.StatusResponse"> & {
  * Use `create(StatusResponseSchema)` to create a new message.
  */
 export const StatusResponseSchema: GenMessage<StatusResponse> = /*@__PURE__*/
-  messageDesc(file_b3nd, 8);
+  messageDesc(file_b3nd, 9);
 
 /**
  * @generated from service b3nd.v1.B3ndService
@@ -241,14 +260,14 @@ export const B3ndService: GenService<{
   },
   /**
    * Observe a batch of urls — server-streaming INV-style change bundles.
-   * Each streamed Output is [inputUrl, payload=string[] of uris that changed].
+   * Each streamed frame is a batch of uris that fired in this notification.
    *
    * @generated from rpc b3nd.v1.B3ndService.Observe
    */
   observe: {
     methodKind: "server_streaming";
     input: typeof ObserveRequestSchema;
-    output: typeof OutputProtoSchema;
+    output: typeof ObserveFrameSchema;
   },
   /**
    * Health + capabilities.

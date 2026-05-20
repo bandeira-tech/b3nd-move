@@ -75,7 +75,7 @@ export function runAction(
 export function runAction(
   rig: Rig,
   call: { action: "observe"; urls: string[]; signal: AbortSignal },
-): AsyncIterable<Output<string[]>>;
+): AsyncIterable<readonly string[]>;
 export function runAction(
   rig: Rig,
   call: ActionCall,
@@ -83,7 +83,7 @@ export function runAction(
   | Promise<StatusResult>
   | PromiseLike<ReceiveResult[]>
   | Promise<Output[]>
-  | AsyncIterable<Output<string[]>> {
+  | AsyncIterable<readonly string[]> {
   switch (call.action) {
     case "status":
       return rig.status();

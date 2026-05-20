@@ -15,8 +15,8 @@
  *   POST /api/v1/read       → rig.read(urls)           body: string[]
  *   POST /api/v1/observe    → rig.observe(urls)        body: string[]   (NDJSON stream)
  *
- * Observe streams one JSON-encoded `[pattern, uris[]]` frame per line,
- * matching what `rig.observe()` yields.
+ * Observe streams one JSON-encoded `string[]` (batch of uris that
+ * fired) per line, matching what `rig.observe()` yields.
  *
  * @example
  * ```ts
@@ -138,7 +138,7 @@ export function httpApi(
     // ── Observe ──
     // Body: `string[]` — array of patterns to subscribe to, matching
     // `rig.observe(urls)`. Streams NDJSON: one JSON-encoded
-    // `[pattern, uris[]]` frame per line.
+    // `string[]` (batch of uris that fired) per line.
     if (method === "POST" && path === "/api/v1/observe") {
       let body: unknown;
       try {
