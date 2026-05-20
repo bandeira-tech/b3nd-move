@@ -7,16 +7,17 @@
  *
  * The rig stays pure (orchestration only). Transport is external.
  *
- * Routes (mirror the `ProtocolInterfaceNode` surface — every body is a
- * bare array, exactly the argument the corresponding PIN method takes):
+ * Each route is its own declaration in a sibling file:
  *
- *   GET  /api/v1/status     → rig.status()
- *   POST /api/v1/receive    → rig.receive(msgs)        body: [[uri, payload], ...]
- *   POST /api/v1/read       → rig.read(urls)           body: string[]
- *   POST /api/v1/observe    → rig.observe(urls)        body: string[]   (NDJSON stream)
+ *   GET  /api/v1/status     → ./status.ts   (rig.status())
+ *   POST /api/v1/receive    → ./receive.ts  (rig.receive(msgs))
+ *   POST /api/v1/read       → ./read.ts     (rig.read(urls))
+ *   POST /api/v1/observe    → ./observe.ts  (rig.observe(urls), NDJSON)
  *
- * Observe streams one JSON-encoded `string[]` (batch of uris that
- * fired) per line, matching what `rig.observe()` yields.
+ * This file's only job is to assemble the table and hand it to the
+ * shared dispatcher. Wire-adapter failures (bad JSON, schema mismatch)
+ * throw `BadRequest` from within the routes; the dispatcher renders
+ * them as plain-text 400. See `src/router/errors.ts`.
  *
  * @example
  * ```ts
@@ -38,25 +39,20 @@
  */
 
 import type { Rig } from "@bandeira-tech/b3nd-core/rig";
-import { ndjsonResponse } from "../actions/ndjson.ts";
-import { runAction } from "../actions/run.ts";
-import { validateOutputs, validateUrls } from "../actions/validate.ts";
+import { dispatchHttp } from "./router.ts";
+import { observeRoute } from "./observe.ts";
+import { readRoute } from "./read.ts";
+import { receiveRoute } from "./receive.ts";
+import { statusRoute, type StatusRouteOptions } from "./status.ts";
 
 // ── Types ──
 
-export interface HttpApiOptions {
-  /** Extra metadata merged into status responses. */
-  statusMeta?: Record<string, unknown>;
-}
-
-// ── Responses ──
-
-function json(data: unknown, status = 200): Response {
-  return new Response(JSON.stringify(data), {
-    status,
-    headers: { "Content-Type": "application/json" },
-  });
-}
+/**
+ * `HttpApiOptions` is a superset of the per-route options of every
+ * route that takes one (currently just `status`). New per-route
+ * options get added here as routes grow.
+ */
+export interface HttpApiOptions extends StatusRouteOptions {}
 
 // ── API factory ──
 
@@ -70,94 +66,11 @@ export function httpApi(
   rig: Rig,
   options?: HttpApiOptions,
 ): (req: Request) => Promise<Response> {
-  const statusMeta = options?.statusMeta;
-
-  return async (req: Request): Promise<Response> => {
-    const url = new URL(req.url);
-    const path = url.pathname;
-    const method = req.method;
-
-    // ── Status ──
-    if (method === "GET" && path === "/api/v1/status") {
-      const res = await runAction(rig, { action: "status" });
-      const body = statusMeta ? { ...res, ...statusMeta } : res;
-      return json(body, res.status === "healthy" ? 200 : 503);
-    }
-
-    // ── Receive ──
-    // Body is a batch of message tuples: [[uri, payload], ...]. Matches
-    // what HttpClient.receive(msgs) sends and what Rig.receive(msgs) takes,
-    // so the result array shape passes straight through.
-    if (method === "POST" && path === "/api/v1/receive") {
-      let body: unknown;
-      try {
-        body = await req.json();
-      } catch {
-        return json(
-          [{ accepted: false, error: "Invalid JSON body" }],
-          400,
-        );
-      }
-      const v = validateOutputs(body);
-      if (!v.ok) return json([{ accepted: false, error: v.error }], 400);
-      // 200 means the server processed the batch; per-slot accept/reject
-      // lives in the body. Non-2xx is reserved for request-level failures.
-      const results = await runAction(rig, {
-        action: "receive",
-        outputs: v.value,
-      });
-      return json(results, 200);
-    }
-
-    // ── Read (batch) ──
-    // Body: `string[]` — the same shape `rig.read(urls)` takes. Returns
-    // `Output[]` 1:1 with input. Payloads pass through as JSON; content
-    // semantics (miss representation, binary encoding, …) are the
-    // executing client / protocol's concern.
-    if (method === "POST" && path === "/api/v1/read") {
-      let body: unknown;
-      try {
-        body = await req.json();
-      } catch {
-        return json({ error: "Invalid JSON body" }, 400);
-      }
-      const v = validateUrls(body);
-      if (!v.ok) return json({ error: v.error }, 400);
-      try {
-        return json(
-          await runAction(rig, { action: "read", urls: v.value }),
-        );
-      } catch (err) {
-        return json(
-          { error: err instanceof Error ? err.message : String(err) },
-          500,
-        );
-      }
-    }
-
-    // ── Observe ──
-    // Body: `string[]` — array of patterns to subscribe to, matching
-    // `rig.observe(urls)`. Streams NDJSON: one JSON-encoded
-    // `string[]` (batch of uris that fired) per line.
-    if (method === "POST" && path === "/api/v1/observe") {
-      let body: unknown;
-      try {
-        body = await req.json();
-      } catch {
-        return json({ error: "Invalid JSON body" }, 400);
-      }
-      const v = validateUrls(body);
-      if (!v.ok) return json({ error: v.error }, 400);
-      return ndjsonResponse(
-        (signal) =>
-          runAction(rig, { action: "observe", urls: v.value, signal }),
-        (frame) => frame,
-        req.signal,
-        { "X-Accel-Buffering": "no" },
-      );
-    }
-
-    // ── Not found ──
-    return new Response("Not Found", { status: 404 });
-  };
+  const routes = [
+    statusRoute(options),
+    receiveRoute,
+    readRoute,
+    observeRoute,
+  ];
+  return (req) => dispatchHttp(rig, routes, req);
 }

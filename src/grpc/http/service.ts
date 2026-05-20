@@ -188,14 +188,23 @@ async function handleObserve(rig: Rig, req: Request): Promise<Response> {
   }
   if (!body.urls?.length) return errResponse("Expected { urls: string[] }");
 
+  const abort = new AbortController();
+  const onAbort = () => abort.abort();
+  req.signal.addEventListener("abort", onAbort, { once: true });
+
+  const frames = runAction(rig, {
+    action: "observe",
+    urls: body.urls,
+    signal: abort.signal,
+  });
   return ndjsonResponse(
-    (signal) => runAction(rig, { action: "observe", urls: body.urls, signal }),
+    frames,
+    abort,
     (frame) =>
       toJson(
         ObserveFrameSchema,
         create(ObserveFrameSchema, { uris: [...frame] }),
       ),
-    req.signal,
   );
 }
 

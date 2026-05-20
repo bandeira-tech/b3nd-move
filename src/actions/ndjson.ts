@@ -4,7 +4,7 @@
  *
  * Shared by HTTP and gRPC-over-HTTP for the `observe` action — the rig
  * yields frames, the transport ships one JSON line per frame, the
- * client parses line-by-line. Per-frame `encode` lets the caller
+ * client parses line-by-line. Per-frame `frameEncode` lets the caller
  * decide what JSON shape lands on the wire (raw frame, proto-mapped,
  * …). Errors mid-stream are surfaced as a final `{ "error": "…" }`
  * frame unless the request was aborted first.
@@ -13,25 +13,28 @@
 /**
  * Stream an `AsyncIterable` as NDJSON over a fetch `Response`.
  *
- * Wires `reqSignal` to an internal abort so the caller closing the
- * connection tears down the iterator.
+ * The caller owns the `AbortController` and pre-wires it to whatever
+ * lifecycle should tear down the stream (request abort, …). When the
+ * response stream's consumer cancels, `ndjsonResponse` aborts the
+ * controller, which propagates to the upstream iterable so the rig
+ * observer terminates.
  */
 export function ndjsonResponse<T>(
-  iter: (signal: AbortSignal) => AsyncIterable<T>,
-  encode: (frame: T) => unknown,
-  reqSignal: AbortSignal,
+  iter: AsyncIterable<T>,
+  abort: AbortController,
+  frameEncode: (frame: T) => unknown = (f) => f,
   extraHeaders?: Record<string, string>,
 ): Response {
-  const abort = new AbortController();
-  reqSignal.addEventListener("abort", () => abort.abort());
   const enc = new TextEncoder();
 
   const stream = new ReadableStream({
     async start(controller) {
       try {
-        for await (const frame of iter(abort.signal)) {
+        for await (const frame of iter) {
           if (abort.signal.aborted) break;
-          controller.enqueue(enc.encode(JSON.stringify(encode(frame)) + "\n"));
+          controller.enqueue(
+            enc.encode(JSON.stringify(frameEncode(frame)) + "\n"),
+          );
         }
       } catch (e) {
         if (!abort.signal.aborted) {
