@@ -12,13 +12,14 @@
 import { ndjsonResponse } from "../actions/ndjson.ts";
 import { validateUrls } from "../actions/validate.ts";
 import { BadRequest } from "../router/errors.ts";
-import { type HttpRoute, route } from "../router/http.ts";
+import { route } from "../router/http.ts";
+import type { Route } from "../router/route.ts";
 import { readJson } from "./wire.ts";
 
-export const observeRoute: HttpRoute = route({
+export const observeRoute: Route = route({
   on: { method: "POST", path: "/api/v1/observe" },
   action: "observe",
-  decode: async (req) => {
+  decode: async ({ req }) => {
     const body = await readJson(req);
     const v = validateUrls(body);
     if (!v.ok) throw new BadRequest(v.error);

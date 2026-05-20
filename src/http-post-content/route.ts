@@ -8,7 +8,8 @@
 
 import type { Decoder } from "../codecs/codec.ts";
 import { BadRequest } from "../router/errors.ts";
-import { type HttpRoute, route } from "../router/http.ts";
+import { route } from "../router/http.ts";
+import type { Route } from "../router/route.ts";
 
 /** Re-exported so both `service.ts` and `route.ts` agree on the contract. */
 export type PayloadDecoder = Decoder;
@@ -19,12 +20,12 @@ export interface PostContentRouteOptions {
 
 export function httpPostContentRoute(
   options: PostContentRouteOptions,
-): HttpRoute {
+): Route {
   const { payloadDecoder } = options;
   return route({
     on: { method: "POST", path: "/api/v1/content/:uri" },
     action: "receive",
-    decode: async (req, params) => {
+    decode: async ({ req, params }) => {
       let uri: string;
       try {
         uri = decodeURIComponent(params.uri);

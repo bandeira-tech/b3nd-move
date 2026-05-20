@@ -10,13 +10,14 @@
 
 import { validateOutputs } from "../actions/validate.ts";
 import { BadRequest } from "../router/errors.ts";
-import { type HttpRoute, route } from "../router/http.ts";
+import { route } from "../router/http.ts";
+import type { Route } from "../router/route.ts";
 import { json, readJson } from "./wire.ts";
 
-export const receiveRoute: HttpRoute = route({
+export const receiveRoute: Route = route({
   on: { method: "POST", path: "/api/v1/receive" },
   action: "receive",
-  decode: async (req) => {
+  decode: async ({ req }) => {
     const body = await readJson(req);
     const v = validateOutputs(body);
     if (!v.ok) throw new BadRequest(v.error);

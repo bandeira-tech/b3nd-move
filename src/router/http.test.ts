@@ -13,7 +13,8 @@ import type {
   StatusResult,
 } from "@bandeira-tech/b3nd-core/types";
 import { BadRequest, InternalError, NotFound } from "./errors.ts";
-import { dispatchHttp, type HttpRoute, route } from "./http.ts";
+import { dispatchHttp, route } from "./http.ts";
+import type { Route } from "./route.ts";
 
 class StubBackend implements ProtocolInterfaceNode {
   receive(outs: Output[]): Promise<ReceiveResult[]> {
@@ -42,7 +43,7 @@ function req(path: string, init?: RequestInit): Request {
   return new Request(`http://test${path}`, init);
 }
 
-const statusRoute = (): HttpRoute =>
+const statusRoute = (): Route =>
   route({
     on: { method: "GET", path: "/api/v1/x" },
     action: "status",
@@ -104,7 +105,7 @@ Deno.test("dispatchHttp: :param captures into params", async () => {
   const r = route({
     on: { method: "GET", path: "/api/v1/content/:uri" },
     action: "status",
-    decode: (_req, params) => {
+    decode: ({ params }) => {
       seen = params;
       return [];
     },

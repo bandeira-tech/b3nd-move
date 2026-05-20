@@ -7,15 +7,16 @@
  * factory so the caller can pass that metadata at instantiation.
  */
 
+import { route } from "../router/http.ts";
+import type { Route } from "../router/route.ts";
 import { json } from "./wire.ts";
-import { type HttpRoute, route } from "../router/http.ts";
 
 export interface StatusRouteOptions {
   /** Extra metadata merged into status responses. */
   statusMeta?: Record<string, unknown>;
 }
 
-export function statusRoute(options?: StatusRouteOptions): HttpRoute {
+export function statusRoute(options?: StatusRouteOptions): Route {
   const statusMeta = options?.statusMeta;
   return route({
     on: { method: "GET", path: "/api/v1/status" },
