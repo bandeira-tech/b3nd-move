@@ -105,7 +105,7 @@ The move-suite drives every transport with the same conventions:
 | --------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
 | `receive(msgs)` | `[{accepted: true}, …]`; URIs containing `/__reject__/` → `{accepted: false, error: "rejected by stub"}` (rejected at the program) |
 | `read(urls)`    | `[[url, {echo: url}], …]`; URIs containing `/__miss__/` → `[url, null]`; URIs ending in `/` synthesize a 3-child listing           |
-| `observe(urls)` | 3 frames per subscribed pattern: `[pattern, [` ${pattern}/${i}`]]`, then end                                                       |
+| `observe(urls)` | 3 frames per subscribed pattern: `[` ${pattern}/${i}`]` (singleton uri batch), then end                                            |
 | `status()`      | `{status: "healthy", message: "stub", fns: ["receive","read","observe","status"]}`                                                 |
 
 Every test exercises **batched inputs AND batched outputs** so the encode/

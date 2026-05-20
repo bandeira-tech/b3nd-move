@@ -14,7 +14,6 @@
 
 import { connection, Rig } from "@bandeira-tech/b3nd-core/rig";
 import type {
-  Message,
   Output,
   Program,
   ProtocolInterfaceNode,
@@ -27,8 +26,8 @@ import { withCors } from "./cors.ts";
 import type { ServerHandle } from "./http.ts";
 
 class ContentPostStubBackend implements ProtocolInterfaceNode {
-  seen: Message[] = [];
-  receive(msgs: Message[]): Promise<ReceiveResult[]> {
+  seen: Output[] = [];
+  receive(msgs: Output[]): Promise<ReceiveResult[]> {
     this.seen.push(...msgs);
     return Promise.resolve(msgs.map(() => ({ accepted: true })));
   }
@@ -36,7 +35,7 @@ class ContentPostStubBackend implements ProtocolInterfaceNode {
     return Promise.resolve([]);
   }
   // deno-lint-ignore require-yield
-  async *observe(): AsyncIterable<Output<string[]>> {
+  async *observe(): AsyncIterable<readonly string[]> {
     return;
   }
   status(): Promise<StatusResult> {

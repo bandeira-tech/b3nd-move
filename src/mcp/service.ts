@@ -6,6 +6,7 @@ import {
   ReadResourceRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
 import type { Rig } from "@bandeira-tech/b3nd-core";
+import { runAction } from "../actions/run.ts";
 
 export interface McpServerOptions {
   name?: string;
@@ -75,7 +76,10 @@ export function buildMcpServer(rig: Rig, opts: McpServerOptions = {}): Server {
       switch (name) {
         case "b3nd_receive": {
           const { messages } = args as { messages: [string, unknown][] };
-          const results = await rig.receive(messages);
+          const results = await runAction(rig, {
+            action: "receive",
+            outputs: messages,
+          });
           return {
             content: [{
               type: "text",
@@ -95,7 +99,7 @@ export function buildMcpServer(rig: Rig, opts: McpServerOptions = {}): Server {
 
         case "b3nd_read": {
           const { urls } = args as { urls: string[] };
-          const outputs = await rig.read(urls);
+          const outputs = await runAction(rig, { action: "read", urls });
           return {
             content: [{
               type: "text",
@@ -109,7 +113,7 @@ export function buildMcpServer(rig: Rig, opts: McpServerOptions = {}): Server {
         }
 
         case "b3nd_status": {
-          const result = await rig.status();
+          const result = await runAction(rig, { action: "status" });
           return {
             content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
           };
@@ -135,7 +139,7 @@ export function buildMcpServer(rig: Rig, opts: McpServerOptions = {}): Server {
 
   server.setRequestHandler(ListResourcesRequestSchema, async () => {
     try {
-      const status = await rig.status();
+      const status = await runAction(rig, { action: "status" });
       return {
         resources: (status.schema ?? []).map((program) => ({
           uri: `b3nd://${program}`,
@@ -155,7 +159,10 @@ export function buildMcpServer(rig: Rig, opts: McpServerOptions = {}): Server {
     const resourceUri = request.params.uri;
     const b3ndUri = resourceUri.replace(/^b3nd:\/\//, "");
     try {
-      const [output] = await rig.read([b3ndUri]);
+      const [output] = await runAction(rig, {
+        action: "read",
+        urls: [b3ndUri],
+      });
       const [, payload] = output;
       return {
         contents: [{

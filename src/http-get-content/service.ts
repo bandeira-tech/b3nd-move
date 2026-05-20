@@ -38,6 +38,7 @@
 import type { Rig } from "@bandeira-tech/b3nd-core/rig";
 import type { Output } from "@bandeira-tech/b3nd-core/types";
 import type { ContentResponseInit, Encoder } from "../codecs/codec.ts";
+import { runAction } from "../actions/run.ts";
 
 // ── Types ──
 
@@ -105,7 +106,7 @@ export function httpGetContentApi(
 
     let output: Output;
     try {
-      const results = await rig.read([uri]);
+      const results = await runAction(rig, { action: "read", urls: [uri] });
       output = results[0];
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);

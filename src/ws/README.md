@@ -20,13 +20,13 @@ outbound → { id, success: true,  data }
            { id, success: false, error }
 ```
 
-| `type`           | `payload`        | `data`                                     |
-| ---------------- | ---------------- | ------------------------------------------ |
-| `receive`        | `Message[]`      | `ReceiveResult[]`                          |
-| `read`           | `{ urls }`       | `Output[]`                                 |
-| `observe`        | `{ urls }`       | repeated frames, each `Output<string[]>`   |
-| `observe-cancel` | `{}` (reuses id) | no reply — active observe emits terminator |
-| `status`         | `{}`             | `StatusResult`                             |
+| `type`           | `payload`        | `data`                                       |
+| ---------------- | ---------------- | -------------------------------------------- |
+| `receive`        | `Message[]`      | `ReceiveResult[]`                            |
+| `read`           | `{ urls }`       | `Output[]`                                   |
+| `observe`        | `{ urls }`       | repeated frames, each `string[]` (uri batch) |
+| `observe-cancel` | `{}` (reuses id) | no reply — active observe emits terminator   |
+| `status`         | `{}`             | `StatusResult`                               |
 
 Observe streams are terminated by a frame with `data: null` (server
 end-of-stream) or by `observe-cancel` from the client.
@@ -60,9 +60,7 @@ const client = new WebSocketClient({
 await client.receive([["mutable://app/x", { name: "thing" }]]);
 
 const ac = new AbortController();
-for await (
-  const [_pattern, uris] of client.observe(["mutable://app/*"], ac.signal)
-) {
+for await (const uris of client.observe(["mutable://app/*"], ac.signal)) {
   console.log("changed:", uris);
 }
 ```

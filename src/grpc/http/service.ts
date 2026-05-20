@@ -40,15 +40,16 @@ import {
   statusResultToResponse,
 } from "../proto/convert.ts";
 import {
+  ObserveFrameSchema,
   ObserveRequestSchema,
-  OutputProtoSchema,
   ReadRequestSchema,
   ReadResponseSchema,
   ReceiveRequestSchema,
   ReceiveResponseSchema,
   StatusResponseSchema,
 } from "../proto/gen/b3nd_pb.ts";
-import { ndjsonResponse } from "../../actions.ts";
+import { ndjsonResponse } from "../../actions/ndjson.ts";
+import { runAction } from "../../actions/run.ts";
 
 const SERVICE_PREFIX = "/b3nd.v1.B3ndService/";
 
@@ -132,7 +133,7 @@ async function handleReceive(
   }
 
   const msgs = body.messages.map((m) => outputFromProto(m));
-  const results = await rig.receive(msgs);
+  const results = await runAction(rig, { action: "receive", outputs: msgs });
   const response = create(ReceiveResponseSchema, {
     results: results.map(receiveResultToProto),
   });
@@ -160,7 +161,10 @@ async function handleRead(
   if (!body.urls?.length) return errResponse("Expected { urls: string[] }");
 
   try {
-    const results = await rig.read(body.urls);
+    const results = await runAction(rig, {
+      action: "read",
+      urls: body.urls,
+    });
     const response = create(ReadResponseSchema, {
       results: results.map(outputToProto),
     });
@@ -185,14 +189,18 @@ async function handleObserve(rig: Rig, req: Request): Promise<Response> {
   if (!body.urls?.length) return errResponse("Expected { urls: string[] }");
 
   return ndjsonResponse(
-    (signal) => rig.observe(body.urls, signal),
-    (frame) => toJson(OutputProtoSchema, outputToProto(frame)),
+    (signal) => runAction(rig, { action: "observe", urls: body.urls, signal }),
+    (frame) =>
+      toJson(
+        ObserveFrameSchema,
+        create(ObserveFrameSchema, { uris: [...frame] }),
+      ),
     req.signal,
   );
 }
 
 async function handleStatus(rig: Rig, enc: Encoding): Promise<Response> {
-  const result = await rig.status();
+  const result = await runAction(rig, { action: "status" });
   const response = statusResultToResponse(result);
   return okResponse(
     enc === "binary"
