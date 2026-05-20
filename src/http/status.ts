@@ -8,7 +8,6 @@
  */
 
 import { route } from "../router/http.ts";
-import type { Route } from "../router/route.ts";
 import { json } from "./wire.ts";
 
 export interface StatusRouteOptions {
@@ -16,7 +15,7 @@ export interface StatusRouteOptions {
   statusMeta?: Record<string, unknown>;
 }
 
-export function statusRoute(options?: StatusRouteOptions): Route {
+export function statusRoute(options?: StatusRouteOptions) {
   const statusMeta = options?.statusMeta;
   return route({
     on: { method: "GET", path: "/api/v1/status" },

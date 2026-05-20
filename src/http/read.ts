@@ -8,10 +8,9 @@
 import { validateUrls } from "../actions/validate.ts";
 import { BadRequest } from "../router/errors.ts";
 import { route } from "../router/http.ts";
-import type { Route } from "../router/route.ts";
 import { json, readJson } from "./wire.ts";
 
-export const readRoute: Route = route({
+export const readRoute = route({
   on: { method: "POST", path: "/api/v1/read" },
   action: "read",
   decode: async ({ req }) => {

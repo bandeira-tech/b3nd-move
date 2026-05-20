@@ -16,9 +16,9 @@
  * request side, `Out` is the wire response type. Each transport
  * specialises with its own values; the data structure stays one.
  *
- * Defaults are HTTP-friendly so the common case doesn't have to
- * spell out generics. See `./http.ts` for the HTTP specialisation
- * and the dispatcher.
+ * No defaults — the generic stays neutral. Transport modules (see
+ * `./http.ts`) define their own specialisation alias and export the
+ * `route()` constructor that pins the generics for that transport.
  */
 
 import type {
@@ -27,7 +27,6 @@ import type {
   StatusResult,
 } from "@bandeira-tech/b3nd-core/types";
 import type { ActionName } from "../actions/run.ts";
-import type { HttpContext, HttpMatcher } from "./http.ts";
 
 /**
  * Args tuple `decode` produces for each rig action. The dispatcher
@@ -61,14 +60,14 @@ export type ResultFor<A extends ActionName> = A extends "status" ? StatusResult
  *   Ctx    request-side context decode/encode see
  *   Out    wire response type
  *
- * For HTTP the defaults are wired so `Route<"read">` is enough; other
- * transports specialise with their own `Match` / `Ctx` / `Out`.
+ * Transport modules pin the latter three for their specialisation —
+ * see `./http.ts` for the HTTP case.
  */
 export interface Route<
-  A extends ActionName = ActionName,
-  Match = HttpMatcher,
-  Ctx = HttpContext,
-  Out = Response,
+  A extends ActionName,
+  Match,
+  Ctx,
+  Out,
 > {
   on: Match;
   action: A;

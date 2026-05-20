@@ -14,7 +14,6 @@ import type {
 } from "@bandeira-tech/b3nd-core/types";
 import { BadRequest, InternalError, NotFound } from "./errors.ts";
 import { dispatchHttp, route } from "./http.ts";
-import type { Route } from "./route.ts";
 
 class StubBackend implements ProtocolInterfaceNode {
   receive(outs: Output[]): Promise<ReceiveResult[]> {
@@ -43,7 +42,7 @@ function req(path: string, init?: RequestInit): Request {
   return new Request(`http://test${path}`, init);
 }
 
-const statusRoute = (): Route =>
+const statusRoute = () =>
   route({
     on: { method: "GET", path: "/api/v1/x" },
     action: "status",

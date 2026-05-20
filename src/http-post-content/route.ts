@@ -9,7 +9,6 @@
 import type { Decoder } from "../codecs/codec.ts";
 import { BadRequest } from "../router/errors.ts";
 import { route } from "../router/http.ts";
-import type { Route } from "../router/route.ts";
 
 /** Re-exported so both `service.ts` and `route.ts` agree on the contract. */
 export type PayloadDecoder = Decoder;
@@ -18,9 +17,7 @@ export interface PostContentRouteOptions {
   payloadDecoder: PayloadDecoder;
 }
 
-export function httpPostContentRoute(
-  options: PostContentRouteOptions,
-): Route {
+export function httpPostContentRoute(options: PostContentRouteOptions) {
   const { payloadDecoder } = options;
   return route({
     on: { method: "POST", path: "/api/v1/content/:uri" },

@@ -13,10 +13,9 @@ import { ndjsonResponse } from "../actions/ndjson.ts";
 import { validateUrls } from "../actions/validate.ts";
 import { BadRequest } from "../router/errors.ts";
 import { route } from "../router/http.ts";
-import type { Route } from "../router/route.ts";
 import { readJson } from "./wire.ts";
 
-export const observeRoute: Route = route({
+export const observeRoute = route({
   on: { method: "POST", path: "/api/v1/observe" },
   action: "observe",
   decode: async ({ req }) => {

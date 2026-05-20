@@ -29,6 +29,19 @@ import type { ActionName } from "../actions/run.ts";
 import { HttpError } from "./errors.ts";
 import type { Route } from "./route.ts";
 
+/**
+ * Internal alias for an HTTP-specialised `Route`. Not exported — the
+ * public name is the generic `Route`. This just keeps the dispatcher
+ * and `route()` signatures from spelling out the four type params at
+ * every site.
+ */
+type HttpRoute<A extends ActionName = ActionName> = Route<
+  A,
+  HttpMatcher,
+  HttpContext,
+  Response
+>;
+
 // ── HTTP-specific axes of `Route` ──
 
 /** Declarative matcher: method + path-with-`:params`. */
@@ -74,8 +87,8 @@ export interface HttpContext {
  * The return is erased to `Route` so heterogeneous routes share a
  * single table type.
  */
-export function route<A extends ActionName>(r: Route<A>): Route {
-  return r as unknown as Route;
+export function route<A extends ActionName>(r: HttpRoute<A>): HttpRoute {
+  return r as HttpRoute;
 }
 
 // ── Matcher compilation ──
@@ -131,7 +144,7 @@ function compile(matcher: HttpMatcher): Compiled {
  */
 export async function dispatchHttp(
   rig: Rig,
-  routes: readonly Route[],
+  routes: readonly HttpRoute[],
   req: Request,
 ): Promise<Response> {
   const path = new URL(req.url).pathname;
