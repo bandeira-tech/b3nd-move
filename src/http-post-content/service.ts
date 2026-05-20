@@ -36,7 +36,6 @@
 import type { Rig } from "@bandeira-tech/b3nd-core/rig";
 import type { Decoder } from "../codecs/codec.ts";
 import { runAction } from "../actions/run.ts";
-import { CONTENT_PREFIX, extractContentUri } from "../router/content-uri.ts";
 import { dispatchHttp, type HttpRoute } from "../router/http.ts";
 
 // ── Types ──
@@ -60,18 +59,16 @@ function buildRoute(options: HttpPostContentApiOptions): HttpRoute {
   const { payloadDecoder } = options;
 
   return {
-    // Claim the prefix for any method — `build` returns 405 for
-    // non-POST so the route owns its method-not-allowed envelope.
-    matches: (req) => new URL(req.url).pathname.startsWith(CONTENT_PREFIX),
-    build: async (req) => {
-      if (req.method !== "POST") {
-        return new Response("Method Not Allowed", {
-          status: 405,
-          headers: { Allow: "POST" },
+    on: { method: "POST", path: "/api/v1/content/:uri" },
+    build: async (req, params) => {
+      let uri: string;
+      try {
+        uri = decodeURIComponent(params.uri);
+      } catch {
+        return new Response("Bad Request: invalid URI encoding", {
+          status: 400,
         });
       }
-      const extracted = extractContentUri(req);
-      if (extracted instanceof Response) return extracted;
 
       let payload: unknown;
       try {
@@ -80,10 +77,7 @@ function buildRoute(options: HttpPostContentApiOptions): HttpRoute {
         const msg = err instanceof Error ? err.message : String(err);
         return new Response(`payloadDecoder failed: ${msg}`, { status: 400 });
       }
-      return {
-        action: "receive",
-        outputs: [[extracted.uri, payload]],
-      };
+      return { action: "receive", outputs: [[uri, payload]] };
     },
     respond: async (rig, _req, call) => {
       const outputs = (call as { outputs: [string, unknown][] }).outputs;
@@ -112,8 +106,8 @@ function buildRoute(options: HttpPostContentApiOptions): HttpRoute {
  * - `POST /api/v1/content/<encoded-uri>` → 200 with `ReceiveResult` JSON
  * - decoder throws                      → 400
  * - rig.receive throws                  → 500
- * - URI not extractable from path       → 404 / 400
- * - non-POST method on the prefix       → 405 (`Allow: POST`)
+ * - bad % encoding in `<uri>`           → 400
+ * - non-POST method on the path         → 405 (`Allow: POST`)
  * - any other path                      → 404
  *
  * The response body is the single `ReceiveResult` from the rig. Status

@@ -39,7 +39,6 @@ import type { Rig } from "@bandeira-tech/b3nd-core/rig";
 import type { Output } from "@bandeira-tech/b3nd-core/types";
 import type { ContentResponseInit, Encoder } from "../codecs/codec.ts";
 import { runAction } from "../actions/run.ts";
-import { CONTENT_PREFIX, extractContentUri } from "../router/content-uri.ts";
 import { dispatchHttp, type HttpRoute } from "../router/http.ts";
 
 // ── Types ──
@@ -68,24 +67,17 @@ function buildRoute(options: HttpGetContentApiOptions): HttpRoute {
   const { payloadResponseMap } = options;
 
   return {
-    // Claim the prefix for any method — `build` returns 405 for
-    // non-GET so the route owns its method-not-allowed envelope.
-    matches: (req) => new URL(req.url).pathname.startsWith(CONTENT_PREFIX),
-    build: (req) => {
-      if (req.method !== "GET") {
+    on: { method: "GET", path: "/api/v1/content/:uri" },
+    build: (_req, params) => {
+      let uri: string;
+      try {
+        uri = decodeURIComponent(params.uri);
+      } catch {
         return Promise.resolve(
-          new Response("Method Not Allowed", {
-            status: 405,
-            headers: { Allow: "GET" },
-          }),
+          new Response("Bad Request: invalid URI encoding", { status: 400 }),
         );
       }
-      const extracted = extractContentUri(req);
-      if (extracted instanceof Response) return Promise.resolve(extracted);
-      return Promise.resolve({
-        action: "read",
-        urls: [extracted.uri],
-      });
+      return Promise.resolve({ action: "read", urls: [uri] });
     },
     respond: async (rig, req, call) => {
       const urls = (call as { urls: string[] }).urls;
@@ -126,8 +118,8 @@ function buildRoute(options: HttpGetContentApiOptions): HttpRoute {
  * - `GET /api/v1/content/<encoded-uri>` → `rig.read([decoded-uri])` → hook → 200
  * - rig.read throws                    → 500
  * - hook throws                        → 500
- * - missing / malformed path           → 404 / 400
- * - non-GET method on the prefix       → 405 (`Allow: GET`)
+ * - bad % encoding in `<uri>`          → 400
+ * - non-GET method on the path         → 405 (`Allow: GET`)
  * - any other path                     → 404
  *
  * Miss semantics (e.g. payload `null` = 404 vs payload `null` = 200 with

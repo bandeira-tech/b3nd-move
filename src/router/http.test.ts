@@ -1,6 +1,7 @@
 /// <reference lib="deno.ns" />
 /**
- * dispatchHttp: route walking, short-circuit, ordering, no-match.
+ * dispatchHttp: declarative match, path params, method gating,
+ * 404 / 405 fallbacks.
  */
 
 import { assertEquals } from "@std/assert";
@@ -40,68 +41,143 @@ function req(path: string, init?: RequestInit): Request {
   return new Request(`http://test${path}`, init);
 }
 
+const hit: HttpRoute["respond"] = () =>
+  Promise.resolve(new Response("hit", { status: 200 }));
+
 Deno.test("dispatchHttp: empty route list → 404", async () => {
   const r = await dispatchHttp(buildRig(), [], req("/anything"));
   assertEquals(r.status, 404);
 });
 
-Deno.test("dispatchHttp: no match → 404", async () => {
+Deno.test("dispatchHttp: path matches, method matches → build → respond", async () => {
   const route: HttpRoute = {
-    matches: () => false,
+    on: { method: "GET", path: "/api/v1/status" },
     build: () => Promise.resolve({ action: "status" }),
-    respond: () => Promise.resolve(new Response("never", { status: 200 })),
+    respond: hit,
   };
-  const r = await dispatchHttp(buildRig(), [route], req("/anything"));
-  assertEquals(r.status, 404);
-});
-
-Deno.test("dispatchHttp: matched route runs build → respond", async () => {
-  const route: HttpRoute = {
-    matches: (req) => req.method === "GET" && req.url.endsWith("/x"),
-    build: () => Promise.resolve({ action: "status" }),
-    respond: () => Promise.resolve(new Response("hit", { status: 200 })),
-  };
-  const r = await dispatchHttp(buildRig(), [route], req("/x"));
+  const r = await dispatchHttp(buildRig(), [route], req("/api/v1/status"));
   assertEquals(r.status, 200);
   assertEquals(await r.text(), "hit");
 });
 
+Deno.test("dispatchHttp: no matching path → 404", async () => {
+  const route: HttpRoute = {
+    on: { method: "GET", path: "/api/v1/status" },
+    build: () => Promise.resolve({ action: "status" }),
+    respond: hit,
+  };
+  const r = await dispatchHttp(buildRig(), [route], req("/elsewhere"));
+  assertEquals(r.status, 404);
+});
+
+Deno.test("dispatchHttp: path matches but method doesn't → 405 with Allow", async () => {
+  const route: HttpRoute = {
+    on: { method: "GET", path: "/api/v1/status" },
+    build: () => Promise.resolve({ action: "status" }),
+    respond: hit,
+  };
+  const r = await dispatchHttp(
+    buildRig(),
+    [route],
+    req("/api/v1/status", { method: "POST" }),
+  );
+  assertEquals(r.status, 405);
+  assertEquals(r.headers.get("Allow"), "GET");
+});
+
+Deno.test("dispatchHttp: 405 Allow unions methods from all path-matching routes", async () => {
+  const get: HttpRoute = {
+    on: { method: "GET", path: "/api/v1/content/:uri" },
+    build: () => Promise.resolve({ action: "status" }),
+    respond: hit,
+  };
+  const post: HttpRoute = {
+    on: { method: "POST", path: "/api/v1/content/:uri" },
+    build: () => Promise.resolve({ action: "status" }),
+    respond: hit,
+  };
+  const r = await dispatchHttp(
+    buildRig(),
+    [get, post],
+    req("/api/v1/content/x", { method: "PUT" }),
+  );
+  assertEquals(r.status, 405);
+  const allow = (r.headers.get("Allow") ?? "").split(", ").sort();
+  assertEquals(allow, ["GET", "POST"]);
+});
+
+Deno.test("dispatchHttp: :param captures into params", async () => {
+  let seen: Record<string, string> | null = null;
+  const route: HttpRoute = {
+    on: { method: "GET", path: "/api/v1/content/:uri" },
+    build: (_req, params) => {
+      seen = params;
+      return Promise.resolve({ action: "status" });
+    },
+    respond: hit,
+  };
+  await dispatchHttp(buildRig(), [route], req("/api/v1/content/abc%2Fdef"));
+  assertEquals(seen, { uri: "abc%2Fdef" });
+});
+
+Deno.test("dispatchHttp: trailing slash does not match :param (strict)", async () => {
+  const route: HttpRoute = {
+    on: { method: "GET", path: "/api/v1/content/:uri" },
+    build: () => Promise.resolve({ action: "status" }),
+    respond: hit,
+  };
+  const r = await dispatchHttp(buildRig(), [route], req("/api/v1/content/"));
+  assertEquals(r.status, 404);
+});
+
+Deno.test("dispatchHttp: multi-method matcher accepts both", async () => {
+  const route: HttpRoute = {
+    on: { method: ["GET", "POST"], path: "/api/v1/x" },
+    build: () => Promise.resolve({ action: "status" }),
+    respond: hit,
+  };
+  const a = await dispatchHttp(buildRig(), [route], req("/api/v1/x"));
+  const b = await dispatchHttp(
+    buildRig(),
+    [route],
+    req("/api/v1/x", { method: "POST" }),
+  );
+  assertEquals(a.status, 200);
+  assertEquals(b.status, 200);
+});
+
 Deno.test("dispatchHttp: build returning Response short-circuits", async () => {
   const route: HttpRoute = {
-    matches: () => true,
+    on: { method: "GET", path: "/api/v1/x" },
     build: () => Promise.resolve(new Response("bad", { status: 400 })),
-    respond: () => Promise.resolve(new Response("never", { status: 200 })),
+    respond: hit,
   };
-  const r = await dispatchHttp(buildRig(), [route], req("/x"));
+  const r = await dispatchHttp(buildRig(), [route], req("/api/v1/x"));
   assertEquals(r.status, 400);
   assertEquals(await r.text(), "bad");
 });
 
 Deno.test("dispatchHttp: first matching route wins", async () => {
   const first: HttpRoute = {
-    matches: () => true,
+    on: { method: "GET", path: "/api/v1/x" },
     build: () => Promise.resolve({ action: "status" }),
     respond: () => Promise.resolve(new Response("first", { status: 200 })),
   };
   const second: HttpRoute = {
-    matches: () => true,
+    on: { method: "GET", path: "/api/v1/x" },
     build: () => Promise.resolve({ action: "status" }),
     respond: () => Promise.resolve(new Response("second", { status: 200 })),
   };
-  const r = await dispatchHttp(buildRig(), [first, second], req("/x"));
+  const r = await dispatchHttp(buildRig(), [first, second], req("/api/v1/x"));
   assertEquals(await r.text(), "first");
 });
 
-Deno.test("dispatchHttp: respond receives the call build produced", async () => {
-  let seen: unknown = null;
+Deno.test("dispatchHttp: literal segment mismatch → no match", async () => {
   const route: HttpRoute = {
-    matches: () => true,
-    build: () => Promise.resolve({ action: "read", urls: ["mutable://t/x"] }),
-    respond: (_rig, _req, call) => {
-      seen = call;
-      return Promise.resolve(new Response("ok"));
-    },
+    on: { method: "GET", path: "/api/v1/x" },
+    build: () => Promise.resolve({ action: "status" }),
+    respond: hit,
   };
-  await dispatchHttp(buildRig(), [route], req("/x"));
-  assertEquals(seen, { action: "read", urls: ["mutable://t/x"] });
+  const r = await dispatchHttp(buildRig(), [route], req("/api/v1/y"));
+  assertEquals(r.status, 404);
 });

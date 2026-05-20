@@ -18,9 +18,11 @@
  * Observe streams one JSON-encoded `string[]` (batch of uris that
  * fired) per line, matching what `rig.observe()` yields.
  *
- * Implementation: each route is a `HttpRoute` (see `src/router/http.ts`).
- * The procedural if-ladder lives in the route table now — one entry per
- * wire-shape ↔ action mapping.
+ * Implementation: each route is a `HttpRoute` (see `src/router/http.ts`)
+ * with a declarative `on: { method, path }` matcher. `dispatchHttp`
+ * walks the table — no procedural if-ladder. Wrong method on a known
+ * path gets a `405` with `Allow:` from the dispatcher; unknown paths
+ * get `404`.
  *
  * @example
  * ```ts
@@ -47,16 +49,6 @@ import type { ActionCall } from "../actions/run.ts";
 import { runAction } from "../actions/run.ts";
 import { validateOutputs, validateUrls } from "../actions/validate.ts";
 import { dispatchHttp, type HttpRoute } from "../router/http.ts";
-
-// Narrow an `ActionCall` to a specific action variant. Routes know
-// which they built; this just gets TS to agree without per-site
-// inline casts.
-function narrow<A extends ActionCall["action"]>(
-  call: ActionCall,
-  _action: A,
-): Extract<ActionCall, { action: A }> {
-  return call as Extract<ActionCall, { action: A }>;
-}
 
 // ── Types ──
 
@@ -85,16 +77,23 @@ async function readJson(
   }
 }
 
+// Narrow an `ActionCall` to a specific action variant. Routes know
+// which they built; this just gets TS to agree without per-site
+// inline casts.
+function narrow<A extends ActionCall["action"]>(
+  call: ActionCall,
+  _action: A,
+): Extract<ActionCall, { action: A }> {
+  return call as Extract<ActionCall, { action: A }>;
+}
+
 // ── Routes ──
 
 function buildRoutes(options?: HttpApiOptions): HttpRoute[] {
   const statusMeta = options?.statusMeta;
 
-  // GET /api/v1/status
   const status: HttpRoute = {
-    matches: (req) =>
-      req.method === "GET" &&
-      new URL(req.url).pathname === "/api/v1/status",
+    on: { method: "GET", path: "/api/v1/status" },
     build: () => Promise.resolve({ action: "status" }),
     respond: async (rig) => {
       const res = await runAction(rig, { action: "status" });
@@ -103,13 +102,10 @@ function buildRoutes(options?: HttpApiOptions): HttpRoute[] {
     },
   };
 
-  // POST /api/v1/receive — body: Output[] (bare arg shape)
   // 200 with per-slot ReceiveResult body; non-2xx is reserved for
   // request-level failures (bad JSON, schema mismatch).
   const receive: HttpRoute = {
-    matches: (req) =>
-      req.method === "POST" &&
-      new URL(req.url).pathname === "/api/v1/receive",
+    on: { method: "POST", path: "/api/v1/receive" },
     build: async (req) => {
       const body = await readJson(
         req,
@@ -126,12 +122,9 @@ function buildRoutes(options?: HttpApiOptions): HttpRoute[] {
     },
   };
 
-  // POST /api/v1/read — body: string[]
   // Output[] 1:1 with input. Content semantics are the protocol's.
   const read: HttpRoute = {
-    matches: (req) =>
-      req.method === "POST" &&
-      new URL(req.url).pathname === "/api/v1/read",
+    on: { method: "POST", path: "/api/v1/read" },
     build: async (req) => {
       const body = await readJson(req, (msg) => json({ error: msg }, 400));
       if (body instanceof Response) return body;
@@ -151,13 +144,11 @@ function buildRoutes(options?: HttpApiOptions): HttpRoute[] {
     },
   };
 
-  // POST /api/v1/observe — body: string[] → NDJSON stream of frames
-  // The action's signal is ndjsonResponse's internal abort — wires
-  // consumer cancel + request abort to the rig observer.
+  // NDJSON stream of frames. Action signal is ndjsonResponse's
+  // internal abort — consumer cancel + request abort both reach the
+  // rig observer.
   const observe: HttpRoute = {
-    matches: (req) =>
-      req.method === "POST" &&
-      new URL(req.url).pathname === "/api/v1/observe",
+    on: { method: "POST", path: "/api/v1/observe" },
     build: async (req) => {
       const body = await readJson(req, (msg) => json({ error: msg }, 400));
       if (body instanceof Response) return body;
