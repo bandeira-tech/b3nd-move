@@ -9,8 +9,10 @@ compatibility promise. We replace the existing wire in place; no parallel mount,
 no deprecation window, no version-pinned clients. Breaking change is fine at
 this stage and trying to avoid it would just muddy the design.
 
-**Prereq landed:** `Output<T>` is the canonical PIN tuple (b3nd-core), `Message`
-is gone. Type contract is already where we need it.
+**Prereqs landed:** `Output<T>` is the canonical PIN tuple (b3nd-core),
+`Message` is gone. `observe()` yields `AsyncIterable<readonly string[]>` —
+uri batches with no payload slot (b3nd-core 0.20). Type contract is already
+where we need it.
 
 ## The idea (one paragraph)
 
@@ -44,7 +46,7 @@ making so we can ship. Reversible later — we're pre-1.0.
 | URL param name            | `u`                                                                                                              | terse, only one parameter on the URL anyway                          |
 | URI list framing          | url-safe-base64 of `<u16 url-len><url-utf8>` × N                                                                 | byte-safe, no separator footguns, ~no space cost                     |
 | Body framing              | `<u32 payload-len><payload>` × N                                                                                 | matches receive request and read response, single codec to test      |
-| Observe frame             | `<u16 uri-len><uri-utf8><u32 payload-len><payload>` × N stream                                                   | preserves opacity end-to-end; same byte-order/endian as body framing |
+| Observe frame             | `<u16 count>[<u16 uri-len><uri-utf8>]*` × N stream                                                               | matches b3nd-core 0.20 observe contract: uri batches only, no payload |
 | Endianness                | big-endian (network order)                                                                                       | one less thing to think about across runtimes                        |
 | Empty payload             | `payload-len = 0` is legal; presence semantics live above the wire                                               | wire stays policy-free                                               |
 | Per-frame size cap        | `1 << 26` (64 MiB) configurable on the service                                                                   | sane DoS protection                                                  |
@@ -96,13 +98,13 @@ export function decodeUriList(param: string): string[];
 export function encodePayloads(payloads: Uint8Array[]): Uint8Array;
 export function decodePayloads(body: Uint8Array): Uint8Array[];
 
-/** <u16 uri-len><uri><u32 payload-len><payload> — one observe frame */
-export function encodeObserveFrame(out: Output<Uint8Array>): Uint8Array;
+/** <u16 count>[<u16 uri-len><uri>]* — one observe frame (uri batch) */
+export function encodeObserveFrame(uris: readonly string[]): Uint8Array;
 
-/** Streaming decoder. Yields frames as they complete. */
+/** Streaming decoder. Yields uri-batch frames as they complete. */
 export async function* decodeObserveFrames(
   body: ReadableStream<Uint8Array>,
-): AsyncIterable<Output<Uint8Array>>;
+): AsyncIterable<readonly string[]>;
 ```
 
 All length-prefixed. All big-endian. Limits parameter for `decode*`
@@ -124,9 +126,14 @@ slot back into `Output<Uint8Array>` by pairing it with the request's URI list.
 mismatch → 400.
 
 **observe.** `decodeUriList(u)` → for-await `rig.observe(uris, signal)` → stream
-`encodeObserveFrame(frame)` per match → close on iterator end or request abort.
-Same abort wiring as the existing `ndjsonResponse`; likely factor an
-`octetStreamResponse` sibling next to it in `src/actions.ts`.
+`encodeObserveFrame(batch)` per yielded uri batch → close on iterator end or
+request abort. Same abort wiring as the existing `ndjsonResponse`; likely
+factor an `octetStreamResponse` sibling next to it in `src/actions.ts`.
+
+Observe is **pure notification** under b3nd-core 0.20+ — each yield is a
+`readonly string[]` of uris that fired, no payload slot. Content delivery is
+the consumer's job via a follow-up `read`. That keeps the wire's "opaque
+bytes" thesis intact: there are no observe payloads to be opaque about.
 
 ## Client surface
 
@@ -140,7 +147,7 @@ class HttpClient {
   observe(
     urls: string[],
     signal: AbortSignal,
-  ): AsyncIterable<Output<Uint8Array>>;
+  ): AsyncIterable<readonly string[]>;
   status(): Promise<StatusResult>;
 }
 ```
