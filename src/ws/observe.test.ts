@@ -17,10 +17,8 @@
  *     `{ id, type: "observe", payload: { urls: string[] } }`
  *
  *   Event push (server → client, repeated):
- *     `{ id, success: true, data: [inputUrl, uris] }`
- *     where `data` is an `Output<string[]>` package — `inputUrl` is
- *     one of the caller's subscription urls (the one whose pattern
- *     matched) and `uris` is the list of changed uris.
+ *     `{ id, success: true, data: string[] }`
+ *     where `data` is the batch of uris that fired.
  *
  *   End-of-stream (server → client, optional):
  *     `{ id, success: true, data: null }`
@@ -92,15 +90,12 @@ class ObserveMockWebSocket {
         id,
         urls,
         push: (uris) => {
-          // Tag the package with the first subscription url — the
-          // real server would pick the matching pattern; this mock
-          // doesn't actually match, so the first url is sufficient.
           this.dispatchEvent({
             type: "message",
             data: JSON.stringify({
               id,
               success: true,
-              data: [urls[0], uris],
+              data: uris,
             }),
           });
         },
@@ -151,7 +146,7 @@ Deno.test("WS observe - subscribe frame shape + event delivery", async () => {
 
     const done = (async () => {
       for await (const ev of client.observe(["mutable://app/*"], ac.signal)) {
-        seen.push(ev[1][0]);
+        seen.push(ev[0]);
         if (seen.length >= 2) ac.abort();
       }
     })();
@@ -198,7 +193,7 @@ Deno.test("WS observe - server end-of-stream terminates iterator", async () => {
 
     const done = (async () => {
       for await (const ev of client.observe(["mutable://x/*"], ac.signal)) {
-        seen.push(ev[1][0]);
+        seen.push(ev[0]);
       }
     })();
 

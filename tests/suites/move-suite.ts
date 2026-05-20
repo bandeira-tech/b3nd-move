@@ -162,11 +162,11 @@ export function runMoveSuite(suiteName: string, config: MoveSuiteConfig) {
           "mutable://t/obs/three",
         ];
         const ac = new AbortController();
-        const seen: Output<string[]>[] = [];
+        const seen: (readonly string[])[] = [];
         const expectedTotal = patterns.length * 3;
         const consumer = (async () => {
-          for await (const frame of client.observe(patterns, ac.signal)) {
-            seen.push(frame);
+          for await (const batch of client.observe(patterns, ac.signal)) {
+            seen.push(batch);
             if (seen.length >= expectedTotal) ac.abort();
           }
         })();
@@ -179,16 +179,14 @@ export function runMoveSuite(suiteName: string, config: MoveSuiteConfig) {
           }, 5000);
         });
         await Promise.race([consumer, timeout]);
-        // Every subscribed pattern must have yielded at least one frame
-        // (proves multi-input subscriptions); total frame count proves
+        // Every subscribed pattern must have produced at least one uri
+        // (proves multi-input subscriptions); total batch count proves
         // multi-output emission.
-        const byPattern = new Map<string, string[][]>();
-        for (const [p, uris] of seen) {
-          const arr = byPattern.get(p) ?? [];
-          arr.push(uris);
-          byPattern.set(p, arr);
-        }
-        assertEquals(byPattern.size, patterns.length);
+        const firedUris = seen.flatMap((b) => [...b]);
+        const patternsHit = new Set(
+          patterns.filter((p) => firedUris.some((u) => u.startsWith(`${p}/`))),
+        );
+        assertEquals(patternsHit.size, patterns.length);
         assertEquals(seen.length >= expectedTotal, true);
       },
     );

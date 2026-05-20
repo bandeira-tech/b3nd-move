@@ -220,7 +220,7 @@ export class HttpClient implements ProtocolInterfaceNode {
   async *observe(
     urls: string[],
     signal: AbortSignal,
-  ): AsyncIterable<Output<string[]>> {
+  ): AsyncIterable<readonly string[]> {
     if (urls.length === 0) return;
 
     const { url, headers, body } = await this.prepare(
@@ -280,14 +280,14 @@ export class HttpClient implements ProtocolInterfaceNode {
           } catch {
             continue;
           }
-          // Frame shape: `[pattern, uris[]]`. Anything else (e.g. an
-          // error envelope `{ error }`) is skipped — observe yields
-          // only well-formed frames.
+          // Frame shape: `string[]` — batch of uris that fired.
+          // Anything else (e.g. an error envelope `{ error }`) is
+          // skipped — observe yields only well-formed frames.
           if (
-            Array.isArray(parsed) && parsed.length === 2 &&
-            typeof parsed[0] === "string" && Array.isArray(parsed[1])
+            Array.isArray(parsed) &&
+            parsed.every((u) => typeof u === "string")
           ) {
-            yield parsed as Output<string[]>;
+            yield parsed as readonly string[];
           }
         }
       }

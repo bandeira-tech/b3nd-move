@@ -15,8 +15,8 @@
  *   POST /api/v1/read       → rig.read(urls)           body: string[]
  *   POST /api/v1/observe    → rig.observe(urls)        body: string[]   (NDJSON stream)
  *
- * Observe streams one JSON-encoded `[pattern, uris[]]` frame per line,
- * matching what `rig.observe()` yields.
+ * Observe streams one JSON-encoded `string[]` (batch of uris that
+ * fired) per line, matching what `rig.observe()` yields.
  *
  * @example
  * ```ts
@@ -38,7 +38,9 @@
  */
 
 import type { Rig } from "@bandeira-tech/b3nd-core/rig";
-import { ndjsonResponse, validateOutputs, validateUrls } from "../actions.ts";
+import { ndjsonResponse } from "../actions/ndjson.ts";
+import { runAction } from "../actions/run.ts";
+import { validateOutputs, validateUrls } from "../actions/validate.ts";
 
 // ── Types ──
 
@@ -77,7 +79,7 @@ export function httpApi(
 
     // ── Status ──
     if (method === "GET" && path === "/api/v1/status") {
-      const res = await rig.status();
+      const res = await runAction(rig, { action: "status" });
       const body = statusMeta ? { ...res, ...statusMeta } : res;
       return json(body, res.status === "healthy" ? 200 : 503);
     }
@@ -100,7 +102,11 @@ export function httpApi(
       if (!v.ok) return json([{ accepted: false, error: v.error }], 400);
       // 200 means the server processed the batch; per-slot accept/reject
       // lives in the body. Non-2xx is reserved for request-level failures.
-      return json(await rig.receive(v.value), 200);
+      const results = await runAction(rig, {
+        action: "receive",
+        outputs: v.value,
+      });
+      return json(results, 200);
     }
 
     // ── Read (batch) ──
@@ -118,7 +124,9 @@ export function httpApi(
       const v = validateUrls(body);
       if (!v.ok) return json({ error: v.error }, 400);
       try {
-        return json(await rig.read(v.value));
+        return json(
+          await runAction(rig, { action: "read", urls: v.value }),
+        );
       } catch (err) {
         return json(
           { error: err instanceof Error ? err.message : String(err) },
@@ -130,7 +138,7 @@ export function httpApi(
     // ── Observe ──
     // Body: `string[]` — array of patterns to subscribe to, matching
     // `rig.observe(urls)`. Streams NDJSON: one JSON-encoded
-    // `[pattern, uris[]]` frame per line.
+    // `string[]` (batch of uris that fired) per line.
     if (method === "POST" && path === "/api/v1/observe") {
       let body: unknown;
       try {
@@ -141,7 +149,8 @@ export function httpApi(
       const v = validateUrls(body);
       if (!v.ok) return json({ error: v.error }, 400);
       return ndjsonResponse(
-        (signal) => rig.observe(v.value, signal),
+        (signal) =>
+          runAction(rig, { action: "observe", urls: v.value, signal }),
         (frame) => frame,
         req.signal,
         { "X-Accel-Buffering": "no" },

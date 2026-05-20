@@ -4,8 +4,17 @@
   "description": "B3nd Move — encoding, transport, decoding. Portable service handlers and clients for each transport (HTTP, WebSocket, gRPC-HTTP, MCP).",
   "exports": {
     "./errors": "./src/errors.ts",
+    "./codecs/codec": "./src/codecs/codec.ts",
+    "./codecs/json": "./src/codecs/json.ts",
+    "./codecs/text": "./src/codecs/text.ts",
+    "./codecs/raw": "./src/codecs/raw.ts",
+    "./codecs/field": "./src/codecs/field.ts",
     "./http/service": "./src/http/service.ts",
     "./http/client": "./src/http/client.ts",
+    "./http-get-content/service": "./src/http-get-content/service.ts",
+    "./http-get-content/payload-response-map": "./src/http-get-content/payload-response-map.ts",
+    "./http-post-content/service": "./src/http-post-content/service.ts",
+    "./http-post-content/payload-decoder": "./src/http-post-content/payload-decoder.ts",
     "./ws/service": "./src/ws/service.ts",
     "./ws/client": "./src/ws/client.ts",
     "./grpc/http/service": "./src/grpc/http/service.ts",
@@ -15,7 +24,7 @@
     "./mcp/service": "./src/mcp/service.ts"
   },
   "imports": {
-    "@bandeira-tech/b3nd-core": "jsr:@bandeira-tech/b3nd-core@^0.17.0",
+    "@bandeira-tech/b3nd-core": "jsr:@bandeira-tech/b3nd-core@^0.20.0",
     "@std/assert": "jsr:@std/assert@^1.0.15",
     "@bufbuild/protobuf": "npm:@bufbuild/protobuf@^2.2.0",
     "@bufbuild/protobuf/codegenv2": "npm:@bufbuild/protobuf@^2.2.0/codegenv2",
@@ -30,10 +39,12 @@
     "esbuild": "npm:esbuild@^0.24.0"
   },
   "tasks": {
-    "check": "deno check src/errors.ts src/http/service.ts src/http/client.ts src/ws/service.ts src/ws/client.ts src/grpc/http/service.ts src/grpc/http/client.ts src/grpc/proto/convert.ts src/grpc/proto/gen/b3nd_pb.ts src/mcp/service.ts dev/serve.ts dev/main.ts tests/suites/mcp-spec.ts tests/suites/move-suite.ts",
+    "check": "deno check src/errors.ts src/actions/run.ts src/actions/validate.ts src/actions/ndjson.ts src/codecs/codec.ts src/codecs/json.ts src/codecs/text.ts src/codecs/raw.ts src/codecs/field.ts src/http/service.ts src/http/client.ts src/http-get-content/service.ts src/http-get-content/payload-response-map.ts src/http-post-content/service.ts src/http-post-content/payload-decoder.ts src/ws/service.ts src/ws/client.ts src/grpc/http/service.ts src/grpc/http/client.ts src/grpc/proto/convert.ts src/grpc/proto/gen/b3nd_pb.ts src/mcp/service.ts dev/serve.ts dev/main.ts tests/suites/mcp-spec.ts tests/suites/move-suite.ts",
     "test": "deno test --allow-all src/",
     "test:integration:deno": "deno test --allow-all tests/integration/deno/",
     "test:integration:http": "deno test --allow-all tests/integration/browser/http.test.ts",
+    "test:integration:http-get-content": "deno test --allow-all tests/integration/browser/http-get-content.test.ts",
+    "test:integration:http-post-content": "deno test --allow-all tests/integration/browser/http-post-content.test.ts",
     "test:integration:ws": "deno test --allow-all tests/integration/browser/ws.test.ts",
     "test:integration:grpc": "deno test --allow-all tests/integration/browser/grpc.test.ts",
     "test:integration:grpc-binary": "deno test --allow-all tests/integration/browser/grpc-binary.test.ts",

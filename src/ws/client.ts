@@ -73,12 +73,12 @@ export class WebSocketClient implements ProtocolInterfaceNode {
     timeout: ReturnType<typeof setTimeout>;
   }>();
   // Active observe subscriptions. The server pushes
-  // `{ id, success: true, data: [meta, uris] }` per package and
+  // `{ id, success: true, data: string[] }` per batch and
   // `{ id, success: true, data: null }` to signal end-of-stream.
   // Cancel: client sends `{ type: "observe-cancel" }`.
   private subscriptions = new Map<
     string,
-    (frame: Output<string[]> | null) => void
+    (frame: readonly string[] | null) => void
   >();
   private messageHandler = this.handleMessage.bind(this);
   private closeHandler = this.handleClose.bind(this);
@@ -202,7 +202,7 @@ export class WebSocketClient implements ProtocolInterfaceNode {
           this.subscriptions.delete(response.id);
           sub(null);
         } else {
-          sub(response.data as Output<string[]>);
+          sub(response.data as readonly string[]);
         }
         return;
       }
@@ -370,12 +370,12 @@ export class WebSocketClient implements ProtocolInterfaceNode {
   async *observe(
     urls: string[],
     signal: AbortSignal,
-  ): AsyncIterable<Output<string[]>> {
+  ): AsyncIterable<readonly string[]> {
     if (urls.length === 0) return;
     await this.ensureConnected();
 
     const id = crypto.randomUUID();
-    const queue: Output<string[]>[] = [];
+    const queue: (readonly string[])[] = [];
     let wake: (() => void) | null = null;
     let ended = false;
 

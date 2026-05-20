@@ -17,8 +17,8 @@ service B3ndService {
   rpc Read(ReadRequest) returns (ReadResponse);
 
   // Observe a batch of urls — server-streaming INV-style change bundles.
-  // Each streamed Output is [inputUrl, payload=string[] of uris that changed].
-  rpc Observe(ObserveRequest) returns (stream OutputProto);
+  // Each streamed frame is a batch of uris that fired in this notification.
+  rpc Observe(ObserveRequest) returns (stream ObserveFrame);
 
   // Health + capabilities.
   rpc Status(StatusRequest) returns (StatusResponse);
@@ -66,6 +66,11 @@ message ReadResponse {
 message ObserveRequest {
   // URLs to observe — each may be a uri pattern (e.g. "mutable://app/users/*").
   repeated string urls = 1;
+}
+
+// One observe notification frame — the batch of uris that fired.
+message ObserveFrame {
+  repeated string uris = 1;
 }
 
 // ── Status ──────────────────────────────────────────────────────────

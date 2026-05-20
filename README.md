@@ -17,12 +17,22 @@ wire bytes  ──►  decode  ──►  Rig (core)  ──►  encode  ──�
 
 Pick a transport, import the side you need:
 
-| Transport      | Client                       | Pure handler                  |
-| -------------- | ---------------------------- | ----------------------------- |
-| HTTP           | `b3nd-move/http/client`      | `b3nd-move/http/service`      |
-| WebSocket      | `b3nd-move/ws/client`        | `b3nd-move/ws/service`        |
-| gRPC-over-HTTP | `b3nd-move/grpc/http/client` | `b3nd-move/grpc/http/service` |
-| MCP (stdio)    | —                            | `b3nd-move/mcp/service`       |
+| Transport         | Client                       | Pure handler                          |
+| ----------------- | ---------------------------- | ------------------------------------- |
+| HTTP              | `b3nd-move/http/client`      | `b3nd-move/http/service`              |
+| WebSocket         | `b3nd-move/ws/client`        | `b3nd-move/ws/service`                |
+| gRPC-over-HTTP    | `b3nd-move/grpc/http/client` | `b3nd-move/grpc/http/service`         |
+| MCP (stdio)       | —                            | `b3nd-move/mcp/service`               |
+| HTTP GET content  | —                            | `b3nd-move/http-get-content/service`  |
+| HTTP POST content | —                            | `b3nd-move/http-post-content/service` |
+
+The last two rows are **specialized facets**, not full transports —
+locked-surface request frontends for narrower jobs. `http-get-content` fronts
+`rig.read` for one URI with a host-controlled response shape (browsers, CDNs,
+`<img src>`); `http-post-content` fronts `rig.receive` for one URI with a
+host-controlled body decoder (browser file uploads, `curl --data-binary`). See
+[`src/http-get-content/`](./src/http-get-content/) and
+[`src/http-post-content/`](./src/http-post-content/).
 
 Plus the proto pieces:
 
@@ -30,6 +40,20 @@ Plus the proto pieces:
 | ------------------------------ | ---------------------------------------------- |
 | `b3nd-move/grpc/proto/types`   | generated wire types + schemas + `B3ndService` |
 | `b3nd-move/grpc/proto/convert` | proto ↔ b3nd converters                        |
+
+And the foundational **codecs** module — symmetric `(encode, decode)` pairs over
+one wire envelope, consumed by both content facets so the write side and read
+side can't drift:
+
+| Subpath                  | Codec                                                                      |
+| ------------------------ | -------------------------------------------------------------------------- |
+| `b3nd-move/codecs/json`  | `JSON.stringify` ↔ `req.json()`                                            |
+| `b3nd-move/codecs/text`  | string + content-type ↔ `req.text()`                                       |
+| `b3nd-move/codecs/raw`   | bytes + fixed content-type ↔ `req.arrayBuffer()`                           |
+| `b3nd-move/codecs/field` | `{ [name]: bytes, [ctField]?: ct }` envelope (round-trips both directions) |
+| `b3nd-move/codecs/codec` | `Codec`, `Encoder`, `Decoder`, `ContentResponseInit` types                 |
+
+See [`src/codecs/`](./src/codecs/) for the round-trip rationale.
 
 ## The two layers
 

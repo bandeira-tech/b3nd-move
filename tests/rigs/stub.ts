@@ -21,8 +21,8 @@
  *     - otherwise                   → [url, { echo: url }]
  *
  *   observe(urls):
- *     - emits 3 frames per subscribed pattern: [pattern, [`${pattern}/${i}`]],
- *       then ends.
+ *     - emits 3 frames per subscribed pattern: [`${pattern}/${i}`] (singleton
+ *       batch), then ends.
  *
  *   status():
  *     - { status: "healthy", message: "stub",
@@ -76,11 +76,11 @@ class StubBackend implements ProtocolInterfaceNode {
   async *observe(
     urls: string[],
     signal: AbortSignal,
-  ): AsyncIterable<Output<string[]>> {
+  ): AsyncIterable<readonly string[]> {
     for (const url of urls) {
       for (let i = 0; i < 3; i++) {
         if (signal.aborted) return;
-        yield [url, [`${url}/${i}`]];
+        yield [`${url}/${i}`];
         // Yield to the event loop so cancellation can interleave.
         await new Promise<void>((r) => setTimeout(r, 0));
       }
