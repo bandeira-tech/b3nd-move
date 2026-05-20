@@ -2,16 +2,21 @@
  * HttpClient — HTTP implementation of ProtocolInterfaceNode.
  *
  * Speaks the wire shape served by `httpApi` in `service.ts`. URIs
- * ride in the URL as `?u=<b64>` (see `./uri-list.ts`) so the body
- * carries only what's body-shaped (payloads for `receive`, nothing
- * for `read` and `observe`):
+ * ride in the URL as `?u=<b64>` (see `./uri-list.ts`) so routing /
+ * auth / observability can decide on a request without parsing the
+ * body. The receive body is opaque: `application/octet-stream` with
+ * `<u32 payload-len><payload-bytes> × N` framing (see
+ * `./payload-list.ts`) — the move layer never JSON-parses payloads.
  *
  *   GET  /api/v1/status            — status (sole status endpoint)
- *   POST /api/v1/receive?u=<b64>   — body: unknown[] (payloads, positional)
+ *   POST /api/v1/receive?u=<b64>   — body: framed payload bytes
  *   POST /api/v1/read?u=<b64>      — no body
  *   POST /api/v1/observe?u=<b64>   — no body, NDJSON response of frames
  *
- * No schema validation — validation happens server-side.
+ * `receive` payloads must be `Uint8Array` — the producing app
+ * encodes once at its own boundary using whatever schema it shares
+ * with the consumer. No schema validation happens here; only at the
+ * edges where the schema is known.
  */
 
 import type {
@@ -21,6 +26,7 @@ import type {
   StatusResult,
 } from "@bandeira-tech/b3nd-core/types";
 import { RequestError, TimeoutError, TransportError } from "../errors.ts";
+import { encodePayloads } from "./payload-list.ts";
 import { encodeUriList } from "./uri-list.ts";
 
 /** The request about to go on the wire. Mutate any field. */
@@ -84,17 +90,19 @@ export class HttpClient implements ProtocolInterfaceNode {
    * Build the in-flight request and run the preSend hook.
    *
    * Used by both unary `request()` and long-lived streaming requests
-   * (`observe`) so auth-style hooks fire once per connection.
+   * (`observe`) so auth-style hooks fire once per connection. The
+   * caller passes an already-prepared `body` (or `null` for no body)
+   * plus the `Content-Type` to advertise; no auto-serialization
+   * happens here.
    */
   private async prepare(
     path: string,
-    bodyJson?: unknown,
+    body: BodyInit | null = null,
+    contentType?: string,
   ): Promise<{ url: URL; headers: Headers; body: BodyInit | null }> {
     const headers = new Headers({ ...this.headers });
-    let body: BodyInit | null = null;
-    if (bodyJson !== undefined) {
-      headers.set("Content-Type", "application/json");
-      body = JSON.stringify(bodyJson);
+    if (body !== null && contentType) {
+      headers.set("Content-Type", contentType);
     }
     const req: HttpPreSendRequest = {
       url: new URL(`${this.baseUrl}${path}`),
@@ -111,14 +119,18 @@ export class HttpClient implements ProtocolInterfaceNode {
    */
   private async request(
     path: string,
-    init: { method: string; body?: unknown },
+    init: { method: string; body?: BodyInit | null; contentType?: string },
     operation?: string,
   ): Promise<Response> {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), this.timeout);
 
     try {
-      const { url, headers, body } = await this.prepare(path, init.body);
+      const { url, headers, body } = await this.prepare(
+        path,
+        init.body ?? null,
+        init.contentType,
+      );
       const response = await fetch(url, {
         method: init.method,
         headers,
@@ -145,35 +157,53 @@ export class HttpClient implements ProtocolInterfaceNode {
   /**
    * Receive a batch of outputs.
    *
-   * @param msgs Array of `Output` tuples `[uri, payload]`.
+   * Payloads must be `Uint8Array` — the move layer is opaque past
+   * the URL. Non-bytes payloads are rejected per-slot with an error
+   * result without sending the request. The producing app is the
+   * only place that has the schema, so it's the only place that
+   * encodes.
+   *
+   * @param msgs Array of `Output` tuples `[uri, Uint8Array]`.
    * @returns One `ReceiveResult` per input output, in input order.
    */
   async receive(msgs: Output[]): Promise<ReceiveResult[]> {
-    // Pre-validate URIs — return error results for invalid ones without sending
-    const results: (ReceiveResult | null)[] = msgs.map(([uri]) => {
+    // Pre-validate URIs and payload shape — return per-slot error results
+    // for invalid entries without sending.
+    const results: (ReceiveResult | null)[] = msgs.map(([uri, payload]) => {
       if (!uri || typeof uri !== "string") {
         return { accepted: false, error: "Output URI is required" };
+      }
+      if (!(payload instanceof Uint8Array)) {
+        return {
+          accepted: false,
+          error: "Payload must be Uint8Array",
+        };
       }
       return null;
     });
 
     const validIndices: number[] = [];
     const validUris: string[] = [];
-    const validPayloads: unknown[] = [];
+    const validPayloads: Uint8Array[] = [];
     for (let i = 0; i < msgs.length; i++) {
       if (results[i] === null) {
         validIndices.push(i);
         validUris.push(msgs[i][0]);
-        validPayloads.push(msgs[i][1]);
+        validPayloads.push(msgs[i][1] as Uint8Array);
       }
     }
     if (validUris.length === 0) return results as ReceiveResult[];
 
     try {
       const u = encodeUriList(validUris);
+      // Cast around lib.dom's `BodyInit` insisting on `ArrayBuffer`
+      // (not `ArrayBufferLike`) for typed-array bodies. `fetch`
+      // accepts the Uint8Array fine at runtime.
+      const body = encodePayloads(validPayloads) as unknown as BodyInit;
       const response = await this.request(`/api/v1/receive?u=${u}`, {
         method: "POST",
-        body: validPayloads,
+        body,
+        contentType: "application/octet-stream",
       }, "receive");
 
       if (!response.ok) {

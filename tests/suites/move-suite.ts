@@ -49,12 +49,22 @@ export interface MoveSuiteConfig {
   client: () => ProtocolInterfaceNode | Promise<ProtocolInterfaceNode>;
   /** Set to false if the transport doesn't implement observe. */
   supportsObserve?: boolean;
+  /**
+   * Encode a JS-value payload into whatever this transport's
+   * `receive` wire accepts. HTTP uses opaque bytes — pass
+   * `(v) => new TextEncoder().encode(JSON.stringify(v))`. WS and
+   * gRPC still serialize JS values inside their own envelopes —
+   * leave undefined (identity). The stub rig ignores payload
+   * content, so the encoding is purely for what the wire requires.
+   */
+  payload?: (value: unknown) => unknown;
 }
 
 const noSanitize = { sanitizeOps: false, sanitizeResources: false };
 
 export function runMoveSuite(suiteName: string, config: MoveSuiteConfig) {
   const supportsObserve = config.supportsObserve !== false;
+  const encodePayload = config.payload ?? ((v: unknown) => v);
 
   const t = (name: string, fn: () => void | Promise<void>) =>
     Deno.test({ name: `${suiteName} — ${name}`, ...noSanitize, fn });
@@ -76,11 +86,11 @@ export function runMoveSuite(suiteName: string, config: MoveSuiteConfig) {
   t("receive: 5-output batch, all accepted, preserves order", async () => {
     const client = await Promise.resolve(config.client());
     const msgs: Output[] = [
-      ["mutable://t/recv/a", { v: 1 }],
-      ["mutable://t/recv/b", { v: 2 }],
-      ["mutable://t/recv/c", { v: 3 }],
-      ["mutable://t/recv/d", { v: 4 }],
-      ["mutable://t/recv/e", { v: 5 }],
+      ["mutable://t/recv/a", encodePayload({ v: 1 })],
+      ["mutable://t/recv/b", encodePayload({ v: 2 })],
+      ["mutable://t/recv/c", encodePayload({ v: 3 })],
+      ["mutable://t/recv/d", encodePayload({ v: 4 })],
+      ["mutable://t/recv/e", encodePayload({ v: 5 })],
     ];
     const results = await client.receive(msgs);
     assertEquals(results.length, msgs.length);
@@ -94,11 +104,11 @@ export function runMoveSuite(suiteName: string, config: MoveSuiteConfig) {
     async () => {
       const client = await Promise.resolve(config.client());
       const msgs: Output[] = [
-        ["mutable://t/mixed/a", { v: 1 }],
-        ["mutable://t/mixed/__reject__/b", { v: 2 }],
-        ["mutable://t/mixed/c", { v: 3 }],
-        ["mutable://t/mixed/__reject__/d", { v: 4 }],
-        ["mutable://t/mixed/e", { v: 5 }],
+        ["mutable://t/mixed/a", encodePayload({ v: 1 })],
+        ["mutable://t/mixed/__reject__/b", encodePayload({ v: 2 })],
+        ["mutable://t/mixed/c", encodePayload({ v: 3 })],
+        ["mutable://t/mixed/__reject__/d", encodePayload({ v: 4 })],
+        ["mutable://t/mixed/e", encodePayload({ v: 5 })],
       ];
       const results = await client.receive(msgs);
       assertEquals(results.length, msgs.length);

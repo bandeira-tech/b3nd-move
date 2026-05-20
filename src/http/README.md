@@ -14,19 +14,25 @@ HTTP transport for B3nd. JSON over `fetch`, with NDJSON streaming for observe.
 
 **Wire shape.** URIs ride in the URL as `?u=<b64>` so routing / auth /
 observability can decide on a request without parsing the body. The body carries
-only what's body-shaped: payloads on `receive`, nothing on `read` or `observe`.
-The `?u=` encoding is `urlsafe-base64(<u16 url-len><url-utf8> × N)` — see
-[`./uri-list.ts`](./uri-list.ts).
+only what's body-shaped: opaque payload bytes on `receive`, nothing on `read` or
+`observe`. The `?u=` encoding is `urlsafe-base64(<u16 url-len><url-utf8> × N)` —
+see [`./uri-list.ts`](./uri-list.ts). The `receive` body framing is
+`<u32 payload-len><payload-bytes> × N` — see
+[`./payload-list.ts`](./payload-list.ts).
 
-| Method | Path                      | Body        | Maps to                |
-| ------ | ------------------------- | ----------- | ---------------------- |
-| `GET`  | `/api/v1/status`          | —           | `rig.status()`         |
-| `POST` | `/api/v1/receive?u=<b64>` | `unknown[]` | `rig.receive(outputs)` |
-| `POST` | `/api/v1/read?u=<b64>`    | —           | `rig.read(urls)`       |
-| `POST` | `/api/v1/observe?u=<b64>` | —           | `rig.observe(urls)`    |
+| Method | Path                      | Body                 | Maps to                |
+| ------ | ------------------------- | -------------------- | ---------------------- |
+| `GET`  | `/api/v1/status`          | —                    | `rig.status()`         |
+| `POST` | `/api/v1/receive?u=<b64>` | framed payload bytes | `rig.receive(outputs)` |
+| `POST` | `/api/v1/read?u=<b64>`    | —                    | `rig.read(urls)`       |
+| `POST` | `/api/v1/observe?u=<b64>` | —                    | `rig.observe(urls)`    |
 
-`receive` body is the payload array — one slot per `u=` URI, positional. The
-route zips them into `Output[]` before calling the rig. Length mismatch → 400.
+`receive` is opaque end-to-end: the route slices the body into per-URI
+`Uint8Array` views and hands `Output<Uint8Array>[]` to the rig — no JSON parse,
+no payload allocation beyond the view. Producing apps encode their payload
+schema once at the edge using whatever codec they share with the consumer
+(proto, JSON, raw bytes, anything). The move layer doesn't know or care. Length
+mismatch between URI count and payload count → 400.
 
 **Observe.** `POST /api/v1/observe?u=…` returns an `application/x-ndjson`
 stream; each line is a JSON-encoded `string[]` — the batch of uris that fired —

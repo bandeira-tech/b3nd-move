@@ -14,8 +14,13 @@ import { HttpClient } from "../../../src/http/client.ts";
 
 const server = await startHttpServer(stubRig());
 
+const enc = new TextEncoder();
 runMoveSuite("http", {
   client: () => new HttpClient({ url: server.url }),
+  // HTTP wire is opaque bytes past the URL — encode JS payloads once
+  // at the producer's edge before they cross the wire. The stub rig
+  // ignores payload content; this is purely for what the wire needs.
+  payload: (v) => enc.encode(JSON.stringify(v)),
 });
 
 Deno.test({

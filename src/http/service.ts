@@ -17,7 +17,10 @@
  * URIs ride in the URL as `?u=<urlsafe-b64>` (see ./uri-list.ts) so
  * routing / auth / observability can decide on a request without
  * parsing the body. The body is only used by `receive`, where it
- * carries the positional payload array.
+ * carries opaque payload bytes framed as
+ * `<u32 payload-len><payload-bytes> × N` (see ./payload-list.ts) —
+ * the move layer never JSON-parses payloads; downstream consumers
+ * decode at their own boundary.
  *
  * This file's only job is to assemble the table and hand it to the
  * shared dispatcher. Wire-adapter failures (bad JSON, schema mismatch)
