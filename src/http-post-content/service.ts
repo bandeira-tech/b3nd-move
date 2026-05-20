@@ -13,9 +13,8 @@
  * uploading a file, `curl --data-binary`, SDK clients that already
  * have raw bytes and don't want to wrap them in `[[uri, payload]]`.
  *
- * Route:
- *
- *   POST /api/v1/content/<url-encoded-uri>   → rig.receive([[uri, payload]])
+ * Route lives in `./route.ts` as a declarative factory. This file
+ * assembles it with the dispatcher.
  *
  * @example
  * ```ts
@@ -34,59 +33,16 @@
  */
 
 import type { Rig } from "@bandeira-tech/b3nd-core/rig";
-import type { Decoder } from "../codecs/codec.ts";
-import { BadRequest } from "../router/errors.ts";
-import { dispatchHttp, type HttpRoute, route } from "../router/http.ts";
+import { dispatchHttp } from "../router/http.ts";
+import { httpPostContentRoute, type PayloadDecoder } from "./route.ts";
 
 // ── Types ──
 
-/**
- * Decodes the request body into the message payload that goes into
- * `rig.receive([[uri, payload]])`. Throws on decode failure → 400.
- *
- * Alias of {@link Decoder} from `src/codecs/codec.ts`.
- */
-export type PayloadDecoder = Decoder;
+export type { PayloadDecoder };
 
 export interface HttpPostContentApiOptions {
   /** Required. Maps the request body → message payload. */
   payloadDecoder: PayloadDecoder;
-}
-
-// ── Route ──
-
-function buildRoute(options: HttpPostContentApiOptions): HttpRoute {
-  const { payloadDecoder } = options;
-
-  return route({
-    on: { method: "POST", path: "/api/v1/content/:uri" },
-    action: "receive",
-    decode: async (req, params) => {
-      let uri: string;
-      try {
-        uri = decodeURIComponent(params.uri);
-      } catch {
-        throw new BadRequest("invalid URI encoding");
-      }
-
-      let payload: unknown;
-      try {
-        payload = await payloadDecoder(req);
-      } catch (err) {
-        throw new BadRequest(
-          err instanceof Error ? err.message : String(err),
-        );
-      }
-      return [[[uri, payload]]];
-    },
-    encode: (results) => {
-      const result = results[0];
-      return new Response(JSON.stringify(result), {
-        status: 200,
-        headers: { "Content-Type": "application/json" },
-      });
-    },
-  });
 }
 
 // ── API factory ──
@@ -112,6 +68,6 @@ export function httpPostContentApi(
   rig: Rig,
   options: HttpPostContentApiOptions,
 ): (req: Request) => Promise<Response> {
-  const routes = [buildRoute(options)];
+  const routes = [httpPostContentRoute(options)];
   return (req) => dispatchHttp(rig, routes, req);
 }

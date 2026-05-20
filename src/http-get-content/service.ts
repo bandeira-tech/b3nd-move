@@ -9,15 +9,8 @@
  * generic `httpApi` JSON-POST wire (a browser `<img src>`, a CDN, an
  * SDK that wants `Content-Type: image/png` instead of opaque JSON).
  *
- * Route:
- *
- *   GET /api/v1/content/<url-encoded-uri>   → rig.read([uri])  (single)
- *
- * The whole content-type / body-bytes / extra-headers decision lives in
- * one hook — `payloadResponseMap(req, output) => ContentResponseInit` —
- * supplied at instantiation. Common policies ship as composable helpers
- * in `payload-response-map.ts`: `json`, `raw`, `fromField`, `fixed`,
- * `byExtension`, `byPayloadField`.
+ * Route lives in `./route.ts` as a declarative factory. This file
+ * assembles it with the dispatcher.
  *
  * @example
  * ```ts
@@ -36,9 +29,8 @@
  */
 
 import type { Rig } from "@bandeira-tech/b3nd-core/rig";
-import type { ContentResponseInit, Encoder } from "../codecs/codec.ts";
-import { BadRequest, NotFound } from "../router/errors.ts";
-import { dispatchHttp, type HttpRoute, route } from "../router/http.ts";
+import { dispatchHttp } from "../router/http.ts";
+import { httpGetContentRoute, type PayloadResponseMap } from "./route.ts";
 
 // ── Types ──
 
@@ -46,51 +38,11 @@ import { dispatchHttp, type HttpRoute, route } from "../router/http.ts";
 // `src/codecs/codec.ts` so both facets share the contract. Re-exported
 // here so existing imports from this module keep working.
 export type { ContentResponseInit } from "../codecs/codec.ts";
-
-/**
- * Decides how a successful `rig.read` output becomes an HTTP response.
- * Owns content-type, body bytes, and any extra headers in one place.
- *
- * Alias of {@link Encoder} from `src/codecs/codec.ts`.
- */
-export type PayloadResponseMap = Encoder;
+export type { PayloadResponseMap };
 
 export interface HttpGetContentApiOptions {
   /** Required. Maps `(req, output)` → response state. */
   payloadResponseMap: PayloadResponseMap;
-}
-
-// ── Route ──
-
-function buildRoute(options: HttpGetContentApiOptions): HttpRoute {
-  const { payloadResponseMap } = options;
-
-  return route({
-    on: { method: "GET", path: "/api/v1/content/:uri" },
-    action: "read",
-    decode: (_req, params) => {
-      let uri: string;
-      try {
-        uri = decodeURIComponent(params.uri);
-      } catch {
-        throw new BadRequest("invalid URI encoding");
-      }
-      return [[uri]];
-    },
-    encode: async (results, ctx) => {
-      const output = results[0];
-      if (!output) throw new NotFound();
-
-      const init: ContentResponseInit = await payloadResponseMap(
-        ctx.req,
-        output,
-      );
-      return new Response(init.body, {
-        status: init.status ?? 200,
-        headers: init.headers,
-      });
-    },
-  });
 }
 
 // ── API factory ──
@@ -115,6 +67,6 @@ export function httpGetContentApi(
   rig: Rig,
   options: HttpGetContentApiOptions,
 ): (req: Request) => Promise<Response> {
-  const routes = [buildRoute(options)];
+  const routes = [httpGetContentRoute(options)];
   return (req) => dispatchHttp(rig, routes, req);
 }

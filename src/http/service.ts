@@ -7,21 +7,17 @@
  *
  * The rig stays pure (orchestration only). Transport is external.
  *
- * Routes (mirror the `ProtocolInterfaceNode` surface — every body is a
- * bare array, exactly the argument the corresponding PIN method takes):
+ * Each route is its own declaration in a sibling file:
  *
- *   GET  /api/v1/status     → rig.status()
- *   POST /api/v1/receive    → rig.receive(msgs)        body: [[uri, payload], ...]
- *   POST /api/v1/read       → rig.read(urls)           body: string[]
- *   POST /api/v1/observe    → rig.observe(urls)        body: string[]   (NDJSON stream)
+ *   GET  /api/v1/status     → ./status.ts   (rig.status())
+ *   POST /api/v1/receive    → ./receive.ts  (rig.receive(msgs))
+ *   POST /api/v1/read       → ./read.ts     (rig.read(urls))
+ *   POST /api/v1/observe    → ./observe.ts  (rig.observe(urls), NDJSON)
  *
- * Observe streams one JSON-encoded `string[]` (batch of uris that
- * fired) per line, matching what `rig.observe()` yields.
- *
- * Wire-adapter failures (bad JSON, schema mismatch) throw `BadRequest`
- * — see `src/router/errors.ts`. The dispatcher catches and renders as
- * `Response(message, { status })` with a plain-text body. No envelope:
- * status carries the category, body carries the message.
+ * This file's only job is to assemble the table and hand it to the
+ * shared dispatcher. Wire-adapter failures (bad JSON, schema mismatch)
+ * throw `BadRequest` from within the routes; the dispatcher renders
+ * them as plain-text 400. See `src/router/errors.ts`.
  *
  * @example
  * ```ts
@@ -43,99 +39,20 @@
  */
 
 import type { Rig } from "@bandeira-tech/b3nd-core/rig";
-import { ndjsonResponse } from "../actions/ndjson.ts";
-import { validateOutputs, validateUrls } from "../actions/validate.ts";
-import { BadRequest } from "../router/errors.ts";
-import { dispatchHttp, type HttpRoute, route } from "../router/http.ts";
+import { dispatchHttp } from "../router/http.ts";
+import { observeRoute } from "./observe.ts";
+import { readRoute } from "./read.ts";
+import { receiveRoute } from "./receive.ts";
+import { statusRoute, type StatusRouteOptions } from "./status.ts";
 
 // ── Types ──
 
-export interface HttpApiOptions {
-  /** Extra metadata merged into status responses. */
-  statusMeta?: Record<string, unknown>;
-}
-
-// ── Helpers ──
-
-function json(data: unknown, status = 200): Response {
-  return new Response(JSON.stringify(data), {
-    status,
-    headers: { "Content-Type": "application/json" },
-  });
-}
-
-async function readJson(req: Request): Promise<unknown> {
-  try {
-    return await req.json();
-  } catch {
-    throw new BadRequest("Invalid JSON body");
-  }
-}
-
-// ── Routes ──
-
-function buildRoutes(options?: HttpApiOptions): HttpRoute[] {
-  const statusMeta = options?.statusMeta;
-
-  return [
-    route({
-      on: { method: "GET", path: "/api/v1/status" },
-      action: "status",
-      decode: () => [],
-      encode: (res) => {
-        const body = statusMeta ? { ...res, ...statusMeta } : res;
-        return json(body, res.status === "healthy" ? 200 : 503);
-      },
-    }),
-
-    // 200 with per-slot ReceiveResult body. Per-slot reject is a
-    // domain outcome, not a transport failure — request-level failures
-    // (bad JSON, schema mismatch) throw `BadRequest` and surface as
-    // plain-text 400.
-    route({
-      on: { method: "POST", path: "/api/v1/receive" },
-      action: "receive",
-      decode: async (req) => {
-        const body = await readJson(req);
-        const v = validateOutputs(body);
-        if (!v.ok) throw new BadRequest(v.error);
-        return [v.value];
-      },
-      encode: (results) => json(results, 200),
-    }),
-
-    // Output[] 1:1 with input. Content semantics are the protocol's.
-    route({
-      on: { method: "POST", path: "/api/v1/read" },
-      action: "read",
-      decode: async (req) => {
-        const body = await readJson(req);
-        const v = validateUrls(body);
-        if (!v.ok) throw new BadRequest(v.error);
-        return [v.value];
-      },
-      encode: (outs) => json(outs, 200),
-    }),
-
-    // NDJSON stream. ctx.abort is wired to req.signal by the dispatcher;
-    // ndjsonResponse fires it again on consumer cancel, propagating to
-    // the rig observer.
-    route({
-      on: { method: "POST", path: "/api/v1/observe" },
-      action: "observe",
-      decode: async (req) => {
-        const body = await readJson(req);
-        const v = validateUrls(body);
-        if (!v.ok) throw new BadRequest(v.error);
-        return [v.value];
-      },
-      encode: (frames, ctx) =>
-        ndjsonResponse(frames, ctx.abort, undefined, {
-          "X-Accel-Buffering": "no",
-        }),
-    }),
-  ];
-}
+/**
+ * `HttpApiOptions` is a superset of the per-route options of every
+ * route that takes one (currently just `status`). New per-route
+ * options get added here as routes grow.
+ */
+export interface HttpApiOptions extends StatusRouteOptions {}
 
 // ── API factory ──
 
@@ -149,6 +66,11 @@ export function httpApi(
   rig: Rig,
   options?: HttpApiOptions,
 ): (req: Request) => Promise<Response> {
-  const routes = buildRoutes(options);
+  const routes = [
+    statusRoute(options),
+    receiveRoute,
+    readRoute,
+    observeRoute,
+  ];
   return (req) => dispatchHttp(rig, routes, req);
 }

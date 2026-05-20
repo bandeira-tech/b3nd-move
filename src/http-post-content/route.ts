@@ -1,0 +1,53 @@
+/**
+ * @module
+ * `POST /api/v1/content/:uri` — single-URI write facet.
+ *
+ * The route is a factory because it closes over the host's
+ * `payloadDecoder` hook. See `./service.ts` for the rationale.
+ */
+
+import type { Decoder } from "../codecs/codec.ts";
+import { BadRequest } from "../router/errors.ts";
+import { type HttpRoute, route } from "../router/http.ts";
+
+/** Re-exported so both `service.ts` and `route.ts` agree on the contract. */
+export type PayloadDecoder = Decoder;
+
+export interface PostContentRouteOptions {
+  payloadDecoder: PayloadDecoder;
+}
+
+export function httpPostContentRoute(
+  options: PostContentRouteOptions,
+): HttpRoute {
+  const { payloadDecoder } = options;
+  return route({
+    on: { method: "POST", path: "/api/v1/content/:uri" },
+    action: "receive",
+    decode: async (req, params) => {
+      let uri: string;
+      try {
+        uri = decodeURIComponent(params.uri);
+      } catch {
+        throw new BadRequest("invalid URI encoding");
+      }
+
+      let payload: unknown;
+      try {
+        payload = await payloadDecoder(req);
+      } catch (err) {
+        throw new BadRequest(
+          err instanceof Error ? err.message : String(err),
+        );
+      }
+      return [[[uri, payload]]];
+    },
+    encode: (results) => {
+      const result = results[0];
+      return new Response(JSON.stringify(result), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    },
+  });
+}
