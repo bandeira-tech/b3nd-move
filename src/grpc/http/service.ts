@@ -42,7 +42,6 @@ import {
 import {
   ObserveFrameSchema,
   ObserveRequestSchema,
-  OutputProtoSchema,
   ReadRequestSchema,
   ReadResponseSchema,
   ReceiveRequestSchema,

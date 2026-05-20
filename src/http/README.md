@@ -23,9 +23,9 @@ HTTP transport for B3nd. JSON over `fetch`, with NDJSON streaming for observe.
 | `POST` | `/api/v1/observe` | `string[]`           | `rig.observe(urls)` |
 
 **Observe.** `POST /api/v1/observe` returns an `application/x-ndjson` stream;
-each line is a JSON-encoded `string[]` — the batch of uris that fired —
-straight from `rig.observe()`. `HttpClient.observe()` parses the lines and
-yields batches.
+each line is a JSON-encoded `string[]` — the batch of uris that fired — straight
+from `rig.observe()`. `HttpClient.observe()` parses the lines and yields
+batches.
 
 **The pair.**
 

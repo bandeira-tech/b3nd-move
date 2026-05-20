@@ -20,13 +20,13 @@ outbound → { id, success: true,  data }
            { id, success: false, error }
 ```
 
-| `type`           | `payload`        | `data`                                     |
-| ---------------- | ---------------- | ------------------------------------------ |
-| `receive`        | `Message[]`      | `ReceiveResult[]`                          |
-| `read`           | `{ urls }`       | `Output[]`                                 |
+| `type`           | `payload`        | `data`                                       |
+| ---------------- | ---------------- | -------------------------------------------- |
+| `receive`        | `Message[]`      | `ReceiveResult[]`                            |
+| `read`           | `{ urls }`       | `Output[]`                                   |
 | `observe`        | `{ urls }`       | repeated frames, each `string[]` (uri batch) |
-| `observe-cancel` | `{}` (reuses id) | no reply — active observe emits terminator |
-| `status`         | `{}`             | `StatusResult`                             |
+| `observe-cancel` | `{}` (reuses id) | no reply — active observe emits terminator   |
+| `status`         | `{}`             | `StatusResult`                               |
 
 Observe streams are terminated by a frame with `data: null` (server
 end-of-stream) or by `observe-cancel` from the client.
