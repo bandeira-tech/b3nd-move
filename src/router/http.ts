@@ -59,18 +59,23 @@ export interface HttpRoute {
    * Build the action call. `params` carries the path-param captures.
    * Throw → 500. Return a `Response` to short-circuit — use this
    * for validation failures so each route owns its 400 envelope
-   * shape.
+   * shape. May be sync or async; the dispatcher awaits either way.
    */
   build: (
     req: Request,
     params: PathParams,
-  ) => Promise<ActionCall | Response>;
+  ) => ActionCall | Response | Promise<ActionCall | Response>;
   /**
    * Run the action against `rig` and render the response. `call` is
    * what `build` produced. Streaming actions are this route's
-   * responsibility: respond decides how to drain the iterable.
+   * responsibility: respond decides how to drain the iterable. May
+   * be sync or async.
    */
-  respond: (rig: Rig, req: Request, call: ActionCall) => Promise<Response>;
+  respond: (
+    rig: Rig,
+    req: Request,
+    call: ActionCall,
+  ) => Response | Promise<Response>;
 }
 
 // ── Compilation ──

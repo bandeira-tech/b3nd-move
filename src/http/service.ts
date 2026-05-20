@@ -94,7 +94,7 @@ function buildRoutes(options?: HttpApiOptions): HttpRoute[] {
 
   const status: HttpRoute = {
     on: { method: "GET", path: "/api/v1/status" },
-    build: () => Promise.resolve({ action: "status" }),
+    build: () => ({ action: "status" }),
     respond: async (rig) => {
       const res = await runAction(rig, { action: "status" });
       const body = statusMeta ? { ...res, ...statusMeta } : res;
@@ -159,14 +159,12 @@ function buildRoutes(options?: HttpApiOptions): HttpRoute[] {
     },
     respond: (rig, req, call) => {
       const obs = narrow(call, "observe");
-      return Promise.resolve(
-        ndjsonResponse(
-          (signal) =>
-            runAction(rig, { action: "observe", urls: obs.urls, signal }),
-          (frame) => frame,
-          req.signal,
-          { "X-Accel-Buffering": "no" },
-        ),
+      return ndjsonResponse(
+        (signal) =>
+          runAction(rig, { action: "observe", urls: obs.urls, signal }),
+        (frame) => frame,
+        req.signal,
+        { "X-Accel-Buffering": "no" },
       );
     },
   };

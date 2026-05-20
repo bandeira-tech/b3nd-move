@@ -73,11 +73,11 @@ function buildRoute(options: HttpGetContentApiOptions): HttpRoute {
       try {
         uri = decodeURIComponent(params.uri);
       } catch {
-        return Promise.resolve(
-          new Response("Bad Request: invalid URI encoding", { status: 400 }),
-        );
+        return new Response("Bad Request: invalid URI encoding", {
+          status: 400,
+        });
       }
-      return Promise.resolve({ action: "read", urls: [uri] });
+      return { action: "read", urls: [uri] };
     },
     respond: async (rig, req, call) => {
       const urls = (call as { urls: string[] }).urls;

@@ -41,8 +41,7 @@ function req(path: string, init?: RequestInit): Request {
   return new Request(`http://test${path}`, init);
 }
 
-const hit: HttpRoute["respond"] = () =>
-  Promise.resolve(new Response("hit", { status: 200 }));
+const hit: HttpRoute["respond"] = () => new Response("hit", { status: 200 });
 
 Deno.test("dispatchHttp: empty route list → 404", async () => {
   const r = await dispatchHttp(buildRig(), [], req("/anything"));
@@ -52,7 +51,7 @@ Deno.test("dispatchHttp: empty route list → 404", async () => {
 Deno.test("dispatchHttp: path matches, method matches → build → respond", async () => {
   const route: HttpRoute = {
     on: { method: "GET", path: "/api/v1/status" },
-    build: () => Promise.resolve({ action: "status" }),
+    build: () => ({ action: "status" }),
     respond: hit,
   };
   const r = await dispatchHttp(buildRig(), [route], req("/api/v1/status"));
@@ -63,7 +62,7 @@ Deno.test("dispatchHttp: path matches, method matches → build → respond", as
 Deno.test("dispatchHttp: no matching path → 404", async () => {
   const route: HttpRoute = {
     on: { method: "GET", path: "/api/v1/status" },
-    build: () => Promise.resolve({ action: "status" }),
+    build: () => ({ action: "status" }),
     respond: hit,
   };
   const r = await dispatchHttp(buildRig(), [route], req("/elsewhere"));
@@ -73,7 +72,7 @@ Deno.test("dispatchHttp: no matching path → 404", async () => {
 Deno.test("dispatchHttp: path matches but method doesn't → 405 with Allow", async () => {
   const route: HttpRoute = {
     on: { method: "GET", path: "/api/v1/status" },
-    build: () => Promise.resolve({ action: "status" }),
+    build: () => ({ action: "status" }),
     respond: hit,
   };
   const r = await dispatchHttp(
@@ -88,12 +87,12 @@ Deno.test("dispatchHttp: path matches but method doesn't → 405 with Allow", as
 Deno.test("dispatchHttp: 405 Allow unions methods from all path-matching routes", async () => {
   const get: HttpRoute = {
     on: { method: "GET", path: "/api/v1/content/:uri" },
-    build: () => Promise.resolve({ action: "status" }),
+    build: () => ({ action: "status" }),
     respond: hit,
   };
   const post: HttpRoute = {
     on: { method: "POST", path: "/api/v1/content/:uri" },
-    build: () => Promise.resolve({ action: "status" }),
+    build: () => ({ action: "status" }),
     respond: hit,
   };
   const r = await dispatchHttp(
@@ -112,7 +111,7 @@ Deno.test("dispatchHttp: :param captures into params", async () => {
     on: { method: "GET", path: "/api/v1/content/:uri" },
     build: (_req, params) => {
       seen = params;
-      return Promise.resolve({ action: "status" });
+      return { action: "status" };
     },
     respond: hit,
   };
@@ -123,7 +122,7 @@ Deno.test("dispatchHttp: :param captures into params", async () => {
 Deno.test("dispatchHttp: trailing slash does not match :param (strict)", async () => {
   const route: HttpRoute = {
     on: { method: "GET", path: "/api/v1/content/:uri" },
-    build: () => Promise.resolve({ action: "status" }),
+    build: () => ({ action: "status" }),
     respond: hit,
   };
   const r = await dispatchHttp(buildRig(), [route], req("/api/v1/content/"));
@@ -133,7 +132,7 @@ Deno.test("dispatchHttp: trailing slash does not match :param (strict)", async (
 Deno.test("dispatchHttp: multi-method matcher accepts both", async () => {
   const route: HttpRoute = {
     on: { method: ["GET", "POST"], path: "/api/v1/x" },
-    build: () => Promise.resolve({ action: "status" }),
+    build: () => ({ action: "status" }),
     respond: hit,
   };
   const a = await dispatchHttp(buildRig(), [route], req("/api/v1/x"));
@@ -149,7 +148,7 @@ Deno.test("dispatchHttp: multi-method matcher accepts both", async () => {
 Deno.test("dispatchHttp: build returning Response short-circuits", async () => {
   const route: HttpRoute = {
     on: { method: "GET", path: "/api/v1/x" },
-    build: () => Promise.resolve(new Response("bad", { status: 400 })),
+    build: () => new Response("bad", { status: 400 }),
     respond: hit,
   };
   const r = await dispatchHttp(buildRig(), [route], req("/api/v1/x"));
@@ -160,13 +159,13 @@ Deno.test("dispatchHttp: build returning Response short-circuits", async () => {
 Deno.test("dispatchHttp: first matching route wins", async () => {
   const first: HttpRoute = {
     on: { method: "GET", path: "/api/v1/x" },
-    build: () => Promise.resolve({ action: "status" }),
-    respond: () => Promise.resolve(new Response("first", { status: 200 })),
+    build: () => ({ action: "status" }),
+    respond: () => new Response("first", { status: 200 }),
   };
   const second: HttpRoute = {
     on: { method: "GET", path: "/api/v1/x" },
-    build: () => Promise.resolve({ action: "status" }),
-    respond: () => Promise.resolve(new Response("second", { status: 200 })),
+    build: () => ({ action: "status" }),
+    respond: () => new Response("second", { status: 200 }),
   };
   const r = await dispatchHttp(buildRig(), [first, second], req("/api/v1/x"));
   assertEquals(await r.text(), "first");
@@ -175,7 +174,7 @@ Deno.test("dispatchHttp: first matching route wins", async () => {
 Deno.test("dispatchHttp: literal segment mismatch → no match", async () => {
   const route: HttpRoute = {
     on: { method: "GET", path: "/api/v1/x" },
-    build: () => Promise.resolve({ action: "status" }),
+    build: () => ({ action: "status" }),
     respond: hit,
   };
   const r = await dispatchHttp(buildRig(), [route], req("/api/v1/y"));
