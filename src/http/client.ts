@@ -1,12 +1,13 @@
 /**
  * HttpClient — HTTP implementation of ProtocolInterfaceNode.
  *
- * Speaks the wire shape served by `httpApi` in `service.ts`. URIs
- * ride in the URL as `?u=<b64>` (see `./uri-list.ts`) so routing /
- * auth / observability can decide on a request without parsing the
- * body. The receive body is opaque: `application/octet-stream` with
- * `<u32 payload-len><payload-bytes> × N` framing (see
- * `../codecs/payload-list.ts`) — the move layer never JSON-parses payloads.
+ * Speaks the wire shape served by `httpApi` in `service.ts`. The URL
+ * list rides in the query as `?u=<b64>` (see
+ * `../codecs/url-list.ts`) so routing / auth / observability can
+ * decide on a request without parsing the body. The receive body is
+ * opaque: `application/octet-stream` carrying the same `bytes-list`
+ * framing at `lenSize: 4` (see `../codecs/bytes-list.ts`) — the move
+ * layer never JSON-parses payloads.
  *
  *   GET  /api/v1/status            — status (sole status endpoint)
  *   POST /api/v1/receive?u=<b64>   — body: framed payload bytes
@@ -26,8 +27,8 @@ import type {
   StatusResult,
 } from "@bandeira-tech/b3nd-core/types";
 import { RequestError, TimeoutError, TransportError } from "../errors.ts";
-import { encodePayloads } from "../codecs/payload-list.ts";
-import { encodeUriList } from "./uri-list.ts";
+import { encodeBytesList } from "../codecs/bytes-list.ts";
+import { encodeUrlList } from "../codecs/url-list.ts";
 
 /** The request about to go on the wire. Mutate any field. */
 export interface HttpPreSendRequest {
@@ -163,15 +164,15 @@ export class HttpClient implements ProtocolInterfaceNode {
    * only place that has the schema, so it's the only place that
    * encodes.
    *
-   * @param msgs Array of `Output` tuples `[uri, Uint8Array]`.
+   * @param msgs Array of `Output` tuples `[url, Uint8Array]`.
    * @returns One `ReceiveResult` per input output, in input order.
    */
   async receive(msgs: Output[]): Promise<ReceiveResult[]> {
-    // Pre-validate URIs and payload shape — return per-slot error results
+    // Pre-validate URLs and payload shape — return per-slot error results
     // for invalid entries without sending.
-    const results: (ReceiveResult | null)[] = msgs.map(([uri, payload]) => {
-      if (!uri || typeof uri !== "string") {
-        return { accepted: false, error: "Output URI is required" };
+    const results: (ReceiveResult | null)[] = msgs.map(([url, payload]) => {
+      if (!url || typeof url !== "string") {
+        return { accepted: false, error: "Output URL is required" };
       }
       if (!(payload instanceof Uint8Array)) {
         return {
@@ -183,23 +184,26 @@ export class HttpClient implements ProtocolInterfaceNode {
     });
 
     const validIndices: number[] = [];
-    const validUris: string[] = [];
+    const validUrls: string[] = [];
     const validPayloads: Uint8Array[] = [];
     for (let i = 0; i < msgs.length; i++) {
       if (results[i] === null) {
         validIndices.push(i);
-        validUris.push(msgs[i][0]);
+        validUrls.push(msgs[i][0]);
         validPayloads.push(msgs[i][1] as Uint8Array);
       }
     }
-    if (validUris.length === 0) return results as ReceiveResult[];
+    if (validUrls.length === 0) return results as ReceiveResult[];
 
     try {
-      const u = encodeUriList(validUris);
+      const u = encodeUrlList(validUrls);
       // Cast around lib.dom's `BodyInit` insisting on `ArrayBuffer`
       // (not `ArrayBufferLike`) for typed-array bodies. `fetch`
       // accepts the Uint8Array fine at runtime.
-      const body = encodePayloads(validPayloads) as unknown as BodyInit;
+      const body = encodeBytesList(
+        validPayloads,
+        { lenSize: 4 },
+      ) as unknown as BodyInit;
       const response = await this.request(`/api/v1/receive?u=${u}`, {
         method: "POST",
         body,
@@ -233,7 +237,7 @@ export class HttpClient implements ProtocolInterfaceNode {
 
   async read<T = unknown>(urls: string[]): Promise<Output<T>[]> {
     if (urls.length === 0) return [];
-    const u = encodeUriList(urls);
+    const u = encodeUrlList(urls);
     const response = await this.request(`/api/v1/read?u=${u}`, {
       method: "POST",
     }, "read");
@@ -260,7 +264,7 @@ export class HttpClient implements ProtocolInterfaceNode {
   ): AsyncIterable<readonly string[]> {
     if (urls.length === 0) return;
 
-    const u = encodeUriList(urls);
+    const u = encodeUrlList(urls);
     const { url, headers, body } = await this.prepare(
       `/api/v1/observe?u=${u}`,
     );

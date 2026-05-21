@@ -80,30 +80,45 @@ response negotiation is read-side; body type matching is write-side.
 ## List framers
 
 A different shape lives alongside the per-payload codecs: framers that pack /
-unpack a _list_ of opaque byte slots into a single buffer. They don't implement
-the `Codec` interface (no `Request` / `Response`, no content-type negotiation) —
-they're lower-level byte-shovelers used by the batch HTTP routes to carry
-multiple URIs / payloads in one wire envelope.
+unpack a _list_ of opaque byte slots into a single buffer using length-prefixed
+framing. They don't implement the `Codec` interface (no `Request` / `Response`,
+no content-type negotiation) — they're lower-level byte-shovelers used to carry
+many slots in one wire envelope.
 
-| File              | Exports                                                      | Used by                             |
-| ----------------- | ------------------------------------------------------------ | ----------------------------------- |
-| `payload-list.ts` | `encodePayloads(Uint8Array[])` / `decodePayloads(buf, opts)` | `POST /api/v1/receive` request body |
+There's one primitive (`bytes-list`) and one string-shaped wrapper (`url-list`):
 
-Framing is `<u32 payload-len BE><payload-bytes> × N`; decoder returns subarray
-views (no copies). Sibling list framers (e.g. the URI list in
-`src/http/uri-list.ts`) follow the same shape but live next to their
-transport-specific consumer until they're needed elsewhere.
+```
+buf = <lenSize prefix BE><slot bytes> × N
+```
+
+`bytes-list` is parameterized over `lenSize`:
+
+- `lenSize: 2` (u16) — slots up to 64 KiB. Used when many short slots share a
+  tight envelope (e.g. URLs in a query string under a URL-length ceiling).
+- `lenSize: 4` (u32) — slots up to 4 GiB. Used when slots are payload-sized and
+  the envelope is an HTTP body.
+
+`url-list` is a thin wrapper: UTF-8 each URL → `bytes-list` (`lenSize: 2`) →
+url-safe base64 so the bytes survive transit inside a URL.
+
+| File            | Exports                                                         | Used by                             |
+| --------------- | --------------------------------------------------------------- | ----------------------------------- |
+| `bytes-list.ts` | `encodeBytesList(slots, opts?)` / `decodeBytesList(buf, opts?)` | `POST /api/v1/receive` request body |
+| `url-list.ts`   | `encodeUrlList(urls)` / `decodeUrlList(s, opts?)`               | `?u=<b64>` on every batch route     |
+
+Decoder returns subarray views into the input buffer — no copies.
 
 ## File layout
 
-| File              | Exports                                                   |
-| ----------------- | --------------------------------------------------------- |
-| `codec.ts`        | `Codec`, `Encoder`, `Decoder`, `ContentResponseInit`      |
-| `json.ts`         | `json()`                                                  |
-| `text.ts`         | `text(contentType?)`                                      |
-| `raw.ts`          | `raw(contentType)`                                        |
-| `field.ts`        | `field(name, { contentTypeField?, defaultContentType? })` |
-| `payload-list.ts` | `encodePayloads` / `decodePayloads` (list framer)         |
+| File            | Exports                                                           |
+| --------------- | ----------------------------------------------------------------- |
+| `codec.ts`      | `Codec`, `Encoder`, `Decoder`, `ContentResponseInit`              |
+| `json.ts`       | `json()`                                                          |
+| `text.ts`       | `text(contentType?)`                                              |
+| `raw.ts`        | `raw(contentType)`                                                |
+| `field.ts`      | `field(name, { contentTypeField?, defaultContentType? })`         |
+| `bytes-list.ts` | `encodeBytesList` / `decodeBytesList` (list framer primitive)     |
+| `url-list.ts`   | `encodeUrlList` / `decodeUrlList` (string list over `bytes-list`) |
 
 One file per codec — the directory is meant to grow as the project absorbs more
 external standards (multipart, signed envelopes, protobuf-over-HTTP, …).

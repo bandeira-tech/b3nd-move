@@ -14,13 +14,13 @@
  *   POST /api/v1/read?u=<b64>      → ./read.ts     (rig.read(urls))
  *   POST /api/v1/observe?u=<b64>   → ./observe.ts  (rig.observe(urls), NDJSON)
  *
- * URIs ride in the URL as `?u=<urlsafe-b64>` (see ./uri-list.ts) so
- * routing / auth / observability can decide on a request without
- * parsing the body. The body is only used by `receive`, where it
- * carries opaque payload bytes framed as
- * `<u32 payload-len><payload-bytes> × N` (see ../codecs/payload-list.ts) —
- * the move layer never JSON-parses payloads; downstream consumers
- * decode at their own boundary.
+ * The URL list rides in the query as `?u=<urlsafe-b64>` (see
+ * ../codecs/url-list.ts) so routing / auth / observability can
+ * decide on a request without parsing the body. The body is only
+ * used by `receive`, where it carries opaque payload bytes framed
+ * by the same `bytes-list` codec at `lenSize: 4` (see
+ * ../codecs/bytes-list.ts) — the move layer never JSON-parses
+ * payloads; downstream consumers decode at their own boundary.
  *
  * This file's only job is to assemble the table and hand it to the
  * shared dispatcher. Wire-adapter failures (bad JSON, schema mismatch)
