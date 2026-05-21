@@ -1,18 +1,24 @@
 /**
  * HttpClient — HTTP implementation of ProtocolInterfaceNode.
  *
- * Speaks the wire shape served by `httpApi` in `service.ts`. The URL
- * list rides in the query as `?u=<b64>` (see
- * `../codecs/url-list.ts`) so routing / auth / observability can
- * decide on a request without parsing the body. The receive body is
- * opaque: `application/octet-stream` carrying the same `bytes-list`
- * framing at `lenSize: 4` (see `../codecs/bytes-list.ts`) — the move
- * layer never JSON-parses payloads.
+ * Speaks the wire shape served by `httpApi` in `service.ts`. Each
+ * batch route packs its string list into the `?u=<b64>` query slot
+ * (see `../codecs/url-list.ts`) so routing / auth / observability
+ * can decide on a request without parsing the body. The receive
+ * body is opaque: `application/octet-stream` carrying the same
+ * `bytes-list` framing at `lenSize: 4` (see
+ * `../codecs/bytes-list.ts`) — the move layer never JSON-parses
+ * payloads.
  *
  *   GET  /api/v1/status            — status (sole status endpoint)
- *   POST /api/v1/receive?u=<b64>   — body: framed payload bytes
- *   POST /api/v1/read?u=<b64>      — no body
- *   POST /api/v1/observe?u=<b64>   — no body, NDJSON response of frames
+ *   POST /api/v1/receive?u=<b64>   — `u=` is a URI list (resource
+ *                                   identifiers, one per payload);
+ *                                   body: framed payload bytes
+ *   POST /api/v1/read?u=<b64>      — `u=` is a URL list (locators —
+ *                                   may carry patterns / listings /
+ *                                   queries); no body
+ *   POST /api/v1/observe?u=<b64>   — `u=` is a URL list; no body;
+ *                                   NDJSON response of frames
  *
  * `receive` payloads must be `Uint8Array` — the producing app
  * encodes once at its own boundary using whatever schema it shares
@@ -158,21 +164,23 @@ export class HttpClient implements ProtocolInterfaceNode {
   /**
    * Receive a batch of outputs.
    *
-   * Payloads must be `Uint8Array` — the move layer is opaque past
-   * the URL. Non-bytes payloads are rejected per-slot with an error
-   * result without sending the request. The producing app is the
-   * only place that has the schema, so it's the only place that
-   * encodes.
+   * Each entry's first slot is a URI — `receive` writes a specific
+   * resource at a specific identifier, no pattern / listing /
+   * higher-order semantics. Payloads must be `Uint8Array`; the move
+   * layer is opaque past the URI. Invalid entries (non-string URI,
+   * non-bytes payload) are rejected per-slot with an error result
+   * without sending the request. The producing app is the only
+   * place that has the schema, so it's the only place that encodes.
    *
-   * @param msgs Array of `Output` tuples `[url, Uint8Array]`.
+   * @param msgs Array of `Output` tuples `[uri, Uint8Array]`.
    * @returns One `ReceiveResult` per input output, in input order.
    */
   async receive(msgs: Output[]): Promise<ReceiveResult[]> {
-    // Pre-validate URLs and payload shape — return per-slot error results
+    // Pre-validate URIs and payload shape — return per-slot error results
     // for invalid entries without sending.
-    const results: (ReceiveResult | null)[] = msgs.map(([url, payload]) => {
-      if (!url || typeof url !== "string") {
-        return { accepted: false, error: "Output URL is required" };
+    const results: (ReceiveResult | null)[] = msgs.map(([uri, payload]) => {
+      if (!uri || typeof uri !== "string") {
+        return { accepted: false, error: "Output URI is required" };
       }
       if (!(payload instanceof Uint8Array)) {
         return {
@@ -184,19 +192,19 @@ export class HttpClient implements ProtocolInterfaceNode {
     });
 
     const validIndices: number[] = [];
-    const validUrls: string[] = [];
+    const validUris: string[] = [];
     const validPayloads: Uint8Array[] = [];
     for (let i = 0; i < msgs.length; i++) {
       if (results[i] === null) {
         validIndices.push(i);
-        validUrls.push(msgs[i][0]);
+        validUris.push(msgs[i][0]);
         validPayloads.push(msgs[i][1] as Uint8Array);
       }
     }
-    if (validUrls.length === 0) return results as ReceiveResult[];
+    if (validUris.length === 0) return results as ReceiveResult[];
 
     try {
-      const u = encodeUrlList(validUrls);
+      const u = encodeUrlList(validUris);
       // Cast around lib.dom's `BodyInit` insisting on `ArrayBuffer`
       // (not `ArrayBufferLike`) for typed-array bodies. `fetch`
       // accepts the Uint8Array fine at runtime.

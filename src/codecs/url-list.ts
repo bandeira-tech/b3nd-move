@@ -1,18 +1,21 @@
 /**
  * @module
- * URL-list framer — packs / unpacks a list of URLs into a single
- * url-safe-base64 string, suitable for a wire envelope's routing
- * slot (today: the `?u=` query parameter on the batch HTTP routes).
+ * URL-list framer — packs / unpacks a list of URL-shaped strings
+ * into a single url-safe-base64 string, suitable for a wire
+ * envelope's routing slot (today: the `?u=` query parameter on the
+ * batch HTTP routes).
  *
- * URLs, not URIs: these are *locators*. The move layer doesn't
- * interpret them — a URL might carry a query string that's
- * meaningful to the persistence/save layer downstream, and the
- * move layer flies it through opaquely.
+ * "URL" here is the superset string shape: a URI (specific
+ * resource identifier, as `receive` sends) is a degenerate URL,
+ * and a locator carrying higher-order info (patterns, listings,
+ * queries — as `read` and `observe` send) is the full URL form.
+ * The move layer doesn't interpret either; this codec just frames
+ * the bytes for transit. Consumers decide what the strings mean.
  *
  * This is a thin wrapper over `./bytes-list.ts`: encode UTF-8 bytes
- * for each URL, frame them at `lenSize: 2` (URLs are short — 64 KiB
- * each is plenty), wrap the result in url-safe base64 so the bytes
- * survive transit inside a URL.
+ * for each entry, frame them at `lenSize: 2` (URL-shaped strings
+ * are short — 64 KiB each is plenty), wrap the result in url-safe
+ * base64 so the bytes survive transit inside a URL.
  *
  *   buf  = bytesList(UTF8(url) for each url, lenSize: 2)
  *   wire = url-safe base64 of `buf`, unpadded
