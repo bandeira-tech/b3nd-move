@@ -20,12 +20,7 @@
  */
 
 import type { Rig } from "@bandeira-tech/b3nd-core/rig";
-import type {
-  Output,
-  ReceiveResult,
-  StatusResult,
-} from "@bandeira-tech/b3nd-core/types";
-import type { ActionName } from "../actions/run.ts";
+import { type ActionName, makeActionCall, runAction } from "../actions/run.ts";
 import { HttpError } from "../router/errors.ts";
 import type { Route } from "../router/route.ts";
 
@@ -169,7 +164,10 @@ export async function dispatchHttp(
 
     try {
       const args = await route.decode(ctx);
-      const result = await execute(rig, route.action, args, abort.signal);
+      const call = makeActionCall(route.action, args, abort.signal);
+      // `await` resolves promises (status/receive/read) and is a no-op
+      // for observe's AsyncIterable, leaving it for encode to stream.
+      const result = await runAction(rig, call);
       // The action discriminant guarantees result matches the route's
       // ResultFor<A>, but TS can't carry that across the existential
       // erasure in the heterogeneous routes array.
@@ -201,29 +199,4 @@ function renderError(e: unknown): Response {
   }
   const msg = e instanceof Error ? e.message : String(e);
   return new Response(msg, { status: 500 });
-}
-
-/**
- * Dispatch the rig method for an action. Unary actions are awaited so
- * `encode` sees the unwrapped result; observe returns the live
- * AsyncIterable so encoders can stream it.
- */
-async function execute(
-  rig: Rig,
-  action: ActionName,
-  args: readonly unknown[],
-  signal: AbortSignal,
-): Promise<
-  StatusResult | ReceiveResult[] | Output[] | AsyncIterable<readonly string[]>
-> {
-  switch (action) {
-    case "status":
-      return await rig.status();
-    case "receive":
-      return await rig.receive(args[0] as Output[]);
-    case "read":
-      return await rig.read(args[0] as string[]);
-    case "observe":
-      return rig.observe(args[0] as string[], signal);
-  }
 }
