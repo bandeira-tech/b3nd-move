@@ -18,7 +18,7 @@
  * routing / auth / observability can decide on a request without
  * parsing the body. The body is only used by `receive`, where it
  * carries opaque payload bytes framed as
- * `<u32 payload-len><payload-bytes> × N` (see ./payload-list.ts) —
+ * `<u32 payload-len><payload-bytes> × N` (see ../codecs/payload-list.ts) —
  * the move layer never JSON-parses payloads; downstream consumers
  * decode at their own boundary.
  *

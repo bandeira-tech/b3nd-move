@@ -6,7 +6,7 @@
  * auth / observability can decide on a request without parsing the
  * body. The receive body is opaque: `application/octet-stream` with
  * `<u32 payload-len><payload-bytes> × N` framing (see
- * `./payload-list.ts`) — the move layer never JSON-parses payloads.
+ * `../codecs/payload-list.ts`) — the move layer never JSON-parses payloads.
  *
  *   GET  /api/v1/status            — status (sole status endpoint)
  *   POST /api/v1/receive?u=<b64>   — body: framed payload bytes
@@ -26,7 +26,7 @@ import type {
   StatusResult,
 } from "@bandeira-tech/b3nd-core/types";
 import { RequestError, TimeoutError, TransportError } from "../errors.ts";
-import { encodePayloads } from "./payload-list.ts";
+import { encodePayloads } from "../codecs/payload-list.ts";
 import { encodeUriList } from "./uri-list.ts";
 
 /** The request about to go on the wire. Mutate any field. */

@@ -3,7 +3,7 @@
  * `POST /api/v1/receive?u=<b64>` — URIs ride in the query string;
  * the body is `application/octet-stream` carrying opaque payload
  * bytes framed as `<u32 payload-len><payload-bytes> × N` (see
- * `./payload-list.ts`). The route slices the body into per-URI
+ * `../codecs/payload-list.ts`). The route slices the body into per-URI
  * `Uint8Array` views and hands `Output<Uint8Array>[]` to the rig —
  * no payload is ever decoded at this layer.
  *
@@ -18,7 +18,7 @@
 import type { Output } from "@bandeira-tech/b3nd-core/types";
 import { BadRequest } from "../router/errors.ts";
 import { route } from "./router.ts";
-import { decodePayloads } from "./payload-list.ts";
+import { decodePayloads } from "../codecs/payload-list.ts";
 import { decodeUriList } from "./uri-list.ts";
 import { json } from "./wire.ts";
 

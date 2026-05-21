@@ -18,7 +18,7 @@ only what's body-shaped: opaque payload bytes on `receive`, nothing on `read` or
 `observe`. The `?u=` encoding is `urlsafe-base64(<u16 url-len><url-utf8> × N)` —
 see [`./uri-list.ts`](./uri-list.ts). The `receive` body framing is
 `<u32 payload-len><payload-bytes> × N` — see
-[`./payload-list.ts`](./payload-list.ts).
+[`../codecs/payload-list.ts`](../codecs/payload-list.ts).
 
 | Method | Path                      | Body                 | Maps to                |
 | ------ | ------------------------- | -------------------- | ---------------------- |

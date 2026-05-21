@@ -77,15 +77,33 @@ Selectors stay in the facet helper modules because their inputs differ (URI vs.
 payload field vs. request header) and they have no encode/decode symmetry —
 response negotiation is read-side; body type matching is write-side.
 
+## List framers
+
+A different shape lives alongside the per-payload codecs: framers that pack /
+unpack a _list_ of opaque byte slots into a single buffer. They don't implement
+the `Codec` interface (no `Request` / `Response`, no content-type negotiation) —
+they're lower-level byte-shovelers used by the batch HTTP routes to carry
+multiple URIs / payloads in one wire envelope.
+
+| File              | Exports                                                      | Used by                             |
+| ----------------- | ------------------------------------------------------------ | ----------------------------------- |
+| `payload-list.ts` | `encodePayloads(Uint8Array[])` / `decodePayloads(buf, opts)` | `POST /api/v1/receive` request body |
+
+Framing is `<u32 payload-len BE><payload-bytes> × N`; decoder returns subarray
+views (no copies). Sibling list framers (e.g. the URI list in
+`src/http/uri-list.ts`) follow the same shape but live next to their
+transport-specific consumer until they're needed elsewhere.
+
 ## File layout
 
-| File       | Exports                                                   |
-| ---------- | --------------------------------------------------------- |
-| `codec.ts` | `Codec`, `Encoder`, `Decoder`, `ContentResponseInit`      |
-| `json.ts`  | `json()`                                                  |
-| `text.ts`  | `text(contentType?)`                                      |
-| `raw.ts`   | `raw(contentType)`                                        |
-| `field.ts` | `field(name, { contentTypeField?, defaultContentType? })` |
+| File              | Exports                                                   |
+| ----------------- | --------------------------------------------------------- |
+| `codec.ts`        | `Codec`, `Encoder`, `Decoder`, `ContentResponseInit`      |
+| `json.ts`         | `json()`                                                  |
+| `text.ts`         | `text(contentType?)`                                      |
+| `raw.ts`          | `raw(contentType)`                                        |
+| `field.ts`        | `field(name, { contentTypeField?, defaultContentType? })` |
+| `payload-list.ts` | `encodePayloads` / `decodePayloads` (list framer)         |
 
 One file per codec — the directory is meant to grow as the project absorbs more
 external standards (multipart, signed envelopes, protobuf-over-HTTP, …).
