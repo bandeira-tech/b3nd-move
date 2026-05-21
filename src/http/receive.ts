@@ -1,24 +1,32 @@
 /**
  * @module
- * `POST /api/v1/receive?u=<b64>` — URIs ride in the query string;
- * the body carries only the payload array. The route zips them into
- * `Output[]` (`[uri, payload]` tuples) for the rig call, so URI
- * routing/auth can decide on a request without parsing the body.
+ * `POST /api/v1/receive?u=<b64>` — the URI list rides in the query
+ * string; the body is `application/octet-stream` carrying opaque
+ * payload bytes framed by the same `bytes-list` codec used for the
+ * URI list, just at `lenSize: 4` so individual payloads can be large
+ * (see `../codecs/bytes-list.ts`). Receive's strings are URIs, not
+ * URLs — `receive` specifically identifies the resource each payload
+ * is being written to; there's no pattern / listing / query
+ * semantic at this route.
  *
- * Body shape: `unknown[]` — one payload per `u=` URI, positional.
- * Length mismatch throws `BadRequest`. Returns one `ReceiveResult`
- * per slot.
+ * The route slices the body into per-URI `Uint8Array` views and
+ * hands `Output<Uint8Array>[]` to the rig — no payload is ever
+ * decoded at this layer.
  *
- * 200 with per-slot accept/reject is a domain outcome; request-level
- * failures (bad JSON, count mismatch, malformed `?u=`) surface as
- * plain-text 400 via the dispatcher.
+ * The win vs. the prior JSON-body shape: the move layer never pays
+ * the JSON.parse cost on the request body. Downstream consumers
+ * (PIN clients that own the schema) decode at their own boundary.
+ *
+ * Length mismatch between URI count and payload count throws
+ * `BadRequest`. Returns one `ReceiveResult` per slot as JSON.
  */
 
 import type { Output } from "@bandeira-tech/b3nd-core/types";
+import { decodeBytesList } from "../codecs/bytes-list.ts";
+import { decodeUrlList } from "../codecs/url-list.ts";
 import { BadRequest } from "../router/errors.ts";
 import { route } from "./router.ts";
-import { decodeUriList } from "./uri-list.ts";
-import { json, readJson } from "./wire.ts";
+import { json } from "./wire.ts";
 
 export const receiveRoute = route({
   on: { method: "POST", path: "/api/v1/receive" },
@@ -28,20 +36,26 @@ export const receiveRoute = route({
     if (!u) throw new BadRequest("Missing ?u= URI list");
     let uris: string[];
     try {
-      uris = decodeUriList(u);
+      uris = decodeUrlList(u);
     } catch (e) {
       throw new BadRequest(e instanceof Error ? e.message : String(e));
     }
-    const body = await readJson(req);
-    if (!Array.isArray(body)) {
-      throw new BadRequest("Expected payload array as body");
+    const body = new Uint8Array(await req.arrayBuffer());
+    let payloads: Uint8Array[];
+    try {
+      payloads = decodeBytesList(body, { lenSize: 4 });
+    } catch (e) {
+      throw new BadRequest(e instanceof Error ? e.message : String(e));
     }
-    if (body.length !== uris.length) {
+    if (payloads.length !== uris.length) {
       throw new BadRequest(
-        `Payload count (${body.length}) does not match URI count (${uris.length})`,
+        `Payload count (${payloads.length}) does not match URI count (${uris.length})`,
       );
     }
-    const outputs: Output[] = uris.map((uri, i) => [uri, body[i]]);
+    const outputs: Output<Uint8Array>[] = uris.map((
+      uri,
+      i,
+    ) => [uri, payloads[i]]);
     return [outputs];
   },
   encode: (results) => json(results, 200),

@@ -48,8 +48,8 @@ Deno.test("HttpClient preSend — stamps headers and query params on every call"
         r.url.searchParams.set("region", "eu");
       },
     });
-    await client.receive([["mutable://x/y", { v: 1 }]]);
-    await client.receive([["mutable://x/z", { v: 2 }]]);
+    await client.receive([["mutable://x/y", new Uint8Array(0)]]);
+    await client.receive([["mutable://x/z", new Uint8Array(0)]]);
     assertEquals(seen.length, 2);
     for (const s of seen) {
       assertEquals(s.auth, "Bearer tok-1");
@@ -83,7 +83,7 @@ Deno.test("HttpClient preSend — async hook is awaited", async () => {
         r.headers.set("Authorization", "Bearer async-tok");
       },
     });
-    await client.receive([["mutable://x/y", {}]]);
+    await client.receive([["mutable://x/y", new Uint8Array(0)]]);
     assertEquals(receivedAuth, "Bearer async-tok");
   } finally {
     ac.abort();
@@ -117,7 +117,7 @@ Deno.test("HttpClient preSend — functions compose via plain calls", async () =
         trace(r);
       },
     });
-    await client.receive([["mutable://x/y", {}]]);
+    await client.receive([["mutable://x/y", new Uint8Array(0)]]);
     assertEquals(seenAuth, "Bearer t");
     assertEquals(seenTrace, "tr");
   } finally {

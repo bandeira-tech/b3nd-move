@@ -77,15 +77,48 @@ Selectors stay in the facet helper modules because their inputs differ (URI vs.
 payload field vs. request header) and they have no encode/decode symmetry —
 response negotiation is read-side; body type matching is write-side.
 
+## List framers
+
+A different shape lives alongside the per-payload codecs: framers that pack /
+unpack a _list_ of opaque byte slots into a single buffer using length-prefixed
+framing. They don't implement the `Codec` interface (no `Request` / `Response`,
+no content-type negotiation) — they're lower-level byte-shovelers used to carry
+many slots in one wire envelope.
+
+There's one primitive (`bytes-list`) and one string-shaped wrapper (`url-list`):
+
+```
+buf = <lenSize prefix BE><slot bytes> × N
+```
+
+`bytes-list` is parameterized over `lenSize`:
+
+- `lenSize: 2` (u16) — slots up to 64 KiB. Used when many short slots share a
+  tight envelope (e.g. URLs in a query string under a URL-length ceiling).
+- `lenSize: 4` (u32) — slots up to 4 GiB. Used when slots are payload-sized and
+  the envelope is an HTTP body.
+
+`url-list` is a thin wrapper: UTF-8 each URL → `bytes-list` (`lenSize: 2`) →
+url-safe base64 so the bytes survive transit inside a URL.
+
+| File            | Exports                                                         | Used by                             |
+| --------------- | --------------------------------------------------------------- | ----------------------------------- |
+| `bytes-list.ts` | `encodeBytesList(slots, opts?)` / `decodeBytesList(buf, opts?)` | `POST /api/v1/receive` request body |
+| `url-list.ts`   | `encodeUrlList(urls)` / `decodeUrlList(s, opts?)`               | `?u=<b64>` on every batch route     |
+
+Decoder returns subarray views into the input buffer — no copies.
+
 ## File layout
 
-| File       | Exports                                                   |
-| ---------- | --------------------------------------------------------- |
-| `codec.ts` | `Codec`, `Encoder`, `Decoder`, `ContentResponseInit`      |
-| `json.ts`  | `json()`                                                  |
-| `text.ts`  | `text(contentType?)`                                      |
-| `raw.ts`   | `raw(contentType)`                                        |
-| `field.ts` | `field(name, { contentTypeField?, defaultContentType? })` |
+| File            | Exports                                                           |
+| --------------- | ----------------------------------------------------------------- |
+| `codec.ts`      | `Codec`, `Encoder`, `Decoder`, `ContentResponseInit`              |
+| `json.ts`       | `json()`                                                          |
+| `text.ts`       | `text(contentType?)`                                              |
+| `raw.ts`        | `raw(contentType)`                                                |
+| `field.ts`      | `field(name, { contentTypeField?, defaultContentType? })`         |
+| `bytes-list.ts` | `encodeBytesList` / `decodeBytesList` (list framer primitive)     |
+| `url-list.ts`   | `encodeUrlList` / `decodeUrlList` (string list over `bytes-list`) |
 
 One file per codec — the directory is meant to grow as the project absorbs more
 external standards (multipart, signed envelopes, protobuf-over-HTTP, …).

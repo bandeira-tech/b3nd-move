@@ -12,24 +12,39 @@ HTTP transport for B3nd. JSON over `fetch`, with NDJSON streaming for observe.
 
 ## Concepts
 
-**Wire shape.** URIs ride in the URL as `?u=<b64>` so routing / auth /
-observability can decide on a request without parsing the body. The body carries
-only what's body-shaped: payloads on `receive`, nothing on `read` or `observe`.
-The `?u=` encoding is `urlsafe-base64(<u16 url-len><url-utf8> × N)` — see
-[`./uri-list.ts`](./uri-list.ts).
+**Wire shape.** Every batch route packs its string list into the `?u=<b64>`
+query slot so routing / auth / observability can decide on a request without
+parsing the body. The body carries only what's body-shaped: opaque payload bytes
+on `receive`, nothing on `read` or `observe`. Both the `?u=` value and the
+`receive` body use the same length-prefixed `bytes-list` framing — `lenSize: 2`
+for the string list (wrapped in url-safe base64), `lenSize: 4` for the receive
+body (raw bytes). See [`../codecs/url-list.ts`](../codecs/url-list.ts) and
+[`../codecs/bytes-list.ts`](../codecs/bytes-list.ts).
 
-| Method | Path                      | Body        | Maps to                |
-| ------ | ------------------------- | ----------- | ---------------------- |
-| `GET`  | `/api/v1/status`          | —           | `rig.status()`         |
-| `POST` | `/api/v1/receive?u=<b64>` | `unknown[]` | `rig.receive(outputs)` |
-| `POST` | `/api/v1/read?u=<b64>`    | —           | `rig.read(urls)`       |
-| `POST` | `/api/v1/observe?u=<b64>` | —           | `rig.observe(urls)`    |
+The strings on each route differ in semantic, even though the codec is shared:
 
-`receive` body is the payload array — one slot per `u=` URI, positional. The
-route zips them into `Output[]` before calling the rig. Length mismatch → 400.
+- `receive` sends **URIs** — each one specifically identifies the resource a
+  payload is being written to. No patterns, no listings, no queries.
+- `read` and `observe` send **URLs** — locators that may carry higher-order
+  info: pattern matches, listings, paging, filters. The move layer flies them
+  opaquely to the persistence layer; only the executing client interprets them.
+
+| Method | Path                      | `?u=` semantic | Body                 | Maps to                |
+| ------ | ------------------------- | -------------- | -------------------- | ---------------------- |
+| `GET`  | `/api/v1/status`          | —              | —                    | `rig.status()`         |
+| `POST` | `/api/v1/receive?u=<b64>` | URI list       | framed payload bytes | `rig.receive(outputs)` |
+| `POST` | `/api/v1/read?u=<b64>`    | URL list       | —                    | `rig.read(urls)`       |
+| `POST` | `/api/v1/observe?u=<b64>` | URL list       | —                    | `rig.observe(urls)`    |
+
+`receive` is opaque end-to-end: the route slices the body into per-URI
+`Uint8Array` views and hands `Output<Uint8Array>[]` to the rig — no JSON parse,
+no payload allocation beyond the view. Producing apps encode their payload
+schema once at the edge using whatever codec they share with the consumer
+(proto, JSON, raw bytes, anything). The move layer doesn't know or care. Length
+mismatch between URI count and payload count → 400.
 
 **Observe.** `POST /api/v1/observe?u=…` returns an `application/x-ndjson`
-stream; each line is a JSON-encoded `string[]` — the batch of uris that fired —
+stream; each line is a JSON-encoded `string[]` — the batch of urls that fired —
 straight from `rig.observe()`. `HttpClient.observe()` parses the lines and
 yields batches.
 
