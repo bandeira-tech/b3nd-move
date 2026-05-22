@@ -24,11 +24,7 @@
  */
 
 import type { Rig } from "@bandeira-tech/b3nd-core/rig";
-import {
-  type ActionName,
-  makeActionCall,
-  runAction,
-} from "../actions/run.ts";
+import { type ActionName, makeActionCall, runAction } from "../actions/run.ts";
 import { HttpError } from "../router/errors.ts";
 import type { Route } from "../router/route.ts";
 import type { WebSocketRequest, WebSocketResponse } from "./client.ts";
