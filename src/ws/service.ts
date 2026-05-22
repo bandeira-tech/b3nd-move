@@ -22,12 +22,12 @@
  *                                                              the terminator)
  *   - `status`         payload = `{}`                       → data = `StatusResult`
  *
- * Per-type routes (`./{status,receive,read,observe}.ts`) own their
- * decode/encode; `dispatchWs` in `./router.ts` runs the table. The
- * service's only jobs are the WS lifecycle (upgrade, per-socket
- * `observes` map, graceful shutdown) and the one control frame
- * (`observe-cancel`) that operates on that lifecycle rather than the
- * rig.
+ * Per-type routes (`./{status,receive,read,observe,observe-cancel}.ts`)
+ * own their decode/action/encode; `dispatchWs` in `./router.ts` runs
+ * the table. The service's only jobs are the WS lifecycle (upgrade,
+ * per-socket `observes` map, graceful shutdown) and assembling the
+ * route table — `observe` and `observe-cancel` are factories that
+ * close over the per-socket map.
  *
  * Non-upgrade requests get a 404 — the handler does only the WS path.
  * Compose with `withCors` upstream if browser clients hit this directly.
@@ -42,6 +42,7 @@ import type { Rig } from "@bandeira-tech/b3nd-core/rig";
 import type { WebSocketRequest, WebSocketResponse } from "./client.ts";
 import { dispatchWs } from "./router.ts";
 import { observeRoute } from "./observe.ts";
+import { observeCancelRoute } from "./observe-cancel.ts";
 import { readRoute } from "./read.ts";
 import { receiveRoute } from "./receive.ts";
 import { statusRoute } from "./status.ts";
@@ -70,7 +71,6 @@ export interface WsApi {
  */
 export function wsApi(rig: Rig): WsApi {
   const sockets = new Set<WebSocket>();
-  const routes = [statusRoute, receiveRoute, readRoute, observeRoute];
 
   const handler = (req: Request): Promise<Response> => {
     if (req.headers.get("upgrade") !== "websocket") {
@@ -79,6 +79,13 @@ export function wsApi(rig: Rig): WsApi {
 
     const { socket, response } = Deno.upgradeWebSocket(req);
     const observes = new Map<string, AbortController>();
+    const routes = [
+      statusRoute,
+      receiveRoute,
+      readRoute,
+      observeRoute(observes),
+      observeCancelRoute(observes),
+    ];
     sockets.add(socket);
 
     const send = (msg: WebSocketResponse) => {
@@ -99,20 +106,9 @@ export function wsApi(rig: Rig): WsApi {
         return;
       }
 
-      // Control frame: lifecycle-only, never reaches the route table.
-      if (frame.type === "observe-cancel") {
-        observes.get(frame.id)?.abort();
-        return;
-      }
-
       const abort = new AbortController();
-      observes.set(frame.id, abort);
-      try {
-        for await (const resp of dispatchWs(rig, routes, frame, abort)) {
-          send(resp);
-        }
-      } finally {
-        observes.delete(frame.id);
+      for await (const resp of dispatchWs(rig, routes, frame, abort)) {
+        send(resp);
       }
     }
 

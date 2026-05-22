@@ -6,6 +6,8 @@
  * `payloadDecoder` hook. See `./service.ts` for the rationale.
  */
 
+import type { Output } from "@bandeira-tech/b3nd-core/types";
+import { receiveAction } from "../actions/standard.ts";
 import type { Decoder } from "../codecs/codec.ts";
 import { BadRequest } from "../router/errors.ts";
 import { route } from "../http/router.ts";
@@ -21,7 +23,6 @@ export function httpPostContentRoute(options: PostContentRouteOptions) {
   const { payloadDecoder } = options;
   return route({
     on: { method: "POST", path: "/api/v1/content/:uri" },
-    action: "receive",
     decode: async ({ req, params }) => {
       let uri: string;
       try {
@@ -38,8 +39,10 @@ export function httpPostContentRoute(options: PostContentRouteOptions) {
           err instanceof Error ? err.message : String(err),
         );
       }
-      return [[[uri, payload]]];
+      const outputs: Output[] = [[uri, payload]];
+      return [outputs] as const;
     },
+    action: receiveAction,
     encode: (results) => {
       const result = results[0];
       return new Response(JSON.stringify(result), {

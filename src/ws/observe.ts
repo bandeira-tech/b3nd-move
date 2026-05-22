@@ -5,36 +5,44 @@
  * frame with `data: null` on stream end (natural completion, abort, or
  * an `observe-cancel` from the client).
  *
- * `encode` is an async generator that drains the rig's frame iterable
- * and yields one outbound envelope per frame. The `finally` guarantees
- * a terminator regardless of how the iteration ends — the WS client
- * uses that terminator to dispose its subscription.
+ * The route is a factory closing over the per-socket `observes` map.
+ * `decode` registers `ctx.abort` under the frame's `id` so the
+ * companion `observe-cancel` route can find and fire it; `encode`'s
+ * async generator cleans the entry on its `finally`, regardless of how
+ * iteration ends.
  *
  * The dispatcher detects the AsyncIterable return and pumps each
  * yielded envelope onto the socket.
  */
 
+import { observeAction } from "../actions/standard.ts";
 import { validateUrls } from "../actions/validate.ts";
 import { BadRequest } from "../router/errors.ts";
 import { route } from "./router.ts";
 import type { WebSocketResponse } from "./client.ts";
 
-export const observeRoute = route({
-  on: { type: "observe" },
-  action: "observe",
-  decode: ({ payload }) => {
-    const urls = (payload as { urls?: unknown } | null)?.urls;
-    const v = validateUrls(urls);
-    if (!v.ok) throw new BadRequest(v.error);
-    return [v.value];
-  },
-  encode: (frames, ctx) => streamFrames(frames, ctx.id, ctx.abort),
-});
+export function observeRoute(observes: Map<string, AbortController>) {
+  return route({
+    on: { type: "observe" },
+    decode: ({ id, payload, abort }) => {
+      const urls = (payload as { urls?: unknown } | null)?.urls;
+      const v = validateUrls(urls);
+      if (!v.ok) throw new BadRequest(v.error);
+      // Register before yielding any frames so a fast follow-up
+      // `observe-cancel` always lands on a live entry.
+      observes.set(id, abort);
+      return [v.value] as const;
+    },
+    action: observeAction,
+    encode: (frames, ctx) => streamFrames(frames, ctx.id, ctx.abort, observes),
+  });
+}
 
 async function* streamFrames(
   frames: AsyncIterable<readonly string[]>,
   id: string,
   abort: AbortController,
+  observes: Map<string, AbortController>,
 ): AsyncIterable<WebSocketResponse> {
   try {
     for await (const data of frames) {
@@ -42,6 +50,7 @@ async function* streamFrames(
       yield { id, success: true, data };
     }
   } finally {
+    observes.delete(id);
     yield { id, success: true, data: null };
   }
 }

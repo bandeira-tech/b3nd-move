@@ -6,11 +6,12 @@
  * status has no host-defined extras today, so the route is a constant.
  */
 
+import { statusAction } from "../actions/standard.ts";
 import { route } from "./router.ts";
 
 export const statusRoute = route({
   on: { type: "status" },
-  action: "status",
-  decode: () => [],
+  decode: () => [] as const,
+  action: statusAction,
   encode: (data, { id }) => ({ id, success: true, data }),
 });

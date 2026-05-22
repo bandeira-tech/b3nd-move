@@ -6,12 +6,12 @@
  *
  *   GrpcMatcher  `{ method }` — the suffix after `/b3nd.v1.B3ndService/`
  *   GrpcContext  `{ req, encoding, abort }` — what decode/encode see
- *   route<A>()   constructor that preserves action narrowing
+ *   route()      constructor that infers Args/Result from the action fn
  *   dispatchGrpc gates SERVICE_PREFIX + POST, picks encoding from
  *                Content-Type, runs the table, renders errors as
  *                `{ "error": message }` JSON
  *
- * The data structure itself (`Route`, `ArgsFor`, `ResultFor`) lives in
+ * The data structure itself (`Route`, `Action`) lives in
  * `../../router/route.ts` and is transport-agnostic. Wire-adapter
  * errors live in `../../router/errors.ts`; their `status` maps onto
  * the HTTP response status here, with the message in the JSON envelope.
@@ -21,14 +21,12 @@
  * branching on `ctx.encoding`. The `observe` route streams NDJSON
  * regardless of encoding (the connectrpc streaming envelope format is
  * not implemented here), so it ignores the field.
+ *
+ * Routes whose `encode` returns `undefined` (fire-and-forget control
+ * frames) render as `204 No Content`.
  */
 
 import type { Rig } from "@bandeira-tech/b3nd-core/rig";
-import {
-  type ActionName,
-  makeActionCall,
-  runAction,
-} from "../../actions/run.ts";
 import { HttpError, NotFound } from "../../router/errors.ts";
 import type { Route } from "../../router/route.ts";
 
@@ -41,15 +39,13 @@ export type Encoding = "json" | "binary";
 /**
  * Internal alias for a gRPC-HTTP-specialised `Route`. Not exported —
  * the public name is the generic `Route`. This just keeps the
- * dispatcher and `route()` signatures from spelling out the four type
+ * dispatcher and `route()` signatures from spelling out the five type
  * params at every site.
  */
-type GrpcRoute<A extends ActionName = ActionName> = Route<
-  A,
-  GrpcMatcher,
-  GrpcContext,
-  Response
->;
+type GrpcRoute<
+  Args extends readonly unknown[] = readonly unknown[],
+  Result = unknown,
+> = Route<Args, Result, GrpcMatcher, GrpcContext, Response>;
 
 // ── gRPC-HTTP-specific axes of `Route` ──
 
@@ -74,14 +70,19 @@ export interface GrpcContext {
 }
 
 /**
- * Type-preserving gRPC-HTTP route constructor. Use this so `decode`'s
- * args and `encode`'s result narrow from the literal `action`.
+ * Type-preserving gRPC-HTTP route constructor. Infers `Args`/`Result`
+ * from the supplied `action` so `decode`'s tuple and `encode`'s input
+ * narrow automatically.
  *
- * The return is erased to `Route` so heterogeneous routes share a
- * single table type.
+ * The return is erased to the default `GrpcRoute` so heterogeneous
+ * routes share a single table type.
  */
-export function route<A extends ActionName>(r: GrpcRoute<A>): GrpcRoute {
-  return r as GrpcRoute;
+export function route<Args extends readonly unknown[], Result>(
+  r: GrpcRoute<Args, Result>,
+): GrpcRoute {
+  // Erase Args/Result to the heterogeneous-table type. The dispatcher
+  // re-narrows per-route via the action's runtime closure.
+  return r as unknown as GrpcRoute;
 }
 
 // ── Encoding ──
@@ -111,8 +112,9 @@ export function detectEncoding(req: Request): Encoding {
  *   path doesn't start with SERVICE_PREFIX → 404 plain text
  *   method != POST                         → 404 plain text
  *   no route matches the method suffix     → 404 with `{ error }` JSON
- *   decode/encode throws HttpError         → status from error, JSON envelope
+ *   decode/action/encode throws HttpError  → status from error, JSON envelope
  *   anything else thrown                   → 500 with `{ error }` JSON
+ *   `encode` returns undefined             → 204 No Content
  *   full match                             → run action → encode
  *
  * Errors are wire-adapter concerns (bad body, bad encoding, unknown
@@ -144,12 +146,9 @@ export async function dispatchGrpc(
       const ctx: GrpcContext = { req, encoding, abort };
       try {
         const args = await r.decode(ctx);
-        const call = makeActionCall(r.action, args, abort.signal);
-        const result = await runAction(rig, call);
-        // The action discriminant guarantees result matches the route's
-        // ResultFor<A>, but TS can't carry that across the existential
-        // erasure in the heterogeneous routes array.
-        return await r.encode(result as never, ctx);
+        const result = await r.action(rig, args, abort.signal);
+        const out = await r.encode(result as Awaited<typeof result>, ctx);
+        return out ?? new Response(null, { status: 204 });
       } catch (e) {
         return renderError(e);
       }

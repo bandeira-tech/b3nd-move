@@ -9,6 +9,8 @@
  */
 
 import { create } from "@bufbuild/protobuf";
+import type { Output } from "@bandeira-tech/b3nd-core/types";
+import { receiveAction } from "../../actions/standard.ts";
 import {
   ReceiveRequestSchema,
   ReceiveResponseSchema,
@@ -20,14 +22,15 @@ import { okResponse, readRequest } from "./wire.ts";
 
 export const receiveRoute = route({
   on: { method: "Receive" },
-  action: "receive",
   decode: async ({ req, encoding }) => {
     const body = await readRequest(req, ReceiveRequestSchema, encoding);
     if (!body.messages?.length) {
       throw new BadRequest("Expected [[uri, payload], ...]");
     }
-    return [body.messages.map((m) => outputFromProto(m))];
+    const outputs: Output[] = body.messages.map((m) => outputFromProto(m));
+    return [outputs] as const;
   },
+  action: receiveAction,
   encode: (results, { encoding }) =>
     okResponse(
       ReceiveResponseSchema,

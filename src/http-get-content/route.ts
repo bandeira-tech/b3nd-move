@@ -6,6 +6,7 @@
  * `payloadResponseMap` hook. See `./service.ts` for the rationale.
  */
 
+import { readAction } from "../actions/standard.ts";
 import type { ContentResponseInit, Encoder } from "../codecs/codec.ts";
 import { BadRequest, NotFound } from "../router/errors.ts";
 import { route } from "../http/router.ts";
@@ -21,7 +22,6 @@ export function httpGetContentRoute(options: GetContentRouteOptions) {
   const { payloadResponseMap } = options;
   return route({
     on: { method: "GET", path: "/api/v1/content/:uri" },
-    action: "read",
     decode: ({ params }) => {
       let uri: string;
       try {
@@ -29,8 +29,9 @@ export function httpGetContentRoute(options: GetContentRouteOptions) {
       } catch {
         throw new BadRequest("invalid URI encoding");
       }
-      return [[uri]];
+      return [[uri]] as readonly [string[]];
     },
+    action: readAction,
     encode: async (results, { req }) => {
       const output = results[0];
       if (!output) throw new NotFound();

@@ -14,6 +14,7 @@
  */
 
 import { create, toJson } from "@bufbuild/protobuf";
+import { observeAction } from "../../actions/standard.ts";
 import {
   ObserveFrameSchema,
   ObserveRequestSchema,
@@ -25,14 +26,14 @@ import { readRequest } from "./wire.ts";
 
 export const observeRoute = route({
   on: { method: "Observe" },
-  action: "observe",
   decode: async ({ req }) => {
     // Observe is JSON-only on the wire today; force the codec so
     // binary clients still get a parseable error rather than a hang.
     const body = await readRequest(req, ObserveRequestSchema, "json");
     if (!body.urls?.length) throw new BadRequest("Expected { urls: string[] }");
-    return [body.urls];
+    return [body.urls] as const;
   },
+  action: observeAction,
   encode: (frames, { abort }) =>
     ndjsonResponse(
       frames,

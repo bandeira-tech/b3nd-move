@@ -6,36 +6,37 @@
  *
  *   HttpMatcher  `{ method, path }` with `:param` placeholders
  *   HttpContext  `{ req, params, abort }` — what decode/encode see
- *   route<A>()   constructor that preserves action narrowing
+ *   route()      constructor that infers Args/Result from the action fn
  *   dispatchHttp walks a list of `Route` and runs the first match
  *
- * The data structure itself (`Route`, `ArgsFor`, `ResultFor`) lives in
- * `./route.ts` and is transport-agnostic.
+ * The data structure itself (`Route`, `Action`) lives in
+ * `../router/route.ts` and is transport-agnostic.
  *
  * `path` patterns support `:name` placeholders captured into
  * `ctx.params`. The dispatcher emits standards-compliant
  * `405 Method Not Allowed` automatically when the path matches some
  * route but its method doesn't — `Allow:` header is the union of
  * methods from all path-matching routes.
+ *
+ * Routes whose `encode` returns `undefined` (e.g. fire-and-forget
+ * control frames) render as `204 No Content`. HTTP always emits some
+ * response; `204` is how it represents "nothing to say".
  */
 
 import type { Rig } from "@bandeira-tech/b3nd-core/rig";
-import { type ActionName, makeActionCall, runAction } from "../actions/run.ts";
 import { HttpError } from "../router/errors.ts";
 import type { Route } from "../router/route.ts";
 
 /**
  * Internal alias for an HTTP-specialised `Route`. Not exported — the
  * public name is the generic `Route`. This just keeps the dispatcher
- * and `route()` signatures from spelling out the four type params at
+ * and `route()` signatures from spelling out the five type params at
  * every site.
  */
-type HttpRoute<A extends ActionName = ActionName> = Route<
-  A,
-  HttpMatcher,
-  HttpContext,
-  Response
->;
+type HttpRoute<
+  Args extends readonly unknown[] = readonly unknown[],
+  Result = unknown,
+> = Route<Args, Result, HttpMatcher, HttpContext, Response>;
 
 // ── HTTP-specific axes of `Route` ──
 
@@ -69,21 +70,27 @@ export interface HttpContext {
 }
 
 /**
- * Type-preserving HTTP route constructor. Use this so `decode`'s args
- * and `encode`'s result narrow from the literal `action`:
+ * Type-preserving HTTP route constructor. Infers `Args`/`Result` from
+ * the supplied `action` so `decode`'s tuple and `encode`'s input
+ * narrow automatically:
  *
  *   route({
  *     on: { method: "GET", path: "/api/v1/status" },
- *     action: "status",
- *     decode: () => [],               // narrowed to ArgsFor<"status">
- *     encode: (r) => json(r, …),      // r: StatusResult
+ *     decode: () => [] as const,        // → []
+ *     action: statusAction,             // → Promise<StatusResult>
+ *     encode: (r) => json(r, …),        // r: StatusResult
  *   })
  *
- * The return is erased to `Route` so heterogeneous routes share a
- * single table type.
+ * The return is erased to the default `HttpRoute` so heterogeneous
+ * routes share a single table type.
  */
-export function route<A extends ActionName>(r: HttpRoute<A>): HttpRoute {
-  return r as HttpRoute;
+export function route<Args extends readonly unknown[], Result>(
+  r: HttpRoute<Args, Result>,
+): HttpRoute {
+  // Erase Args/Result to the heterogeneous-table type. The dispatcher
+  // re-narrows per-route via the action's runtime closure, so the
+  // erasure is safe at the call site.
+  return r as unknown as HttpRoute;
 }
 
 // ── Matcher compilation ──
@@ -127,15 +134,16 @@ function compile(matcher: HttpMatcher): Compiled {
  * Walk `routes` against `req`, run the first whose method + path
  * match, run the action, and return its `encode` response.
  *
- *   path doesn't match anything           → 404
- *   path matches but no method does       → 405 with `Allow:` union
- *   `decode`/`encode` throws HttpError    → status + plain-text body
- *   `decode`/`encode` throws anything else → 500 with that message
- *   full match                            → run action → encode
+ *   path doesn't match anything                 → 404
+ *   path matches but no method does             → 405 with `Allow:` union
+ *   `decode`/`action`/`encode` throws HttpError → status + plain-text body
+ *   anything else thrown                        → 500 with that message
+ *   `encode` returns undefined                  → 204 No Content
+ *   full match                                  → run action → encode
  *
  * Errors are wire-adapter concerns (bad JSON, bad encoding, missing
  * resource at the route layer) and never reach the rig. Throwing
- * an `HttpError` is the way routes signal them — see `./errors.ts`.
+ * an `HttpError` is the way routes signal them — see `../router/errors.ts`.
  */
 export async function dispatchHttp(
   rig: Rig,
@@ -145,8 +153,8 @@ export async function dispatchHttp(
   const path = new URL(req.url).pathname;
   const allowed = new Set<string>();
 
-  for (const route of routes) {
-    const c = compile(route.on);
+  for (const r of routes) {
+    const c = compile(r.on);
     const params = c.match(path);
     if (params === null) continue;
     if (!c.methods.includes(req.method)) {
@@ -163,15 +171,12 @@ export async function dispatchHttp(
     const ctx: HttpContext = { req, params, abort };
 
     try {
-      const args = await route.decode(ctx);
-      const call = makeActionCall(route.action, args, abort.signal);
-      // `await` resolves promises (status/receive/read) and is a no-op
-      // for observe's AsyncIterable, leaving it for encode to stream.
-      const result = await runAction(rig, call);
-      // The action discriminant guarantees result matches the route's
-      // ResultFor<A>, but TS can't carry that across the existential
-      // erasure in the heterogeneous routes array.
-      return await route.encode(result as never, ctx);
+      const args = await r.decode(ctx);
+      // `await` resolves promises and is a no-op for observe's
+      // AsyncIterable, leaving it for encode to stream.
+      const result = await r.action(rig, args, abort.signal);
+      const out = await r.encode(result as Awaited<typeof result>, ctx);
+      return out ?? new Response(null, { status: 204 });
     } catch (e) {
       return renderError(e);
     } finally {

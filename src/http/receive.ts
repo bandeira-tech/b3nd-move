@@ -22,6 +22,7 @@
  */
 
 import type { Output } from "@bandeira-tech/b3nd-core/types";
+import { receiveAction } from "../actions/standard.ts";
 import { decodeBytesList } from "../codecs/bytes-list.ts";
 import { decodeUrlList } from "../codecs/url-list.ts";
 import { BadRequest } from "../router/errors.ts";
@@ -30,7 +31,6 @@ import { json } from "./wire.ts";
 
 export const receiveRoute = route({
   on: { method: "POST", path: "/api/v1/receive" },
-  action: "receive",
   decode: async ({ req }) => {
     const u = new URL(req.url).searchParams.get("u");
     if (!u) throw new BadRequest("Missing ?u= URI list");
@@ -52,11 +52,12 @@ export const receiveRoute = route({
         `Payload count (${payloads.length}) does not match URI count (${uris.length})`,
       );
     }
-    const outputs: Output<Uint8Array>[] = uris.map((
+    const outputs: Output<Uint8Array>[] = uris.map((uri, i) => [
       uri,
-      i,
-    ) => [uri, payloads[i]]);
-    return [outputs];
+      payloads[i],
+    ]);
+    return [outputs] as const;
   },
+  action: receiveAction,
   encode: (results) => json(results, 200),
 });

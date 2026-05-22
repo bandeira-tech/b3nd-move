@@ -7,70 +7,79 @@
  *
  *   on      a matcher of the transport's shape (HTTP method+path, WS
  *           envelope type, MCP tool name, …)
- *   action  the rig method this endpoint targets
  *   decode  ctx → args tuple for the action (or throws on bad input)
- *   encode  (action result, ctx) → wire response
+ *   action  the function that does the work — `(rig, args, signal) → result`
+ *   encode  (action result, ctx) → wire response, or `undefined` for none
  *
- * The transport-specific bits are the type parameters — `Match` is
- * the matcher shape, `Ctx` is what `decode` and `encode` see for the
- * request side, `Out` is the wire response type. Each transport
- * specialises with its own values; the data structure stays one.
+ * The transport-shaped bits are the type parameters — `Match` is the
+ * matcher shape, `Ctx` is what `decode` and `encode` see, `Out` is the
+ * wire response type. Each transport specialises with its own values;
+ * the data structure stays one.
+ *
+ * `action` is a function, not a label. The standard set
+ * (`statusAction`, `receiveAction`, `readAction`, `observeAction`) is
+ * exported from `../actions/standard.ts`; custom routes supply their
+ * own function — observe-cancel is the canonical example, an action
+ * that operates on transport state (a per-socket abort registry)
+ * rather than on the rig. Routes that don't need to invoke anything
+ * use `noopAction` from `../actions/standard.ts`.
+ *
+ * `encode` may return `undefined` to mean "no wire response" — useful
+ * for fire-and-forget control frames like observe-cancel. Each
+ * dispatcher decides how to render the empty: WS sends nothing,
+ * HTTP/gRPC emit 204 No Content.
  *
  * No defaults — the generic stays neutral. Transport modules (see
- * `./http.ts`) define their own specialisation alias and export the
- * `route()` constructor that pins the generics for that transport.
+ * `../http/router.ts`) define their own specialisation alias and
+ * export the `route()` constructor that pins the generics for that
+ * transport.
  */
 
-import type {
-  Output,
-  ReceiveResult,
-  StatusResult,
-} from "@bandeira-tech/b3nd-core/types";
-import type { ActionName } from "../actions/run.ts";
+import type { Rig } from "@bandeira-tech/b3nd-core/rig";
 
 /**
- * Args tuple `decode` produces for each rig action. The dispatcher
- * spreads these into the matching rig method; for `observe` it also
- * injects the per-request `AbortSignal`, so decoders don't carry one.
+ * Action function: `(rig, args, signal) → result`. Standard ones bind
+ * rig methods; custom ones (observe-cancel, fire-and-forget control
+ * frames, …) can ignore `rig` / `signal` entirely. The signal is the
+ * dispatcher's per-request `AbortController.signal`.
  */
-export type ArgsFor<A extends ActionName> = A extends "status" ? readonly []
-  : A extends "receive" ? readonly [outputs: Output[]]
-  : A extends "read" ? readonly [urls: string[]]
-  : A extends "observe" ? readonly [urls: string[]]
-  : never;
-
-/**
- * What `encode` receives for each action. Unary actions are awaited
- * before encode runs; observe gets the live `AsyncIterable` so encode
- * can stream it.
- */
-export type ResultFor<A extends ActionName> = A extends "status" ? StatusResult
-  : A extends "receive" ? ReceiveResult[]
-  : A extends "read" ? Output[]
-  : A extends "observe" ? AsyncIterable<readonly string[]>
-  : never;
+export type Action<Args extends readonly unknown[], Result> = (
+  rig: Rig,
+  args: Args,
+  signal: AbortSignal,
+) => Result | Promise<Result>;
 
 /**
  * One endpoint as a declarative record.
  *
- * Parameterised over the four transport-shaped axes:
+ * Parameterised over five axes:
  *
- *   A      action this endpoint targets (narrows decode/encode types)
+ *   Args   tuple `decode` produces and `action` consumes
+ *   Result what `action` returns (Promise / AsyncIterable / value)
  *   Match  matcher shape — `{ method, path }` for HTTP, `{ type }` for WS, …
  *   Ctx    request-side context decode/encode see
  *   Out    wire response type
  *
- * Transport modules pin the latter three for their specialisation —
- * see `./http.ts` for the HTTP case.
+ * Transport modules pin `Match`, `Ctx`, `Out` for their
+ * specialisation — see `../http/router.ts`.
  */
 export interface Route<
-  A extends ActionName,
+  Args extends readonly unknown[],
+  Result,
   Match,
   Ctx,
   Out,
 > {
   on: Match;
-  action: A;
-  decode: (ctx: Ctx) => ArgsFor<A> | Promise<ArgsFor<A>>;
-  encode: (result: ResultFor<A>, ctx: Ctx) => Out | Promise<Out>;
+  decode: (ctx: Ctx) => Args | Promise<Args>;
+  action: Action<Args, Result>;
+  /**
+   * `encode` may return `undefined` for routes that don't reply (the
+   * observe-cancel control frame, fire-and-forget hooks). The
+   * dispatcher renders the empty per transport.
+   */
+  encode: (
+    result: Awaited<Result>,
+    ctx: Ctx,
+  ) => Out | Promise<Out> | undefined | Promise<undefined>;
 }
