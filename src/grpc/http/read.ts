@@ -8,10 +8,7 @@
  */
 
 import { create } from "@bufbuild/protobuf";
-import {
-  ReadRequestSchema,
-  ReadResponseSchema,
-} from "../proto/gen/b3nd_pb.ts";
+import { ReadRequestSchema, ReadResponseSchema } from "../proto/gen/b3nd_pb.ts";
 import { outputToProto } from "../proto/convert.ts";
 import { BadRequest } from "../../router/errors.ts";
 import { route } from "./router.ts";

@@ -13,10 +13,7 @@ import {
   ReceiveRequestSchema,
   ReceiveResponseSchema,
 } from "../proto/gen/b3nd_pb.ts";
-import {
-  outputFromProto,
-  receiveResultToProto,
-} from "../proto/convert.ts";
+import { outputFromProto, receiveResultToProto } from "../proto/convert.ts";
 import { BadRequest } from "../../router/errors.ts";
 import { route } from "./router.ts";
 import { okResponse, readRequest } from "./wire.ts";
