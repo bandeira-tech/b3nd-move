@@ -22,6 +22,13 @@
  *                                                              the terminator)
  *   - `status`         payload = `{}`                       → data = `StatusResult`
  *
+ * Per-type routes (`./{status,receive,read,observe}.ts`) own their
+ * decode/encode; `dispatchWs` in `./router.ts` runs the table. The
+ * service's only jobs are the WS lifecycle (upgrade, per-socket
+ * `observes` map, graceful shutdown) and the one control frame
+ * (`observe-cancel`) that operates on that lifecycle rather than the
+ * rig.
+ *
  * Non-upgrade requests get a 404 — the handler does only the WS path.
  * Compose with `withCors` upstream if browser clients hit this directly.
  *
@@ -33,8 +40,11 @@
 
 import type { Rig } from "@bandeira-tech/b3nd-core/rig";
 import type { WebSocketRequest, WebSocketResponse } from "./client.ts";
-import { runAction } from "../actions/run.ts";
-import { validateOutputs, validateUrls } from "../actions/validate.ts";
+import { dispatchWs } from "./router.ts";
+import { observeRoute } from "./observe.ts";
+import { readRoute } from "./read.ts";
+import { receiveRoute } from "./receive.ts";
+import { statusRoute } from "./status.ts";
 
 /**
  * Fetch handler with a `closeAll` lifecycle hook.
@@ -60,6 +70,7 @@ export interface WsApi {
  */
 export function wsApi(rig: Rig): WsApi {
   const sockets = new Set<WebSocket>();
+  const routes = [statusRoute, receiveRoute, readRoute, observeRoute];
 
   const handler = (req: Request): Promise<Response> => {
     if (req.headers.get("upgrade") !== "websocket") {
@@ -81,88 +92,27 @@ export function wsApi(rig: Rig): WsApi {
     };
 
     async function handleMessage(event: MessageEvent): Promise<void> {
-      let raw: WebSocketRequest;
+      let frame: WebSocketRequest;
       try {
-        raw = JSON.parse(event.data);
+        frame = JSON.parse(event.data);
       } catch {
         return;
       }
-      const { id, type, payload } = raw;
 
+      // Control frame: lifecycle-only, never reaches the route table.
+      if (frame.type === "observe-cancel") {
+        observes.get(frame.id)?.abort();
+        return;
+      }
+
+      const abort = new AbortController();
+      observes.set(frame.id, abort);
       try {
-        switch (type) {
-          case "receive": {
-            const v = validateOutputs(payload);
-            if (!v.ok) {
-              send({ id, success: false, error: v.error });
-              return;
-            }
-            const data = await runAction(rig, {
-              action: "receive",
-              outputs: v.value,
-            });
-            send({ id, success: true, data });
-            return;
-          }
-          case "read": {
-            const v = validateUrls(
-              (payload as { urls?: unknown } | null)?.urls,
-            );
-            if (!v.ok) {
-              send({ id, success: false, error: v.error });
-              return;
-            }
-            const data = await runAction(rig, {
-              action: "read",
-              urls: v.value,
-            });
-            send({ id, success: true, data });
-            return;
-          }
-          case "status": {
-            const data = await runAction(rig, { action: "status" });
-            send({ id, success: true, data });
-            return;
-          }
-          case "observe": {
-            const v = validateUrls(
-              (payload as { urls?: unknown } | null)?.urls,
-            );
-            if (!v.ok) {
-              send({ id, success: false, error: v.error });
-              return;
-            }
-            const abort = new AbortController();
-            observes.set(id, abort);
-            try {
-              const frames = runAction(rig, {
-                action: "observe",
-                urls: v.value,
-                signal: abort.signal,
-              });
-              for await (const frame of frames) {
-                if (abort.signal.aborted) break;
-                send({ id, success: true, data: frame });
-              }
-            } finally {
-              observes.delete(id);
-              send({ id, success: true, data: null });
-            }
-            return;
-          }
-          case "observe-cancel": {
-            observes.get(id)?.abort();
-            return;
-          }
-          default:
-            send({ id, success: false, error: `Unknown type: ${type}` });
+        for await (const resp of dispatchWs(rig, routes, frame, abort)) {
+          send(resp);
         }
-      } catch (e) {
-        send({
-          id,
-          success: false,
-          error: e instanceof Error ? e.message : String(e),
-        });
+      } finally {
+        observes.delete(frame.id);
       }
     }
 
