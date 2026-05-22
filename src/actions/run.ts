@@ -76,6 +76,17 @@ export function runAction(
   rig: Rig,
   call: { action: "observe"; urls: string[]; signal: AbortSignal },
 ): AsyncIterable<readonly string[]>;
+// Union-accepting overload for callers that hold a runtime-tagged
+// `ActionCall` (the dispatcher path) — narrows to the discriminated
+// branches above when the literal is known statically.
+export function runAction(
+  rig: Rig,
+  call: ActionCall,
+):
+  | Promise<StatusResult>
+  | PromiseLike<ReceiveResult[]>
+  | Promise<Output[]>
+  | AsyncIterable<readonly string[]>;
 export function runAction(
   rig: Rig,
   call: ActionCall,
@@ -93,5 +104,33 @@ export function runAction(
       return rig.read(call.urls);
     case "observe":
       return rig.observe(call.urls, call.signal);
+  }
+}
+
+/**
+ * Assemble an `ActionCall` from the route layer's `(action, args)` pair
+ * plus the dispatcher's per-request `AbortSignal`. This is the bridge
+ * between the route's `decode → ArgsFor<A>` shape and `runAction`'s
+ * tagged-union shape — the one place that knows which arg slot becomes
+ * which call field, so transport dispatchers stay free of that switch.
+ *
+ * Observe is the only action that consumes `signal`; the others ignore
+ * it. Dispatchers still pass one in unconditionally so the call site
+ * is uniform.
+ */
+export function makeActionCall(
+  action: ActionName,
+  args: readonly unknown[],
+  signal: AbortSignal,
+): ActionCall {
+  switch (action) {
+    case "status":
+      return { action: "status" };
+    case "receive":
+      return { action: "receive", outputs: args[0] as Output[] };
+    case "read":
+      return { action: "read", urls: args[0] as string[] };
+    case "observe":
+      return { action: "observe", urls: args[0] as string[], signal };
   }
 }
