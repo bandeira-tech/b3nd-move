@@ -7,10 +7,10 @@
  */
 
 import { statusAction } from "../actions/standard.ts";
-import { route } from "./router.ts";
+import { route, wsData } from "./router.ts";
 
 export const statusRoute = route({
-  on: { type: "status" },
+  on: wsData("status"),
   decode: () => [] as const,
   action: statusAction,
   encode: (data, { id }) => ({ id, success: true, data }),
