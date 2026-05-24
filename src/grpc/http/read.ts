@@ -12,11 +12,11 @@ import { readAction } from "../../actions/standard.ts";
 import { ReadRequestSchema, ReadResponseSchema } from "../proto/gen/b3nd_pb.ts";
 import { outputToProto } from "../proto/convert.ts";
 import { BadRequest } from "../../router/errors.ts";
-import { route } from "./router.ts";
+import { grpcMethod, route } from "./router.ts";
 import { okResponse, readRequest } from "./wire.ts";
 
 export const readRoute = route({
-  on: { method: "Read" },
+  on: grpcMethod("Read"),
   decode: async ({ req, encoding }) => {
     const body = await readRequest(req, ReadRequestSchema, encoding);
     if (!body.urls?.length) throw new BadRequest("Expected { urls: string[] }");

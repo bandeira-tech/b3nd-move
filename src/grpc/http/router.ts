@@ -4,8 +4,11 @@
  *
  * The transport-shaped bits live here:
  *
- *   GrpcMatcher  `{ method }` — the suffix after `/b3nd.v1.B3ndService/`
+ *   GrpcMatcher  `(req) => true | null` — function over the raw
+ *                Request; matcher decides whether this route handles it
  *   GrpcContext  `{ req, encoding, abort }` — what decode/encode see
+ *   grpcMethod   helper that builds the common
+ *                `path === SERVICE_PREFIX + <method>` matcher
  *   route()      constructor that infers Args/Result from the action fn
  *   dispatchGrpc gates SERVICE_PREFIX + POST, picks encoding from
  *                Content-Type, runs the table, renders errors as
@@ -15,6 +18,13 @@
  * `../../router/route.ts` and is transport-agnostic. Wire-adapter
  * errors live in `../../router/errors.ts`; their `status` maps onto
  * the HTTP response status here, with the message in the JSON envelope.
+ *
+ * `on` is a function over the request primitive, not a declarative
+ * struct: the matcher owns parsing the URL. The dispatcher just
+ * calls it. The win is composability — a route can match on any
+ * property of the Request (header, custom path scheme) by supplying
+ * its own function, without growing the struct the dispatcher knows
+ * about. The common case is built with `grpcMethod(name)`.
  *
  * Encoding is a per-request axis in the context: each route's
  * `decode` / `encode` handles both JSON and binary protobuf by
@@ -49,11 +59,12 @@ type GrpcRoute<
 
 // ── gRPC-HTTP-specific axes of `Route` ──
 
-/** Declarative matcher: the method suffix after `SERVICE_PREFIX`. */
-export interface GrpcMatcher {
-  /** e.g. `"Receive"`, `"Read"`, `"Observe"`, `"Status"`. */
-  method: string;
-}
+/**
+ * Matcher function. Operates on the raw `Request` — no pre-parsing
+ * by the dispatcher beyond the upstream SERVICE_PREFIX + POST gate —
+ * and returns `true` on a match, `null` to skip.
+ */
+export type GrpcMatcher = (req: Request) => true | null;
 
 /** Per-request context handed to `decode` and `encode`. */
 export interface GrpcContext {
@@ -85,6 +96,24 @@ export function route<Args extends readonly unknown[], Result>(
   return r as unknown as GrpcRoute;
 }
 
+// ── The common-case matcher ──
+
+/**
+ * Build the `path === SERVICE_PREFIX + <method>` matcher — what every
+ * route used to write inline. `method` is the bare RPC name, e.g.
+ * `"Receive"`, `"Read"`, `"Observe"`, `"Status"`.
+ *
+ *   grpcMethod("Receive")
+ *   grpcMethod("Status")
+ *
+ * The dispatcher pre-gates `POST` + `SERVICE_PREFIX`; matchers only
+ * need to discriminate by method suffix.
+ */
+export function grpcMethod(method: string): GrpcMatcher {
+  const expected = SERVICE_PREFIX + method;
+  return (req) => new URL(req.url).pathname === expected ? true : null;
+}
+
 // ── Encoding ──
 
 /**
@@ -105,17 +134,16 @@ export function detectEncoding(req: Request): Encoding {
 // ── Dispatch ──
 
 /**
- * Walk `routes` against `req`, run the first route whose method
- * matches the path suffix, run the action, and return its encoded
- * Response.
+ * Walk `routes` against `req`, call each `on(req)`, and run the first
+ * route that hits.
  *
  *   path doesn't start with SERVICE_PREFIX → 404 plain text
  *   method != POST                         → 404 plain text
- *   no route matches the method suffix     → 404 with `{ error }` JSON
+ *   every matcher returns null             → 404 with `{ error }` JSON
  *   decode/action/encode throws HttpError  → status from error, JSON envelope
  *   anything else thrown                   → 500 with `{ error }` JSON
  *   `encode` returns undefined             → 204 No Content
- *   full match                             → run action → encode
+ *   first matching route                   → run action → encode
  *
  * Errors are wire-adapter concerns (bad body, bad encoding, unknown
  * method) and never reach the rig. Throwing an `HttpError` is the way
@@ -130,7 +158,6 @@ export async function dispatchGrpc(
   if (req.method !== "POST" || !path.startsWith(SERVICE_PREFIX)) {
     return new Response("Not Found", { status: 404 });
   }
-  const method = path.slice(SERVICE_PREFIX.length);
   const encoding = detectEncoding(req);
 
   // Per-request lifecycle. For streaming actions (observe) this is
@@ -142,7 +169,7 @@ export async function dispatchGrpc(
 
   try {
     for (const r of routes) {
-      if (r.on.method !== method) continue;
+      if (r.on(req) === null) continue;
       const ctx: GrpcContext = { req, encoding, abort };
       try {
         const args = await r.decode(ctx);
@@ -153,6 +180,7 @@ export async function dispatchGrpc(
         return renderError(e);
       }
     }
+    const method = path.slice(SERVICE_PREFIX.length);
     return renderError(new NotFound(`Unknown method: ${method}`));
   } finally {
     req.signal.removeEventListener("abort", onAbort);

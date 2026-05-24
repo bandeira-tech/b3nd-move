@@ -17,11 +17,11 @@ import {
 } from "../proto/gen/b3nd_pb.ts";
 import { outputFromProto, receiveResultToProto } from "../proto/convert.ts";
 import { BadRequest } from "../../router/errors.ts";
-import { route } from "./router.ts";
+import { grpcMethod, route } from "./router.ts";
 import { okResponse, readRequest } from "./wire.ts";
 
 export const receiveRoute = route({
-  on: { method: "Receive" },
+  on: grpcMethod("Receive"),
   decode: async ({ req, encoding }) => {
     const body = await readRequest(req, ReceiveRequestSchema, encoding);
     if (!body.messages?.length) {
