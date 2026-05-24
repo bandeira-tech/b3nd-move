@@ -49,11 +49,3 @@ export const observeAction: Action<
   readonly [urls: string[]],
   AsyncIterable<readonly string[]>
 > = (rig, [urls], signal) => rig.observe(urls, signal);
-
-/**
- * No-op action — for routes whose work happens entirely in `decode`
- * (control frames that mutate transport state through a closure). The
- * route's `encode` typically returns `undefined` so the dispatcher
- * renders no wire response.
- */
-export const noopAction: Action<readonly unknown[], void> = () => {};

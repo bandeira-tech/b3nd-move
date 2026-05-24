@@ -21,8 +21,7 @@
  * exported from `../actions/standard.ts`; custom routes supply their
  * own function — observe-cancel is the canonical example, an action
  * that operates on transport state (a per-socket abort registry)
- * rather than on the rig. Routes that don't need to invoke anything
- * use `noopAction` from `../actions/standard.ts`.
+ * rather than on the rig.
  *
  * `encode` may return `undefined` to mean "no wire response" — useful
  * for fire-and-forget control frames like observe-cancel. Each
