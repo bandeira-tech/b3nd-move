@@ -9,11 +9,11 @@
  */
 
 import { assertEquals } from "@std/assert";
-import { HttpClient } from "./client.ts";
+import { HttpClient } from "../../../src/http/client.ts";
 import { buildUrl, parseUrl } from "@bandeira-tech/b3nd-core/url";
 import { FunctionalClient } from "@bandeira-tech/b3nd-core";
 import { connection } from "@bandeira-tech/b3nd-core/rig";
-import { httpApi } from "./service.ts";
+import { httpApi } from "../../../src/http/service.ts";
 import { Rig } from "@bandeira-tech/b3nd-core/rig";
 import type { Output } from "@bandeira-tech/b3nd-core/types";
 

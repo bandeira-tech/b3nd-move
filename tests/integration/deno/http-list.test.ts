@@ -9,7 +9,7 @@
  */
 
 import { assertEquals } from "@std/assert";
-import { HttpClient } from "./client.ts";
+import { HttpClient } from "../../../src/http/client.ts";
 
 function createClientWithServer(handler: (req: Request) => Response): {
   client: HttpClient;
