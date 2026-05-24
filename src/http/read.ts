@@ -11,6 +11,7 @@
  * dispatcher.
  */
 
+import { readAction } from "../actions/standard.ts";
 import { decodeUrlList } from "../codecs/url-list.ts";
 import { BadRequest } from "../router/errors.ts";
 import { route } from "./router.ts";
@@ -18,15 +19,15 @@ import { json } from "./wire.ts";
 
 export const readRoute = route({
   on: { method: "POST", path: "/api/v1/read" },
-  action: "read",
   decode: ({ req }) => {
     const u = new URL(req.url).searchParams.get("u");
     if (!u) throw new BadRequest("Missing ?u= URL list");
     try {
-      return [decodeUrlList(u)];
+      return [decodeUrlList(u)] as const;
     } catch (e) {
       throw new BadRequest(e instanceof Error ? e.message : String(e));
     }
   },
+  action: readAction,
   encode: (outs) => json(outs, 200),
 });

@@ -7,6 +7,7 @@
  * factory so the caller can pass that metadata at instantiation.
  */
 
+import { statusAction } from "../actions/standard.ts";
 import { route } from "./router.ts";
 import { json } from "./wire.ts";
 
@@ -19,8 +20,8 @@ export function statusRoute(options?: StatusRouteOptions) {
   const statusMeta = options?.statusMeta;
   return route({
     on: { method: "GET", path: "/api/v1/status" },
-    action: "status",
-    decode: () => [],
+    decode: () => [] as const,
+    action: statusAction,
     encode: (res) => {
       const body = statusMeta ? { ...res, ...statusMeta } : res;
       return json(body, res.status === "healthy" ? 200 : 503);

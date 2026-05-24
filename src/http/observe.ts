@@ -11,22 +11,23 @@
  */
 
 import { ndjsonResponse } from "../actions/ndjson.ts";
+import { observeAction } from "../actions/standard.ts";
 import { decodeUrlList } from "../codecs/url-list.ts";
 import { BadRequest } from "../router/errors.ts";
 import { route } from "./router.ts";
 
 export const observeRoute = route({
   on: { method: "POST", path: "/api/v1/observe" },
-  action: "observe",
   decode: ({ req }) => {
     const u = new URL(req.url).searchParams.get("u");
     if (!u) throw new BadRequest("Missing ?u= URL list");
     try {
-      return [decodeUrlList(u)];
+      return [decodeUrlList(u)] as const;
     } catch (e) {
       throw new BadRequest(e instanceof Error ? e.message : String(e));
     }
   },
+  action: observeAction,
   encode: (frames, ctx) =>
     ndjsonResponse(frames, ctx.abort, undefined, {
       "X-Accel-Buffering": "no",

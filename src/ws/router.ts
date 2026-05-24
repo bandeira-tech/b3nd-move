@@ -6,25 +6,24 @@
  *
  *   WsMatcher    `{ type }` — matches a single envelope `type` value
  *   WsContext    `{ id, payload, abort }` — what decode/encode see
- *   route<A>()   constructor that preserves action narrowing
+ *   route()      constructor that infers Args/Result from the action fn
  *   dispatchWs   matches one inbound frame, runs the action, yields
- *                one or more outbound envelopes
+ *                zero, one, or many outbound envelopes
  *
- * The data structure itself (`Route`, `ArgsFor`, `ResultFor`) lives in
+ * The data structure itself (`Route`, `Action`) lives in
  * `../router/route.ts` and is transport-agnostic. Wire-adapter errors
  * live in `../router/errors.ts`; their `status` is mapped here into the
  * `error` field of the envelope — WS doesn't carry an HTTP status, but
  * the dispatcher still uses the shared taxonomy so transports stay in
  * sync on what counts as a 400 vs. 500.
  *
- * `observe-cancel` is intentionally **not** a route. It's a control
- * frame that operates on the per-socket lifecycle (the `observes` map
- * the service owns), so the service handles it before reaching the
- * route table.
+ * `observe-cancel` is now a regular route: its action operates on the
+ * per-socket `observes` map (a closure captured by the route factory),
+ * its `encode` returns `undefined`, and the dispatcher yields no
+ * envelope. The service no longer needs to special-case anything.
  */
 
 import type { Rig } from "@bandeira-tech/b3nd-core/rig";
-import { type ActionName, makeActionCall, runAction } from "../actions/run.ts";
 import { HttpError } from "../router/errors.ts";
 import type { Route } from "../router/route.ts";
 import type { WebSocketRequest, WebSocketResponse } from "./client.ts";
@@ -32,15 +31,20 @@ import type { WebSocketRequest, WebSocketResponse } from "./client.ts";
 /**
  * Internal alias for a WS-specialised `Route`. Not exported — the
  * public name is the generic `Route`. This just keeps the dispatcher
- * and `route()` signatures from spelling out the four type params at
+ * and `route()` signatures from spelling out the five type params at
  * every site.
  *
  * `Out` is a union so observe can return an `AsyncIterable` of envelope
  * frames (one per fired batch + a terminator) while unary actions
- * return a single envelope.
+ * return a single envelope. Routes that don't reply (observe-cancel)
+ * have `encode` return `undefined`; the dispatcher yields nothing.
  */
-type WsRoute<A extends ActionName = ActionName> = Route<
-  A,
+type WsRoute<
+  Args extends readonly unknown[] = readonly unknown[],
+  Result = unknown,
+> = Route<
+  Args,
+  Result,
   WsMatcher,
   WsContext,
   WebSocketResponse | AsyncIterable<WebSocketResponse>
@@ -50,7 +54,7 @@ type WsRoute<A extends ActionName = ActionName> = Route<
 
 /** Declarative matcher: the inbound envelope's `type` value. */
 export interface WsMatcher {
-  type: ActionName;
+  type: WebSocketRequest["type"];
 }
 
 /** Per-frame context handed to `decode` and `encode`. */
@@ -60,23 +64,29 @@ export interface WsContext {
   /** Raw `payload` field from the inbound envelope; route owns its shape. */
   payload: unknown;
   /**
-   * Per-frame abort. The service registers this in its socket-level
-   * `observes` map so an `observe-cancel` frame with the same `id` can
-   * fire it; the abort flows into the rig for streaming actions and is
-   * a no-op for unary ones.
+   * Per-frame abort. The observe route registers this in the
+   * socket-level `observes` map (via a closure passed to its factory)
+   * so an `observe-cancel` frame with the same `id` can fire it; the
+   * abort flows into the rig for streaming actions and is a no-op for
+   * unary ones.
    */
   abort: AbortController;
 }
 
 /**
- * Type-preserving WS route constructor. Use this so `decode`'s args
- * and `encode`'s result narrow from the literal `action`.
+ * Type-preserving WS route constructor. Infers `Args`/`Result` from
+ * the supplied `action` so `decode`'s tuple and `encode`'s input
+ * narrow automatically.
  *
- * The return is erased to `Route` so heterogeneous routes share a
- * single table type.
+ * The return is erased to the default `WsRoute` so heterogeneous
+ * routes share a single table type.
  */
-export function route<A extends ActionName>(r: WsRoute<A>): WsRoute {
-  return r as WsRoute;
+export function route<Args extends readonly unknown[], Result>(
+  r: WsRoute<Args, Result>,
+): WsRoute {
+  // Erase Args/Result to the heterogeneous-table type. The dispatcher
+  // re-narrows per-route via the action's runtime closure.
+  return r as unknown as WsRoute;
 }
 
 // ── Dispatch ──
@@ -85,14 +95,14 @@ export function route<A extends ActionName>(r: WsRoute<A>): WsRoute {
  * Match `frame` against `routes`, run the first route whose `type`
  * matches, run the action, and yield the encoded envelope(s).
  *
- *   no matching type                       → one envelope, `Unknown type`
- *   decode/encode throws HttpError         → one envelope, `error` = message
- *   decode/encode throws anything else     → one envelope, `error` = message
- *   unary route                            → one envelope from encode
- *   streaming route (observe)              → many envelopes from encode
+ *   no matching type                            → one envelope, `Unknown type`
+ *   decode/action/encode throws HttpError       → one envelope, `error` = message
+ *   anything else thrown                        → one envelope, `error` = message
+ *   `encode` returns undefined                  → no envelope (fire-and-forget)
+ *   unary route                                 → one envelope from encode
+ *   streaming route (observe)                   → many envelopes from encode
  *
- * The caller wires `abort` to the per-frame slot in the socket's
- * `observes` map and pumps each yielded envelope onto the wire.
+ * The caller pumps each yielded envelope onto the wire.
  */
 export async function* dispatchWs(
   rig: Rig,
@@ -109,12 +119,9 @@ export async function* dispatchWs(
     };
     try {
       const args = await r.decode(ctx);
-      const call = makeActionCall(r.action, args, abort.signal);
-      const result = await runAction(rig, call);
-      // The action discriminant guarantees result matches the route's
-      // ResultFor<A>, but TS can't carry that across the existential
-      // erasure in the heterogeneous routes array.
-      const out = await r.encode(result as never, ctx);
+      const result = await r.action(rig, args, abort.signal);
+      const out = await r.encode(result as Awaited<typeof result>, ctx);
+      if (out === undefined) return;
       if (isAsyncIterable(out)) {
         yield* out;
       } else {

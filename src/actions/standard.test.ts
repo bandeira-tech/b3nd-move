@@ -1,7 +1,7 @@
 /// <reference lib="deno.ns" />
 /**
- * runAction: each action dispatches to the corresponding rig method
- * and forwards args/return faithfully.
+ * Standard action functions: each binds the corresponding rig method,
+ * forwarding args and the per-request signal.
  */
 
 import { assertEquals } from "@std/assert";
@@ -12,7 +12,13 @@ import type {
   ReceiveResult,
   StatusResult,
 } from "@bandeira-tech/b3nd-core/types";
-import { runAction } from "./run.ts";
+import {
+  noopAction,
+  observeAction,
+  readAction,
+  receiveAction,
+  statusAction,
+} from "./standard.ts";
 
 class StubBackend implements ProtocolInterfaceNode {
   seen: { fn: string; args: unknown[] }[] = [];
@@ -53,49 +59,53 @@ function buildRig(): { rig: Rig; backend: StubBackend } {
   };
 }
 
-Deno.test("runAction status → StatusResult", async () => {
+const sig = () => new AbortController().signal;
+
+Deno.test("statusAction → StatusResult", async () => {
   const { rig } = buildRig();
-  const out = await runAction(rig, { action: "status" });
+  const out = await statusAction(rig, [], sig());
   assertEquals(out.status, "healthy");
 });
 
-Deno.test("runAction receive → ReceiveResult[]", async () => {
+Deno.test("receiveAction → ReceiveResult[]", async () => {
   const { rig } = buildRig();
   const outputs: Output[] = [
     ["mutable://t/x", { v: 1 }],
     ["mutable://t/y", { v: 2 }],
   ];
-  const results = await runAction(rig, { action: "receive", outputs });
+  const results = await receiveAction(rig, [outputs], sig());
   assertEquals(results.length, 2);
   assertEquals(results.every((r) => r.accepted), true);
 });
 
-Deno.test("runAction read → Output[]", async () => {
+Deno.test("readAction → Output[]", async () => {
   const { rig } = buildRig();
   const urls = ["mutable://t/a", "mutable://t/b"];
-  const outs = await runAction(rig, { action: "read", urls });
+  const outs = await readAction(rig, [urls], sig());
   assertEquals(outs.length, 2);
   assertEquals(outs[0][0], "mutable://t/a");
   assertEquals(outs[1][0], "mutable://t/b");
 });
 
-Deno.test("runAction observe → AsyncIterable streams uri batches", async () => {
+Deno.test("observeAction → AsyncIterable streams uri batches", async () => {
   const { rig } = buildRig();
-  const abort = new AbortController();
+  const ac = new AbortController();
   const frames: (readonly string[])[] = [];
-  for await (
-    const frame of runAction(rig, {
-      action: "observe",
-      urls: ["mutable://t/p"],
-      signal: abort.signal,
-    })
-  ) {
+  const iter = await observeAction(rig, [["mutable://t/p"]], ac.signal);
+  for await (const frame of iter) {
     frames.push(frame);
     if (frames.length >= 1) {
-      abort.abort();
+      ac.abort();
       break;
     }
   }
   assertEquals(frames.length >= 1, true);
   assertEquals(frames[0][0], "mutable://t/p/0");
+});
+
+Deno.test("noopAction returns void without touching rig", () => {
+  const { rig, backend } = buildRig();
+  const out = noopAction(rig, [], sig());
+  assertEquals(out, undefined);
+  assertEquals(backend.seen.length, 0);
 });
