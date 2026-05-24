@@ -12,11 +12,7 @@ import type {
   ReceiveResult,
   StatusResult,
 } from "@bandeira-tech/b3nd-core/types";
-import {
-  noopAction,
-  observeAction,
-  statusAction,
-} from "../actions/standard.ts";
+import { observeAction, statusAction } from "../actions/standard.ts";
 import { BadRequest, InternalError, NotFound } from "../router/errors.ts";
 import { dispatchHttp, route } from "./router.ts";
 
@@ -263,7 +259,7 @@ Deno.test("dispatchHttp: encode returning undefined → 204 No Content", async (
   const r = route({
     on: { method: "POST", path: "/api/v1/noop" },
     decode: () => [] as const,
-    action: noopAction,
+    action: () => {},
     encode: () => undefined,
   });
   const res = await dispatchHttp(

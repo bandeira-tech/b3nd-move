@@ -13,7 +13,6 @@ import type {
   StatusResult,
 } from "@bandeira-tech/b3nd-core/types";
 import {
-  noopAction,
   observeAction,
   readAction,
   receiveAction,
@@ -101,11 +100,4 @@ Deno.test("observeAction → AsyncIterable streams uri batches", async () => {
   }
   assertEquals(frames.length >= 1, true);
   assertEquals(frames[0][0], "mutable://t/p/0");
-});
-
-Deno.test("noopAction returns void without touching rig", () => {
-  const { rig, backend } = buildRig();
-  const out = noopAction(rig, [], sig());
-  assertEquals(out, undefined);
-  assertEquals(backend.seen.length, 0);
 });
