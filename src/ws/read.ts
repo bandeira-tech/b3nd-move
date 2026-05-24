@@ -10,10 +10,10 @@
 import { readAction } from "../actions/standard.ts";
 import { validateUrls } from "../actions/validate.ts";
 import { BadRequest } from "../router/errors.ts";
-import { route } from "./router.ts";
+import { route, wsData } from "./router.ts";
 
 export const readRoute = route({
-  on: { type: "read" },
+  on: wsData("read"),
   decode: ({ payload }) => {
     const urls = (payload as { urls?: unknown } | null)?.urls;
     const v = validateUrls(urls);

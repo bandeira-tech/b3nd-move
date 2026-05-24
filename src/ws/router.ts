@@ -4,8 +4,10 @@
  *
  * The transport-shaped bits live here:
  *
- *   WsMatcher    `{ type }` — matches a single envelope `type` value
+ *   WsMatcher    `(frame) => true | null` — function over the inbound
+ *                envelope; matcher decides whether this route handles it
  *   WsContext    `{ id, payload, abort }` — what decode/encode see
+ *   wsData       helper that builds the common `frame.type === <t>` matcher
  *   route()      constructor that infers Args/Result from the action fn
  *   dispatchWs   matches one inbound frame, runs the action, yields
  *                zero, one, or many outbound envelopes
@@ -16,6 +18,13 @@
  * `error` field of the envelope — WS doesn't carry an HTTP status, but
  * the dispatcher still uses the shared taxonomy so transports stay in
  * sync on what counts as a 400 vs. 500.
+ *
+ * `on` is a function over the frame, not a declarative struct: the
+ * matcher owns inspecting the inbound envelope. The dispatcher just
+ * calls it. The win is composability — a route can match on any
+ * property of the frame (a custom envelope field, payload shape) by
+ * supplying its own function, without growing the struct the
+ * dispatcher knows about. The common case is built with `wsData(type)`.
  *
  * `observe-cancel` is now a regular route: its action operates on the
  * per-socket `observes` map (a closure captured by the route factory),
@@ -52,10 +61,12 @@ type WsRoute<
 
 // ── WS-specific axes of `Route` ──
 
-/** Declarative matcher: the inbound envelope's `type` value. */
-export interface WsMatcher {
-  type: WebSocketRequest["type"];
-}
+/**
+ * Matcher function. Operates on the raw inbound envelope and returns
+ * `true` on a match, `null` to skip. There's no analog to HTTP's 405
+ * here — an unmatched frame produces an `Unknown type` error envelope.
+ */
+export type WsMatcher = (frame: WebSocketRequest) => true | null;
 
 /** Per-frame context handed to `decode` and `encode`. */
 export interface WsContext {
@@ -89,13 +100,27 @@ export function route<Args extends readonly unknown[], Result>(
   return r as unknown as WsRoute;
 }
 
+// ── The common-case matcher ──
+
+/**
+ * Build the `frame.type === <type>` matcher — what every route used
+ * to write inline. Returns `true` when the inbound envelope's `type`
+ * field equals the supplied value, `null` otherwise.
+ *
+ *   wsData("receive")
+ *   wsData("observe-cancel")
+ */
+export function wsData(type: WebSocketRequest["type"]): WsMatcher {
+  return (frame) => frame.type === type ? true : null;
+}
+
 // ── Dispatch ──
 
 /**
- * Match `frame` against `routes`, run the first route whose `type`
- * matches, run the action, and yield the encoded envelope(s).
+ * Match `frame` against `routes` by calling each `on(frame)`, run the
+ * first that hits, and yield the encoded envelope(s).
  *
- *   no matching type                            → one envelope, `Unknown type`
+ *   every matcher returns null                  → one envelope, `Unknown type`
  *   decode/action/encode throws HttpError       → one envelope, `error` = message
  *   anything else thrown                        → one envelope, `error` = message
  *   `encode` returns undefined                  → no envelope (fire-and-forget)
@@ -111,7 +136,7 @@ export async function* dispatchWs(
   abort: AbortController,
 ): AsyncIterable<WebSocketResponse> {
   for (const r of routes) {
-    if (r.on.type !== frame.type) continue;
+    if (r.on(frame) === null) continue;
     const ctx: WsContext = {
       id: frame.id,
       payload: frame.payload,

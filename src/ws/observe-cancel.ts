@@ -15,11 +15,11 @@
  * route ignores `rig` and `signal` and uses the captured map instead.
  */
 
-import { route } from "./router.ts";
+import { route, wsData } from "./router.ts";
 
 export function observeCancelRoute(observes: Map<string, AbortController>) {
   return route({
-    on: { type: "observe-cancel" },
+    on: wsData("observe-cancel"),
     decode: ({ id }) => [id] as const,
     action: (_rig, [id]) => {
       observes.get(id)?.abort();

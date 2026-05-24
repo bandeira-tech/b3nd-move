@@ -18,12 +18,12 @@
 import { observeAction } from "../actions/standard.ts";
 import { validateUrls } from "../actions/validate.ts";
 import { BadRequest } from "../router/errors.ts";
-import { route } from "./router.ts";
+import { route, wsData } from "./router.ts";
 import type { WebSocketResponse } from "./client.ts";
 
 export function observeRoute(observes: Map<string, AbortController>) {
   return route({
-    on: { type: "observe" },
+    on: wsData("observe"),
     decode: ({ id, payload, abort }) => {
       const urls = (payload as { urls?: unknown } | null)?.urls;
       const v = validateUrls(urls);
