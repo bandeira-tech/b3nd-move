@@ -10,7 +10,7 @@ import type { Output } from "@bandeira-tech/b3nd-core/types";
 import { receiveAction } from "../actions/standard.ts";
 import type { Decoder } from "../codecs/codec.ts";
 import { BadRequest } from "../router/errors.ts";
-import { route } from "../http/router.ts";
+import { httpRequest, route } from "../http/router.ts";
 
 /** Re-exported so both `service.ts` and `route.ts` agree on the contract. */
 export type PayloadDecoder = Decoder;
@@ -22,7 +22,7 @@ export interface PostContentRouteOptions {
 export function httpPostContentRoute(options: PostContentRouteOptions) {
   const { payloadDecoder } = options;
   return route({
-    on: { method: "POST", path: "/api/v1/content/:uri" },
+    on: httpRequest("POST", "/api/v1/content/:uri"),
     decode: async ({ req, params }) => {
       let uri: string;
       try {

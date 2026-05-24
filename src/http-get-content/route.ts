@@ -9,7 +9,7 @@
 import { readAction } from "../actions/standard.ts";
 import type { ContentResponseInit, Encoder } from "../codecs/codec.ts";
 import { BadRequest, NotFound } from "../router/errors.ts";
-import { route } from "../http/router.ts";
+import { httpRequest, route } from "../http/router.ts";
 
 /** Re-exported so both `service.ts` and `route.ts` agree on the contract. */
 export type PayloadResponseMap = Encoder;
@@ -21,7 +21,7 @@ export interface GetContentRouteOptions {
 export function httpGetContentRoute(options: GetContentRouteOptions) {
   const { payloadResponseMap } = options;
   return route({
-    on: { method: "GET", path: "/api/v1/content/:uri" },
+    on: httpRequest("GET", "/api/v1/content/:uri"),
     decode: ({ params }) => {
       let uri: string;
       try {

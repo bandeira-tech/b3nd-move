@@ -4,19 +4,27 @@
  *
  * The transport-shaped bits live here:
  *
- *   HttpMatcher  `{ method, path }` with `:param` placeholders
+ *   HttpMatcher  `(req) => HttpMatchResult` — a function over the raw
+ *                Request; the matcher decides hit / miss / 405-fuel
  *   HttpContext  `{ req, params, abort }` — what decode/encode see
+ *   httpRequest  helper that builds the common `method + path` matcher
  *   route()      constructor that infers Args/Result from the action fn
- *   dispatchHttp walks a list of `Route` and runs the first match
+ *   dispatchHttp walks a list of `Route` and runs the first that hits
  *
  * The data structure itself (`Route`, `Action`) lives in
  * `../router/route.ts` and is transport-agnostic.
  *
- * `path` patterns support `:name` placeholders captured into
- * `ctx.params`. The dispatcher emits standards-compliant
- * `405 Method Not Allowed` automatically when the path matches some
- * route but its method doesn't — `Allow:` header is the union of
- * methods from all path-matching routes.
+ * `on` is a function over the request primitive, not a declarative
+ * struct: the matcher owns parsing the URL, splitting methods, and
+ * extracting `:name` captures. The dispatcher just calls it. The win
+ * is composability — a route can match on any property of the Request
+ * (header, host, custom path scheme) by supplying its own function,
+ * without growing the struct shape the dispatcher knows about.
+ *
+ * Matchers participate in 405 by returning `{ allow }` on a
+ * "path matched, method didn't" miss. The dispatcher accumulates the
+ * union and emits the `Allow:` header. A `null` return means "no
+ * match at all" — skip this route silently.
  *
  * Routes whose `encode` returns `undefined` (e.g. fire-and-forget
  * control frames) render as `204 No Content`. HTTP always emits some
@@ -40,20 +48,32 @@ type HttpRoute<
 
 // ── HTTP-specific axes of `Route` ──
 
-/** Declarative matcher: method + path-with-`:params`. */
-export interface HttpMatcher {
-  /** Single method or a list. Used both for match and the `Allow:` header. */
-  method: string | readonly string[];
-  /**
-   * Path pattern. Exact-match by default; `:name` segments capture
-   * one URL segment into `ctx.params[name]` (empty captures don't
-   * match — `/foo/` doesn't match `/foo/:x`).
-   */
-  path: string;
-}
-
 /** Path params extracted from `:name` placeholders in the pattern. */
 export type PathParams = Record<string, string>;
+
+/**
+ * Outcome of an HTTP matcher call.
+ *
+ *   `null`              — no match; the dispatcher skips this route silently.
+ *   `{ params }`        — full match; the dispatcher runs decode/action/encode
+ *                         and merges `params` into the ctx.
+ *   `{ allow }`         — path-shape match but method didn't qualify; the
+ *                         dispatcher folds `allow` into the `Allow:` union
+ *                         used for the 405 response.
+ *
+ * Custom matchers that don't care about 405 just return `{ params }`
+ * or `null` and ignore the third variant.
+ */
+export type HttpMatchResult =
+  | { params: PathParams }
+  | { allow: readonly string[] }
+  | null;
+
+/**
+ * Matcher function. Operates on the raw `Request` — no pre-parsing by
+ * the dispatcher — and returns the outcome above.
+ */
+export type HttpMatcher = (req: Request) => HttpMatchResult;
 
 /** Per-request context handed to `decode` and `encode`. */
 export interface HttpContext {
@@ -75,7 +95,7 @@ export interface HttpContext {
  * narrow automatically:
  *
  *   route({
- *     on: { method: "GET", path: "/api/v1/status" },
+ *     on: httpRequest("GET", "/api/v1/status"),
  *     decode: () => [] as const,        // → []
  *     action: statusAction,             // → Promise<StatusResult>
  *     encode: (r) => json(r, …),        // r: StatusResult
@@ -93,72 +113,76 @@ export function route<Args extends readonly unknown[], Result>(
   return r as unknown as HttpRoute;
 }
 
-// ── Matcher compilation ──
+// ── The common-case matcher ──
 
-interface Compiled {
-  methods: readonly string[];
-  match: (path: string) => PathParams | null;
-}
-
-function methodList(m: HttpMatcher["method"]): readonly string[] {
-  return typeof m === "string" ? [m] : m;
-}
-
-function compile(matcher: HttpMatcher): Compiled {
-  const segments = matcher.path.split("/");
-  return {
-    methods: methodList(matcher.method),
-    match(path: string): PathParams | null {
-      const ps = path.split("/");
-      if (ps.length !== segments.length) return null;
-      const params: PathParams = {};
-      for (let i = 0; i < segments.length; i++) {
-        const seg = segments[i];
-        if (seg.startsWith(":")) {
-          // Strict: `:param` requires a non-empty capture so trailing
-          // slashes (`/foo/`) don't accidentally match `/foo/:x`.
-          if (ps[i] === "") return null;
-          params[seg.slice(1)] = ps[i];
-        } else if (seg !== ps[i]) {
-          return null;
-        }
+/**
+ * Build the `method + path` matcher — what every route used to write
+ * inline. `method` is a single verb or a list; `path` supports
+ * `:name` placeholders captured into `ctx.params`.
+ *
+ *   httpRequest("GET", "/api/v1/status")
+ *   httpRequest(["GET", "POST"], "/api/v1/content/:uri")
+ *
+ * Matching is strict: a `:param` segment requires a non-empty capture,
+ * so `/foo/` doesn't match `/foo/:x`. On a path match where the method
+ * doesn't qualify, the matcher returns `{ allow: methods }` so the
+ * dispatcher can render a standards-compliant 405.
+ */
+export function httpRequest(
+  method: string | readonly string[],
+  path: string,
+): HttpMatcher {
+  const methods = typeof method === "string" ? [method] : method;
+  const segments = path.split("/");
+  return (req) => {
+    const ps = new URL(req.url).pathname.split("/");
+    if (ps.length !== segments.length) return null;
+    const params: PathParams = {};
+    for (let i = 0; i < segments.length; i++) {
+      const seg = segments[i];
+      if (seg.startsWith(":")) {
+        // Strict: `:param` requires a non-empty capture so trailing
+        // slashes (`/foo/`) don't accidentally match `/foo/:x`.
+        if (ps[i] === "") return null;
+        params[seg.slice(1)] = ps[i];
+      } else if (seg !== ps[i]) {
+        return null;
       }
-      return params;
-    },
+    }
+    if (!methods.includes(req.method)) return { allow: methods };
+    return { params };
   };
 }
 
 // ── Dispatch ──
 
 /**
- * Walk `routes` against `req`, run the first whose method + path
- * match, run the action, and return its `encode` response.
+ * Walk `routes` against `req`, call each `on(req)`, and run the first
+ * route that hits.
  *
- *   path doesn't match anything                 → 404
- *   path matches but no method does             → 405 with `Allow:` union
+ *   every matcher returns null                  → 404
+ *   only `{ allow }` results                    → 405 with the `Allow:` union
  *   `decode`/`action`/`encode` throws HttpError → status + plain-text body
  *   anything else thrown                        → 500 with that message
  *   `encode` returns undefined                  → 204 No Content
- *   full match                                  → run action → encode
+ *   first `{ params }` hit                      → run action → encode
  *
  * Errors are wire-adapter concerns (bad JSON, bad encoding, missing
- * resource at the route layer) and never reach the rig. Throwing
- * an `HttpError` is the way routes signal them — see `../router/errors.ts`.
+ * resource at the route layer) and never reach the rig. Throwing an
+ * `HttpError` is the way routes signal them — see `../router/errors.ts`.
  */
 export async function dispatchHttp(
   rig: Rig,
   routes: readonly HttpRoute[],
   req: Request,
 ): Promise<Response> {
-  const path = new URL(req.url).pathname;
   const allowed = new Set<string>();
 
   for (const r of routes) {
-    const c = compile(r.on);
-    const params = c.match(path);
-    if (params === null) continue;
-    if (!c.methods.includes(req.method)) {
-      for (const m of c.methods) allowed.add(m);
+    const m = r.on(req);
+    if (m === null) continue;
+    if (!("params" in m)) {
+      for (const verb of m.allow) allowed.add(verb);
       continue;
     }
 
@@ -168,7 +192,7 @@ export async function dispatchHttp(
     const abort = new AbortController();
     const onAbort = () => abort.abort();
     req.signal.addEventListener("abort", onAbort, { once: true });
-    const ctx: HttpContext = { req, params, abort };
+    const ctx: HttpContext = { req, params: m.params, abort };
 
     try {
       const args = await r.decode(ctx);
