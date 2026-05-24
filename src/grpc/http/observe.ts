@@ -21,11 +21,11 @@ import {
 } from "../proto/gen/b3nd_pb.ts";
 import { ndjsonResponse } from "../../actions/ndjson.ts";
 import { BadRequest } from "../../router/errors.ts";
-import { route } from "./router.ts";
+import { grpcMethod, route } from "./router.ts";
 import { readRequest } from "./wire.ts";
 
 export const observeRoute = route({
-  on: { method: "Observe" },
+  on: grpcMethod("Observe"),
   decode: async ({ req }) => {
     // Observe is JSON-only on the wire today; force the codec so
     // binary clients still get a parseable error rather than a hang.

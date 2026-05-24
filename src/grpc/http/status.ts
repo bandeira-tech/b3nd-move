@@ -10,11 +10,11 @@
 import { statusAction } from "../../actions/standard.ts";
 import { StatusResponseSchema } from "../proto/gen/b3nd_pb.ts";
 import { statusResultToResponse } from "../proto/convert.ts";
-import { route } from "./router.ts";
+import { grpcMethod, route } from "./router.ts";
 import { okResponse } from "./wire.ts";
 
 export const statusRoute = route({
-  on: { method: "Status" },
+  on: grpcMethod("Status"),
   decode: () => [] as const,
   action: statusAction,
   encode: (result, { encoding }) =>
