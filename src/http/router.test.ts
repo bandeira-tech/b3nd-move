@@ -14,7 +14,7 @@ import type {
 } from "@bandeira-tech/b3nd-core/types";
 import { observeAction, statusAction } from "../actions/standard.ts";
 import { BadRequest, InternalError, NotFound } from "../router/errors.ts";
-import { dispatchHttp, route } from "./router.ts";
+import { dispatchHttp, httpRequest, route } from "./router.ts";
 
 class StubBackend implements ProtocolInterfaceNode {
   receive(outs: Output[]): Promise<ReceiveResult[]> {
@@ -45,7 +45,7 @@ function req(path: string, init?: RequestInit): Request {
 
 const statusEcho = () =>
   route({
-    on: { method: "GET", path: "/api/v1/x" },
+    on: httpRequest("GET", "/api/v1/x"),
     decode: () => [] as const,
     action: statusAction,
     encode: () => new Response("hit", { status: 200 }),
@@ -79,13 +79,13 @@ Deno.test("dispatchHttp: path matches but method doesn't → 405 with Allow", as
 
 Deno.test("dispatchHttp: 405 Allow unions methods from all path-matching routes", async () => {
   const get = route({
-    on: { method: "GET", path: "/api/v1/content/:uri" },
+    on: httpRequest("GET", "/api/v1/content/:uri"),
     decode: () => [] as const,
     action: statusAction,
     encode: () => new Response("get"),
   });
   const post = route({
-    on: { method: "POST", path: "/api/v1/content/:uri" },
+    on: httpRequest("POST", "/api/v1/content/:uri"),
     decode: () => [] as const,
     action: statusAction,
     encode: () => new Response("post"),
@@ -103,7 +103,7 @@ Deno.test("dispatchHttp: 405 Allow unions methods from all path-matching routes"
 Deno.test("dispatchHttp: :param captures into params", async () => {
   let seen: Record<string, string> | null = null;
   const r = route({
-    on: { method: "GET", path: "/api/v1/content/:uri" },
+    on: httpRequest("GET", "/api/v1/content/:uri"),
     decode: ({ params }) => {
       seen = params;
       return [] as const;
@@ -117,7 +117,7 @@ Deno.test("dispatchHttp: :param captures into params", async () => {
 
 Deno.test("dispatchHttp: trailing slash does not match :param (strict)", async () => {
   const r = route({
-    on: { method: "GET", path: "/api/v1/content/:uri" },
+    on: httpRequest("GET", "/api/v1/content/:uri"),
     decode: () => [] as const,
     action: statusAction,
     encode: () => new Response("ok"),
@@ -128,7 +128,7 @@ Deno.test("dispatchHttp: trailing slash does not match :param (strict)", async (
 
 Deno.test("dispatchHttp: multi-method matcher accepts both", async () => {
   const r = route({
-    on: { method: ["GET", "POST"], path: "/api/v1/x" },
+    on: httpRequest(["GET", "POST"], "/api/v1/x"),
     decode: () => [] as const,
     action: statusAction,
     encode: () => new Response("ok"),
@@ -145,7 +145,7 @@ Deno.test("dispatchHttp: multi-method matcher accepts both", async () => {
 
 Deno.test("dispatchHttp: decode throwing BadRequest → 400 + plain text", async () => {
   const r = route({
-    on: { method: "GET", path: "/api/v1/x" },
+    on: httpRequest("GET", "/api/v1/x"),
     decode: () => {
       throw new BadRequest("nope");
     },
@@ -159,7 +159,7 @@ Deno.test("dispatchHttp: decode throwing BadRequest → 400 + plain text", async
 
 Deno.test("dispatchHttp: encode throwing NotFound → 404 + plain text", async () => {
   const r = route({
-    on: { method: "GET", path: "/api/v1/x" },
+    on: httpRequest("GET", "/api/v1/x"),
     decode: () => [] as const,
     action: statusAction,
     encode: () => {
@@ -173,7 +173,7 @@ Deno.test("dispatchHttp: encode throwing NotFound → 404 + plain text", async (
 
 Deno.test("dispatchHttp: arbitrary thrown error → 500 + message", async () => {
   const r = route({
-    on: { method: "GET", path: "/api/v1/x" },
+    on: httpRequest("GET", "/api/v1/x"),
     decode: () => {
       throw new Error("kaboom");
     },
@@ -187,7 +187,7 @@ Deno.test("dispatchHttp: arbitrary thrown error → 500 + message", async () => 
 
 Deno.test("dispatchHttp: InternalError thrown explicitly → 500 + message", async () => {
   const r = route({
-    on: { method: "GET", path: "/api/v1/x" },
+    on: httpRequest("GET", "/api/v1/x"),
     decode: () => {
       throw new InternalError("hook misbehaved");
     },
@@ -202,7 +202,7 @@ Deno.test("dispatchHttp: InternalError thrown explicitly → 500 + message", asy
 Deno.test("dispatchHttp: encode receives unwrapped rig result", async () => {
   const seen: { result?: StatusResult } = {};
   const r = route({
-    on: { method: "GET", path: "/api/v1/x" },
+    on: httpRequest("GET", "/api/v1/x"),
     decode: () => [] as const,
     action: statusAction,
     encode: (result) => {
@@ -217,7 +217,7 @@ Deno.test("dispatchHttp: encode receives unwrapped rig result", async () => {
 Deno.test("dispatchHttp: encode for observe receives the AsyncIterable", async () => {
   let kind = "";
   const r = route({
-    on: { method: "POST", path: "/api/v1/x" },
+    on: httpRequest("POST", "/api/v1/x"),
     decode: () => [["mutable://t/p"]] as readonly [string[]],
     action: observeAction,
     encode: (result) => {
@@ -231,13 +231,13 @@ Deno.test("dispatchHttp: encode for observe receives the AsyncIterable", async (
 
 Deno.test("dispatchHttp: first matching route wins", async () => {
   const first = route({
-    on: { method: "GET", path: "/api/v1/x" },
+    on: httpRequest("GET", "/api/v1/x"),
     decode: () => [] as const,
     action: statusAction,
     encode: () => new Response("first"),
   });
   const second = route({
-    on: { method: "GET", path: "/api/v1/x" },
+    on: httpRequest("GET", "/api/v1/x"),
     decode: () => [] as const,
     action: statusAction,
     encode: () => new Response("second"),
@@ -257,7 +257,7 @@ Deno.test("dispatchHttp: literal segment mismatch → no match", async () => {
 
 Deno.test("dispatchHttp: encode returning undefined → 204 No Content", async () => {
   const r = route({
-    on: { method: "POST", path: "/api/v1/noop" },
+    on: httpRequest("POST", "/api/v1/noop"),
     decode: () => [] as const,
     action: () => {},
     encode: () => undefined,
@@ -275,7 +275,7 @@ Deno.test("dispatchHttp: custom action function is invoked with rig + args + sig
   let seenArgs: unknown = null;
   let seenSignal: AbortSignal | null = null;
   const r = route({
-    on: { method: "POST", path: "/api/v1/custom" },
+    on: httpRequest("POST", "/api/v1/custom"),
     decode: () => ["hello"] as const,
     action: (_rig, args, signal) => {
       seenArgs = args;

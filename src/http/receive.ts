@@ -26,11 +26,11 @@ import { receiveAction } from "../actions/standard.ts";
 import { decodeBytesList } from "../codecs/bytes-list.ts";
 import { decodeUrlList } from "../codecs/url-list.ts";
 import { BadRequest } from "../router/errors.ts";
-import { route } from "./router.ts";
+import { httpRequest, route } from "./router.ts";
 import { json } from "./wire.ts";
 
 export const receiveRoute = route({
-  on: { method: "POST", path: "/api/v1/receive" },
+  on: httpRequest("POST", "/api/v1/receive"),
   decode: async ({ req }) => {
     const u = new URL(req.url).searchParams.get("u");
     if (!u) throw new BadRequest("Missing ?u= URI list");

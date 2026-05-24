@@ -13,7 +13,7 @@
  * import { statusAction } from "@bandeira-tech/b3nd-move/actions/standard";
  *
  * route({
- *   on: { method: "GET", path: "/api/v1/status" },
+ *   on: httpRequest("GET", "/api/v1/status"),
  *   decode: () => [] as const,
  *   action: statusAction,
  *   encode: (res) => json(res),

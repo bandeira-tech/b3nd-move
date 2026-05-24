@@ -14,10 +14,10 @@ import { ndjsonResponse } from "../actions/ndjson.ts";
 import { observeAction } from "../actions/standard.ts";
 import { decodeUrlList } from "../codecs/url-list.ts";
 import { BadRequest } from "../router/errors.ts";
-import { route } from "./router.ts";
+import { httpRequest, route } from "./router.ts";
 
 export const observeRoute = route({
-  on: { method: "POST", path: "/api/v1/observe" },
+  on: httpRequest("POST", "/api/v1/observe"),
   decode: ({ req }) => {
     const u = new URL(req.url).searchParams.get("u");
     if (!u) throw new BadRequest("Missing ?u= URL list");
