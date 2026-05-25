@@ -200,6 +200,16 @@ deno task test
 deno task build:npm   # universal slices → ./npm/
 ```
 
+One-time per clone, install the pre-push hook so the fast CI subset
+(type check, lint, fmt --check, unit, in-process integration) runs
+locally before every push:
+
+```bash
+deno task hooks:install
+```
+
+Bypass with `git push --no-verify` when you really need to.
+
 ## Related
 
 - [b3nd-core](https://github.com/bandeira-tech/b3nd-core) — `Rig`,

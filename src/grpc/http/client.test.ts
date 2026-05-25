@@ -1,83 +1,381 @@
-import { assertEquals } from "@std/assert";
-import { grpcHttpApi } from "./service.ts";
+/// <reference lib="deno.ns" />
+/**
+ * GrpcHttpClient: pure unit tests with `fetch` stubbed.
+ *
+ * Documents the client's surface — RPC URL, Content-Type negotiation
+ * (json vs proto), request body encoding (toJson / toBinary), response
+ * decode, error mapping, observe NDJSON parsing, preSend hook — all
+ * without touching the network. Wire-level conformance lives in
+ * tests/integration/.
+ */
+
+import { assertEquals, assertRejects } from "@std/assert";
+import {
+  create,
+  fromJson as pbFromJson,
+  toBinary as pbToBinary,
+  toJson as pbToJson,
+} from "@bufbuild/protobuf";
+import {
+  ObserveFrameSchema,
+  ReadResponseSchema,
+  ReceiveRequestSchema,
+  ReceiveResponseSchema,
+  StatusResponseSchema,
+} from "./../proto/gen/b3nd_pb.ts";
 import { GrpcHttpClient } from "./client.ts";
-import { stubRig } from "../../../tests/rigs/stub.ts";
+import { EncodingError, RequestError, TransportError } from "../../errors.ts";
 
-let nextPort = 19100 + Math.floor(Math.random() * 900);
+const PREFIX = "/b3nd.v1.B3ndService/";
 
-async function withServer(fn: (url: string) => Promise<void>): Promise<void> {
-  const port = nextPort++;
-  const server = Deno.serve(
-    { port, hostname: "127.0.0.1" },
-    grpcHttpApi(stubRig()),
-  );
-  try {
-    await fn(`http://127.0.0.1:${port}`);
-  } finally {
-    await server.shutdown();
-  }
+interface Captured {
+  url: URL;
+  headers: Headers;
+  body: BodyInit | null;
+  signal: AbortSignal | undefined;
 }
 
-Deno.test("GrpcHttpClient — receive relays rig ack (JSON)", async () => {
-  await withServer(async (url) => {
-    const client = new GrpcHttpClient({ url });
-    const [result] = await client.receive([
-      ["mutable://test/item", { value: 42 }],
+function spyFetch(
+  respond: (req: Captured) => Response | Promise<Response>,
+): { calls: Captured[]; restore: () => void } {
+  const calls: Captured[] = [];
+  const original = globalThis.fetch;
+  globalThis.fetch = ((
+    input: RequestInfo | URL,
+    init?: RequestInit,
+  ): Promise<Response> => {
+    const captured: Captured = {
+      url: input instanceof URL ? input : new URL(String(input)),
+      headers: new Headers(init?.headers),
+      body: (init?.body ?? null) as BodyInit | null,
+      signal: init?.signal ?? undefined,
+    };
+    calls.push(captured);
+    return Promise.resolve(respond(captured));
+  }) as typeof fetch;
+  return {
+    calls,
+    restore: () => {
+      globalThis.fetch = original;
+    },
+  };
+}
+
+// ── Status ──
+
+Deno.test("status (json): POSTs to SERVICE_PREFIX+Status with application/json", async () => {
+  const respJson = pbToJson(
+    StatusResponseSchema,
+    create(StatusResponseSchema, { status: "healthy" }),
+  );
+  const { calls, restore } = spyFetch(() =>
+    new Response(JSON.stringify(respJson), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    })
+  );
+  try {
+    const s = await new GrpcHttpClient({ url: "http://h" }).status();
+    assertEquals(s.status, "healthy");
+    assertEquals(calls.length, 1);
+    assertEquals(calls[0].url.pathname, `${PREFIX}Status`);
+    assertEquals(calls[0].headers.get("Content-Type"), "application/json");
+  } finally {
+    restore();
+  }
+});
+
+Deno.test("status (binary): Content-Type application/proto, request+response binary", async () => {
+  const bin = pbToBinary(
+    StatusResponseSchema,
+    create(StatusResponseSchema, { status: "healthy" }),
+  );
+  const { calls, restore } = spyFetch(() =>
+    new Response(bin, {
+      status: 200,
+      headers: { "Content-Type": "application/proto" },
+    })
+  );
+  try {
+    const s = await new GrpcHttpClient({ url: "http://h", binary: true })
+      .status();
+    assertEquals(s.status, "healthy");
+    assertEquals(calls[0].headers.get("Content-Type"), "application/proto");
+  } finally {
+    restore();
+  }
+});
+
+// ── Read ──
+
+Deno.test("read: empty urls returns [] without fetch", async () => {
+  const { calls, restore } = spyFetch(() => new Response("never"));
+  try {
+    const out = await new GrpcHttpClient({ url: "http://h" }).read([]);
+    assertEquals(out, []);
+    assertEquals(calls.length, 0);
+  } finally {
+    restore();
+  }
+});
+
+Deno.test("read (json): POSTs Read RPC, parses ReadResponse, returns Output[]", async () => {
+  const respJson = pbToJson(
+    ReadResponseSchema,
+    create(ReadResponseSchema, {
+      results: [
+        {
+          uri: "mutable://x",
+          payload: new TextEncoder().encode(JSON.stringify({ v: 1 })),
+          payloadIsBinary: false,
+        },
+      ],
+    }),
+  );
+  const { calls, restore } = spyFetch(() =>
+    new Response(JSON.stringify(respJson), { status: 200 })
+  );
+  try {
+    const out = await new GrpcHttpClient({ url: "http://h" }).read([
+      "mutable://x",
     ]);
-    assertEquals(result.accepted, true);
-  });
+    assertEquals(calls[0].url.pathname, `${PREFIX}Read`);
+    assertEquals(out, [["mutable://x", { v: 1 }]]);
+  } finally {
+    restore();
+  }
 });
 
-Deno.test("GrpcHttpClient — read decodes rig output payload (JSON)", async () => {
-  await withServer(async (url) => {
-    const client = new GrpcHttpClient({ url });
-    const [[uri, payload]] = await client.read(["mutable://test/item"]);
-    assertEquals(uri, "mutable://test/item");
-    // stubRig echoes `{ echo: url }` — assert the wire decodes the
-    // rig's canned response unchanged.
-    assertEquals(payload, { echo: "mutable://test/item" });
-  });
+Deno.test("read: non-OK response → RequestError with status/body/operation", async () => {
+  const { restore } = spyFetch(() =>
+    new Response(JSON.stringify({ error: "boom" }), {
+      status: 500,
+      headers: { "Content-Type": "application/json" },
+    })
+  );
+  try {
+    const c = new GrpcHttpClient({ url: "http://h" });
+    const err = await assertRejects(
+      () => c.read(["mutable://x"]),
+      RequestError,
+    );
+    assertEquals(err.status, 500);
+    assertEquals(err.operation, "Read");
+    assertEquals(err.transport, "grpc-http");
+  } finally {
+    restore();
+  }
 });
 
-Deno.test("GrpcHttpClient — read decodes rig output payload (binary)", async () => {
-  await withServer(async (url) => {
-    const client = new GrpcHttpClient({ url, binary: true });
-    const [[, payload]] = await client.read(["mutable://test/binary-item"]);
-    assertEquals(payload, { echo: "mutable://test/binary-item" });
-  });
+// ── Receive ──
+
+Deno.test("receive: empty msgs → returns [] without fetch", async () => {
+  const { calls, restore } = spyFetch(() => new Response("never"));
+  try {
+    const out = await new GrpcHttpClient({ url: "http://h" }).receive([]);
+    assertEquals(out, []);
+    assertEquals(calls.length, 0);
+  } finally {
+    restore();
+  }
 });
 
-Deno.test("GrpcHttpClient — batch read preserves slot order", async () => {
-  await withServer(async (url) => {
-    const client = new GrpcHttpClient({ url });
-    const results = await client.read([
-      "mutable://test/a",
-      "mutable://test/b",
+Deno.test("receive (json): sends ReceiveRequest JSON, returns ReceiveResult[]", async () => {
+  const respJson = pbToJson(
+    ReceiveResponseSchema,
+    create(ReceiveResponseSchema, {
+      results: [{ accepted: true }],
+    }),
+  );
+  const { calls, restore } = spyFetch(async (c) => {
+    // Body should be a valid ReceiveRequest JSON envelope.
+    const parsed = JSON.parse(await new Response(c.body).text());
+    // toJson uses camelCase or proto-name; both have `messages`.
+    pbFromJson(ReceiveRequestSchema, parsed);
+    return new Response(JSON.stringify(respJson), { status: 200 });
+  });
+  try {
+    const out = await new GrpcHttpClient({ url: "http://h" }).receive([
+      ["mutable://x", { v: 1 }],
     ]);
-    assertEquals(results.length, 2);
-    assertEquals(results[0], ["mutable://test/a", {
-      echo: "mutable://test/a",
-    }]);
-    assertEquals(results[1], ["mutable://test/b", {
-      echo: "mutable://test/b",
-    }]);
-  });
+    assertEquals(out, [{ accepted: true }]);
+    assertEquals(calls[0].url.pathname, `${PREFIX}Receive`);
+  } finally {
+    restore();
+  }
 });
 
-Deno.test("GrpcHttpClient — status", async () => {
-  await withServer(async (url) => {
-    const client = new GrpcHttpClient({ url });
-    assertEquals((await client.status()).status, "healthy");
-  });
+Deno.test("receive: network error → TransportError", async () => {
+  const original = globalThis.fetch;
+  globalThis.fetch = () => Promise.reject(new Error("dns"));
+  try {
+    const c = new GrpcHttpClient({ url: "http://h" });
+    await assertRejects(
+      () => c.receive([["mutable://x", { v: 1 }]]),
+      TransportError,
+      "dns",
+    );
+  } finally {
+    globalThis.fetch = original;
+  }
 });
 
-Deno.test("GrpcHttpClient — read surfaces stub miss as nullish payload", async () => {
-  await withServer(async (url) => {
-    const client = new GrpcHttpClient({ url });
-    const [[uri, payload]] = await client.read([
-      "mutable://test/__miss__/no-such-thing",
-    ]);
-    assertEquals(uri, "mutable://test/__miss__/no-such-thing");
-    assertEquals(payload == null, true);
-  });
+// ── Observe ──
+
+Deno.test("observe: empty urls returns without fetch", async () => {
+  const { calls, restore } = spyFetch(() => new Response("never"));
+  try {
+    const c = new GrpcHttpClient({ url: "http://h" });
+    for await (const _ of c.observe([], new AbortController().signal)) {
+      /* drain */
+    }
+    assertEquals(calls.length, 0);
+  } finally {
+    restore();
+  }
+});
+
+Deno.test("observe: streams uris from ObserveFrame JSON lines", async () => {
+  const frame1 = JSON.stringify(
+    pbToJson(ObserveFrameSchema, create(ObserveFrameSchema, { uris: ["a"] })),
+  );
+  const frame2 = JSON.stringify(
+    pbToJson(
+      ObserveFrameSchema,
+      create(ObserveFrameSchema, { uris: ["b", "c"] }),
+    ),
+  );
+  const { calls, restore } = spyFetch(() =>
+    new Response(`${frame1}\n${frame2}\n`, { status: 200 })
+  );
+  try {
+    const frames: string[][] = [];
+    for await (
+      const f of new GrpcHttpClient({ url: "http://h" }).observe(
+        ["mutable://x"],
+        new AbortController().signal,
+      )
+    ) {
+      frames.push([...f]);
+    }
+    assertEquals(frames, [["a"], ["b", "c"]]);
+    assertEquals(calls[0].url.pathname, `${PREFIX}Observe`);
+    assertEquals(calls[0].headers.get("Content-Type"), "application/json");
+  } finally {
+    restore();
+  }
+});
+
+Deno.test("observe: server `{ error }` envelope → throws RequestError", async () => {
+  const { restore } = spyFetch(() =>
+    new Response(`${JSON.stringify({ error: "boom" })}\n`, { status: 200 })
+  );
+  try {
+    const c = new GrpcHttpClient({ url: "http://h" });
+    await assertRejects(
+      async () => {
+        for await (
+          const _ of c.observe(["mutable://x"], new AbortController().signal)
+        ) {
+          /* drain */
+        }
+      },
+      RequestError,
+      "boom",
+    );
+  } finally {
+    restore();
+  }
+});
+
+Deno.test("observe: malformed JSON line → throws EncodingError", async () => {
+  const { restore } = spyFetch(() =>
+    new Response(`not-json\n`, { status: 200 })
+  );
+  try {
+    const c = new GrpcHttpClient({ url: "http://h" });
+    await assertRejects(
+      async () => {
+        for await (
+          const _ of c.observe(["mutable://x"], new AbortController().signal)
+        ) {
+          /* drain */
+        }
+      },
+      EncodingError,
+    );
+  } finally {
+    restore();
+  }
+});
+
+Deno.test("observe: caller-aborted signal exits cleanly (no throw)", async () => {
+  const original = globalThis.fetch;
+  globalThis.fetch = (_input, init) => {
+    if (init?.signal?.aborted) {
+      const e = new Error("aborted");
+      e.name = "AbortError";
+      return Promise.reject(e);
+    }
+    return Promise.resolve(new Response(""));
+  };
+  try {
+    const ac = new AbortController();
+    ac.abort();
+    let yields = 0;
+    for await (
+      const _ of new GrpcHttpClient({ url: "http://h" }).observe([
+        "mutable://x",
+      ], ac.signal)
+    ) {
+      yields++;
+    }
+    assertEquals(yields, 0);
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
+// ── preSend ──
+
+Deno.test("preSend: hook can mutate headers and url on unary RPCs", async () => {
+  const respJson = pbToJson(
+    StatusResponseSchema,
+    create(StatusResponseSchema, { status: "healthy" }),
+  );
+  const { calls, restore } = spyFetch(() =>
+    new Response(JSON.stringify(respJson), { status: 200 })
+  );
+  try {
+    const c = new GrpcHttpClient({
+      url: "http://h",
+      preSend: (r) => {
+        r.headers.set("Authorization", "Bearer x");
+        r.url.searchParams.set("traced", "1");
+      },
+    });
+    await c.status();
+    assertEquals(calls[0].headers.get("Authorization"), "Bearer x");
+    assertEquals(calls[0].url.searchParams.get("traced"), "1");
+  } finally {
+    restore();
+  }
+});
+
+// ── config ──
+
+Deno.test("config: trailing slash on baseUrl is stripped", async () => {
+  const respJson = pbToJson(
+    StatusResponseSchema,
+    create(StatusResponseSchema, { status: "healthy" }),
+  );
+  const { calls, restore } = spyFetch(() =>
+    new Response(JSON.stringify(respJson), { status: 200 })
+  );
+  try {
+    await new GrpcHttpClient({ url: "http://h/" }).status();
+    assertEquals(calls[0].url.toString(), `http://h${PREFIX}Status`);
+  } finally {
+    restore();
+  }
 });
