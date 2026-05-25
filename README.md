@@ -2,19 +2,14 @@
 
 Encoding, transport, decoding. The moving layer for B3nd.
 
-`@bandeira-tech/b3nd-core` defines a `ProtocolInterfaceNode` — a small surface
-(`receive` / `read` / `observe` / `status`) that every B3nd node speaks — and a
-`Rig` that composes those nodes into routes per operation. `b3nd-move` is the
-wire layer over that surface: for each supported transport it ships a
-**service** (incoming bytes → decode → drive a `Rig` → encode → outgoing bytes)
-and a **client** (the inverse, exposed as a `ProtocolInterfaceNode`). The
-client side is the load-bearing detail: because every client implements the
-core PIN interface, a client over one transport can be wired into a `Rig` as
-the backend for a route served over another transport.
-
-Composition falls out of that: any `Rig` can be served over any subset of
-HTTP, WebSocket, gRPC-over-HTTP, and MCP — and any route in that rig can
-itself be backed by a `b3nd-move` client speaking to some upstream node.
+For each supported transport, `b3nd-move` ships two halves over a `Rig`:
+a **service** (incoming bytes → decode → drive the rig → encode → outgoing
+bytes) and a **client** that implements `ProtocolInterfaceNode`. The client
+side is the load-bearing detail — a client speaking one wire drops into a
+rig route exactly like an in-process node, so any rig can be served over any
+subset of HTTP, WebSocket, gRPC-over-HTTP, and MCP while its individual
+routes are backed by `b3nd-move` clients pointing at upstream nodes on
+whatever wire they happen to speak.
 
 ## Example: HTTP-backed reads, WS-backed receives, served over gRPC
 
