@@ -19,22 +19,9 @@ import { HttpClient } from "@bandeira-tech/b3nd-move/http/client";
 import { WebSocketClient } from "@bandeira-tech/b3nd-move/ws/client";
 import { grpcHttpApi } from "@bandeira-tech/b3nd-move/grpc/http/service";
 
-// Two upstream protocol interface nodes, each reached over a different wire.
-// `HttpClient` and `WebSocketClient` both implement `ProtocolInterfaceNode`,
-// so they plug into a `Rig` route exactly like any in-process backend would.
-const reads = new HttpClient({
-  url: "https://content.example.com",
-});
+const reads = new HttpClient({ url: "https://content.example.com" });
+const writes = new WebSocketClient({ url: "wss://ingest.example.com" });
 
-const writes = new WebSocketClient({
-  url: "wss://ingest.example.com",
-  reconnect: { enabled: true, backoff: "exponential" },
-});
-
-// One rig, two routes:
-//   - `rig.read(uris)`    → dispatched to the HTTP upstream
-//   - `rig.receive(msgs)` → dispatched to the WS upstream
-// `connection(node, patterns)` claims URI patterns; `["*"]` means "everything".
 const rig = new Rig({
   routes: {
     read: [connection(reads, ["*"])],
@@ -42,32 +29,21 @@ const rig = new Rig({
   },
 });
 
-// Expose the composed rig as a gRPC-over-HTTP service. The handler is a
-// portable `(Request) => Response`, so any fetch-capable host works.
 Deno.serve({ port: 50051 }, grpcHttpApi(rig));
 ```
 
-A gRPC client now talks to one endpoint; behind it, reads fan out to an HTTP
-API and receives fan out to a WS API. Swap any layer independently — change
-`grpcHttpApi` to `httpApi` or `wsApi` to re-expose the same rig over a
-different wire, or replace one of the upstream clients with an in-process
-backend without touching the rig consumers. Each client exposes a `preSend`
-hook (headers/query for `HttpClient` and `GrpcHttpClient`, per-frame envelope
-mutation for `WebSocketClient`) for attaching auth and tracing on the
-outbound legs.
+A gRPC client hits one endpoint; reads fan out to the HTTP upstream,
+receives fan out to the WS upstream. Swap `grpcHttpApi` for `httpApi`,
+`wsApi`, or any custom service handler without touching the rig.
 
 ## Building custom network APIs
 
-The transport handlers (`httpApi`, `wsApi`, `grpcHttpApi`) are the generic
-wire — JSON in, JSON out, four routes covering the full rig surface. When
-the consumer can't speak that wire, or wants a different endpoint shape,
-two layers of customization sit underneath.
+Two layers sit beneath the stock `httpApi` / `wsApi` / `grpcHttpApi`
+handlers. Pick the higher one when you can; drop a level when you can't.
 
-The **content facets** are the high-level door: `http-get-content` fronts
-`rig.read` for one URI with a host-controlled response shape, and
-`http-post-content` does the same for `rig.receive` with a host-controlled
-body decoder. Use them when a browser-native consumer needs
-`Content-Type: image/png` from a `<img src>` instead of opaque JSON:
+The **content facets** front one URI of `rig.read` / `rig.receive` with a
+host-controlled response shape or body decoder — for consumers that can't
+speak the JSON wire (`<img src>`, file uploads, CDNs):
 
 ```typescript
 import { httpGetContentApi } from "@bandeira-tech/b3nd-move/http-get-content/service";
@@ -82,11 +58,9 @@ Deno.serve({ port: 3000 }, httpGetContentApi(rig, {
 }));
 ```
 
-For anything else, drop one level and build a `Route` directly. A route is
-four fields — `on` (matcher over the request), `decode` (request → action
-args), `action` (the work — usually one of the standard rig-backed actions),
-`encode` (result → wire response) — handed to `dispatchHttp` to assemble a
-handler:
+For anything else, build a `Route` directly — `on` matches the request,
+`decode` produces the action's args, `action` does the work (typically one
+of the standard rig-bound actions), `encode` shapes the wire response:
 
 ```typescript
 import { dispatchHttp, httpRequest, route } from "@bandeira-tech/b3nd-move/http/router";
@@ -94,7 +68,6 @@ import { readAction } from "@bandeira-tech/b3nd-move/actions/standard";
 import { json } from "@bandeira-tech/b3nd-move/http/wire";
 import { NotFound } from "@bandeira-tech/b3nd-move/router/errors";
 
-// `GET /things/:id` → rig.read([`mutable://things/:id`])[0]
 const getThing = route({
   on: httpRequest("GET", "/things/:id"),
   decode: ({ params }) =>
@@ -106,48 +79,29 @@ const getThing = route({
   },
 });
 
-const handler = (req: Request) => dispatchHttp(rig, [getThing], req);
-Deno.serve({ port: 3000 }, handler);
+Deno.serve({ port: 3000 }, (req) => dispatchHttp(rig, [getThing], req));
 ```
-
-The same `Route` shape is the unit every shipped transport handler is
-built from internally — the content facets are exactly this pattern with
-the `encode` step replaced by a `payloadResponseMap` hook.
-
-## What's in the box
-
-For every transport — **HTTP**, **WebSocket**, **gRPC-over-HTTP**, **MCP** —
-there's a portable service handler (`*/service`) and, where the wire is
-client-friendly, a `ProtocolInterfaceNode` client (`*/client`). Two
-specialized request frontends (`http-get-content`, `http-post-content`) front
-a single URI of `rig.read` / `rig.receive` with a host-controlled
-response/body shape, for browser-native consumers like `<img src>` and
-`<form enctype>` uploads. Underneath both sit the **codecs** — symmetric
-`(encode, decode)` pairs over one wire envelope — and the gRPC proto pieces
-(`grpc/proto/types`, `grpc/proto/convert`) for downstream codegen.
-
-Each layer lives in exactly one file; there are no barrel exports. Runtime
-binding (`Deno.serve`, `node:http`, framework adapters) is **not** part of
-this package — pair a `service` handler with whatever your host runtime
-provides. For local development the repo ships `dev/serve.ts` (run via
-`deno task serve`) which wires a stub rig to any combination of transports
-for ad-hoc testing; see [`dev/serve.ts`](./dev/serve.ts).
 
 ## Exports
 
+Each transport's wire format, route table, and `preSend` hook shape are
+documented in its own README (e.g. [`src/http/`](./src/http/),
+[`src/ws/`](./src/ws/), [`src/grpc/http/`](./src/grpc/http/),
+[`src/mcp/`](./src/mcp/), [`src/codecs/`](./src/codecs/)). Every layer
+lives in one file with no barrel re-exports; runtime binding (`Deno.serve`,
+`node:http`, framework adapters) is the host's job. A `deno task serve`
+helper at [`dev/serve.ts`](./dev/serve.ts) wires a stub rig to any
+combination of transports for ad-hoc testing.
+
 | Subpath                                        | Purpose                                          |
 | ---------------------------------------------- | ------------------------------------------------ |
-| `b3nd-move/http/service`                       | HTTP request handler                             |
-| `b3nd-move/http/client`                        | HTTP PIN client                                  |
-| `b3nd-move/ws/service`                         | WebSocket request handler                        |
-| `b3nd-move/ws/client`                          | WebSocket PIN client                             |
-| `b3nd-move/grpc/http/service`                  | gRPC-over-HTTP request handler                   |
-| `b3nd-move/grpc/http/client`                   | gRPC-over-HTTP PIN client                        |
+| `b3nd-move/http/{service,client}`              | HTTP handler + PIN client                        |
+| `b3nd-move/ws/{service,client}`                | WebSocket handler + PIN client                   |
+| `b3nd-move/grpc/http/{service,client}`         | gRPC-over-HTTP handler + PIN client              |
 | `b3nd-move/mcp/service`                        | MCP stdio server factory                         |
-| `b3nd-move/http-get-content/service`           | Locked-surface `rig.read` front for one URI      |
-| `b3nd-move/http-post-content/service`          | Locked-surface `rig.receive` front for one URI   |
-| `b3nd-move/http/router`                        | `route()`, `httpRequest()`, `dispatchHttp()`     |
-| `b3nd-move/http/wire`                          | `json()` / `readJson()` helpers                  |
+| `b3nd-move/http-get-content/{service,payload-response-map}` | `rig.read` content facet           |
+| `b3nd-move/http-post-content/{service,payload-decoder}`     | `rig.receive` content facet        |
+| `b3nd-move/http/{router,wire}`                 | `route()`, `dispatchHttp()`, `json()`            |
 | `b3nd-move/router/{route,errors}`              | Generic `Route` shape + `HttpError` hierarchy    |
 | `b3nd-move/actions/standard`                   | Standard rig-bound action functions              |
 | `b3nd-move/codecs/{codec,json,text,raw,field}` | Symmetric encode/decode pairs                    |
