@@ -48,6 +48,7 @@
     "test:integration:ws": "deno test --allow-all tests/integration/browser/ws.test.ts",
     "test:integration:grpc": "deno test --allow-all tests/integration/browser/grpc.test.ts",
     "test:integration:grpc-binary": "deno test --allow-all tests/integration/browser/grpc-binary.test.ts",
+    "hooks:install": "git config core.hooksPath .githooks",
     "serve": "deno run -A dev/main.ts",
     "build:npm": "deno run -A scripts/build-npm.ts"
   },

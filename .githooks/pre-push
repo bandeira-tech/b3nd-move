@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+# Pre-push: run the fast subset of CI locally so round-trip issues
+# are caught before they hit the remote.
+#
+# Mirrors the CI jobs that finish in < 5s each:
+#   - Type Check                      (deno task check)
+#   - Lint and Format Check           (deno lint + deno fmt --check)
+#   - Unit Tests                      (deno task test)
+#   - Integration (Deno-in-process)   (deno task test:integration:deno)
+#
+# Browser integration is skipped (slow matrix, only runs on push to GH).
+#
+# Bypass with `git push --no-verify` when you really mean to.
+
+set -euo pipefail
+
+# Activate this hook once per clone with:
+#   deno task hooks:install
+
+cd "$(git rev-parse --show-toplevel)"
+
+step() {
+  printf "→ %s\n" "$1"
+}
+
+step "deno task check"
+deno task check >/dev/null
+
+step "deno lint src/ tests/"
+deno lint src/ tests/
+
+step "deno fmt --check src/ tests/"
+deno fmt --check src/ tests/
+
+step "deno task test"
+deno task test >/dev/null
+
+step "deno task test:integration:deno"
+deno task test:integration:deno >/dev/null
+
+printf "\n✓ pre-push checks passed\n"
