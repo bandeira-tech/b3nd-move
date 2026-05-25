@@ -4,6 +4,11 @@
   "description": "B3nd Move — encoding, transport, decoding. Portable service handlers and clients for each transport (HTTP, WebSocket, gRPC-HTTP, MCP).",
   "exports": {
     "./errors": "./src/errors.ts",
+    "./actions/standard": "./src/actions/standard.ts",
+    "./router/route": "./src/router/route.ts",
+    "./router/errors": "./src/router/errors.ts",
+    "./http/router": "./src/http/router.ts",
+    "./http/wire": "./src/http/wire.ts",
     "./codecs/codec": "./src/codecs/codec.ts",
     "./codecs/json": "./src/codecs/json.ts",
     "./codecs/text": "./src/codecs/text.ts",
