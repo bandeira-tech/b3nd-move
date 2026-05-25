@@ -91,10 +91,14 @@ Deno.test("status (binary): Content-Type application/proto, request+response bin
     create(StatusResponseSchema, { status: "healthy" }),
   );
   const { calls, restore } = spyFetch(() =>
-    new Response(bin, { status: 200, headers: { "Content-Type": "application/proto" } })
+    new Response(bin, {
+      status: 200,
+      headers: { "Content-Type": "application/proto" },
+    })
   );
   try {
-    const s = await new GrpcHttpClient({ url: "http://h", binary: true }).status();
+    const s = await new GrpcHttpClient({ url: "http://h", binary: true })
+      .status();
     assertEquals(s.status, "healthy");
     assertEquals(calls[0].headers.get("Content-Type"), "application/proto");
   } finally {
@@ -270,7 +274,9 @@ Deno.test("observe: server `{ error }` envelope → throws RequestError", async 
     const c = new GrpcHttpClient({ url: "http://h" });
     await assertRejects(
       async () => {
-        for await (const _ of c.observe(["mutable://x"], new AbortController().signal)) {
+        for await (
+          const _ of c.observe(["mutable://x"], new AbortController().signal)
+        ) {
           /* drain */
         }
       },
@@ -290,7 +296,9 @@ Deno.test("observe: malformed JSON line → throws EncodingError", async () => {
     const c = new GrpcHttpClient({ url: "http://h" });
     await assertRejects(
       async () => {
-        for await (const _ of c.observe(["mutable://x"], new AbortController().signal)) {
+        for await (
+          const _ of c.observe(["mutable://x"], new AbortController().signal)
+        ) {
           /* drain */
         }
       },
@@ -316,7 +324,9 @@ Deno.test("observe: caller-aborted signal exits cleanly (no throw)", async () =>
     ac.abort();
     let yields = 0;
     for await (
-      const _ of new GrpcHttpClient({ url: "http://h" }).observe(["mutable://x"], ac.signal)
+      const _ of new GrpcHttpClient({ url: "http://h" }).observe([
+        "mutable://x",
+      ], ac.signal)
     ) {
       yields++;
     }

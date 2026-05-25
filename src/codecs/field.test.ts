@@ -5,7 +5,7 @@
  * GET through encode must reproduce the same wire bytes.
  */
 
-import { assertEquals, assertRejects, assertThrows } from "@std/assert";
+import { assertEquals, assertThrows } from "@std/assert";
 import { field } from "./field.ts";
 
 const REQ = new Request("http://x");
@@ -57,7 +57,11 @@ Deno.test("field.encode: empty payload ct falls back to default", async () => {
 
 Deno.test("field.encode: non-object payload → TypeError", () => {
   assertThrows(
-    () => void field("bytes").encode(REQ, ["u", "not-an-object" as unknown as object]),
+    () =>
+      void field("bytes").encode(REQ, [
+        "u",
+        "not-an-object" as unknown as object,
+      ]),
     TypeError,
     "payload must be an object",
   );

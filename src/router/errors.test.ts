@@ -37,7 +37,9 @@ Deno.test("InternalError: 500 + name='InternalError'", () => {
 });
 
 Deno.test("subclasses identify via instanceof HttpError (single discriminant)", () => {
-  for (const e of [new BadRequest("x"), new NotFound(), new InternalError("y")]) {
+  for (
+    const e of [new BadRequest("x"), new NotFound(), new InternalError("y")]
+  ) {
     assertEquals(e instanceof HttpError, true);
   }
 });

@@ -221,7 +221,10 @@ Deno.test("receive: non-Uint8Array payload rejected per-slot, no fetch", async (
     const out = await new HttpClient({ url: "http://h" }).receive([
       ["mutable://x", { not: "bytes" } as unknown as Uint8Array],
     ]);
-    assertEquals(out, [{ accepted: false, error: "Payload must be Uint8Array" }]);
+    assertEquals(out, [{
+      accepted: false,
+      error: "Payload must be Uint8Array",
+    }]);
     assertEquals(calls.length, 0);
   } finally {
     restore();
@@ -317,8 +320,7 @@ Deno.test("observe: empty urls returns without fetch", async () => {
 });
 
 Deno.test("observe: streams string[] frames from NDJSON, skips non-array lines", async () => {
-  const ndjson =
-    `["a","b"]\n` +
+  const ndjson = `["a","b"]\n` +
     `{"error":"ignored"}\n` +
     `["c"]\n`;
   const { calls, restore } = spyFetch((c) => {
@@ -387,7 +389,9 @@ Deno.test("observe: pre-aborted signal swallows fetch error and returns", async 
 // ── preSend hook ──
 
 Deno.test("preSend: hook fires before fetch and can mutate headers/url", async () => {
-  const { calls, restore } = spyFetch(() => new Response("{}", { status: 200 }));
+  const { calls, restore } = spyFetch(() =>
+    new Response("{}", { status: 200 })
+  );
   try {
     const c = new HttpClient({
       url: "http://h",
@@ -405,7 +409,9 @@ Deno.test("preSend: hook fires before fetch and can mutate headers/url", async (
 });
 
 Deno.test("preSend: async hook is awaited", async () => {
-  const { calls, restore } = spyFetch(() => new Response("{}", { status: 200 }));
+  const { calls, restore } = spyFetch(() =>
+    new Response("{}", { status: 200 })
+  );
   try {
     const c = new HttpClient({
       url: "http://h",
@@ -424,7 +430,9 @@ Deno.test("preSend: async hook is awaited", async () => {
 // ── config ──
 
 Deno.test("config: trailing slash on baseUrl is stripped", async () => {
-  const { calls, restore } = spyFetch(() => new Response("{}", { status: 200 }));
+  const { calls, restore } = spyFetch(() =>
+    new Response("{}", { status: 200 })
+  );
   try {
     await new HttpClient({ url: "http://h/" }).status();
     assertEquals(calls[0].url.toString(), "http://h/api/v1/status");
@@ -434,7 +442,9 @@ Deno.test("config: trailing slash on baseUrl is stripped", async () => {
 });
 
 Deno.test("config: custom default headers are sent on every request", async () => {
-  const { calls, restore } = spyFetch(() => new Response("{}", { status: 200 }));
+  const { calls, restore } = spyFetch(() =>
+    new Response("{}", { status: 200 })
+  );
   try {
     const c = new HttpClient({
       url: "http://h",

@@ -130,8 +130,14 @@ Deno.test("client: opens a single socket; subsequent calls reuse it", async () =
       url: "ws://h",
       reconnect: { enabled: false },
     });
-    await rpc(c.status(), (id) => ({ id, success: true, data: { status: "healthy" } }));
-    await rpc(c.status(), (id) => ({ id, success: true, data: { status: "healthy" } }));
+    await rpc(
+      c.status(),
+      (id) => ({ id, success: true, data: { status: "healthy" } }),
+    );
+    await rpc(
+      c.status(),
+      (id) => ({ id, success: true, data: { status: "healthy" } }),
+    );
     assertEquals(MockWebSocket.instances.length, 1);
   } finally {
     restore();
@@ -149,7 +155,10 @@ Deno.test("client: resolves URL provider function on first connect", async () =>
       },
       reconnect: { enabled: false },
     });
-    await rpc(c.status(), (id) => ({ id, success: true, data: { status: "ok" } }));
+    await rpc(
+      c.status(),
+      (id) => ({ id, success: true, data: { status: "ok" } }),
+    );
     assertEquals(MockWebSocket.instances[0].url, "ws://dynamic/1");
     assertEquals(calls, 1);
   } finally {
@@ -162,10 +171,17 @@ Deno.test("client: resolves URL provider function on first connect", async () =>
 Deno.test("status: sends { type: 'status', payload: {} }, returns server data", async () => {
   const { restore } = installMockWs();
   try {
-    const c = new WebSocketClient({ url: "ws://h", reconnect: { enabled: false } });
+    const c = new WebSocketClient({
+      url: "ws://h",
+      reconnect: { enabled: false },
+    });
     const s = await rpc(
       c.status(),
-      (id) => ({ id, success: true, data: { status: "healthy", message: "ok" } }),
+      (id) => ({
+        id,
+        success: true,
+        data: { status: "healthy", message: "ok" },
+      }),
     );
     assertEquals(s, { status: "healthy", message: "ok" });
     const sent = MockWebSocket.instances[0].sentFrames[0] as {
@@ -184,14 +200,19 @@ Deno.test("status: sends { type: 'status', payload: {} }, returns server data", 
 Deno.test("read: sends { type: 'read', payload: { urls } }, returns Output[]", async () => {
   const { restore } = installMockWs();
   try {
-    const c = new WebSocketClient({ url: "ws://h", reconnect: { enabled: false } });
+    const c = new WebSocketClient({
+      url: "ws://h",
+      reconnect: { enabled: false },
+    });
     const expected: [string, unknown][] = [["mutable://a", { v: 1 }]];
     const out = await rpc(
       c.read(["mutable://a"]),
       (id) => ({ id, success: true, data: expected }),
     );
     assertEquals(out, expected);
-    const sent = MockWebSocket.instances[0].sentFrames[0] as { payload: unknown };
+    const sent = MockWebSocket.instances[0].sentFrames[0] as {
+      payload: unknown;
+    };
     assertEquals(sent.payload, { urls: ["mutable://a"] });
   } finally {
     restore();
@@ -201,7 +222,10 @@ Deno.test("read: sends { type: 'read', payload: { urls } }, returns Output[]", a
 Deno.test("read: empty urls returns [] without sending", async () => {
   const { restore } = installMockWs();
   try {
-    const c = new WebSocketClient({ url: "ws://h", reconnect: { enabled: false } });
+    const c = new WebSocketClient({
+      url: "ws://h",
+      reconnect: { enabled: false },
+    });
     const out = await c.read([]);
     assertEquals(out, []);
     assertEquals(MockWebSocket.instances.length, 0);
@@ -213,13 +237,18 @@ Deno.test("read: empty urls returns [] without sending", async () => {
 Deno.test("receive: sends { type: 'receive', payload: msgs }, returns ReceiveResult[]", async () => {
   const { restore } = installMockWs();
   try {
-    const c = new WebSocketClient({ url: "ws://h", reconnect: { enabled: false } });
+    const c = new WebSocketClient({
+      url: "ws://h",
+      reconnect: { enabled: false },
+    });
     const out = await rpc(
       c.receive([["mutable://x", { v: 1 }]]),
       (id) => ({ id, success: true, data: [{ accepted: true }] }),
     );
     assertEquals(out, [{ accepted: true }]);
-    const sent = MockWebSocket.instances[0].sentFrames[0] as { payload: unknown };
+    const sent = MockWebSocket.instances[0].sentFrames[0] as {
+      payload: unknown;
+    };
     assertEquals(sent.payload, [["mutable://x", { v: 1 }]]);
   } finally {
     restore();
@@ -254,7 +283,10 @@ Deno.test("receive: on transport error returns per-slot error (does not throw)",
 Deno.test("read: server { success: false, error } → RequestError", async () => {
   const { restore } = installMockWs();
   try {
-    const c = new WebSocketClient({ url: "ws://h", reconnect: { enabled: false } });
+    const c = new WebSocketClient({
+      url: "ws://h",
+      reconnect: { enabled: false },
+    });
     const err = await assertRejects(
       () =>
         rpc(c.read(["mutable://x"]), (id) => ({
@@ -275,13 +307,19 @@ Deno.test("read: server { success: false, error } → RequestError", async () =>
 Deno.test("status: server error → returns unhealthy (does not throw)", async () => {
   const { restore } = installMockWs();
   try {
-    const c = new WebSocketClient({ url: "ws://h", reconnect: { enabled: false } });
+    const c = new WebSocketClient({
+      url: "ws://h",
+      reconnect: { enabled: false },
+    });
     const s = await rpc(
       c.status(),
       (id) => ({ id, success: false, error: "no" }),
     );
     assertEquals(s.status, "unhealthy");
-    assertEquals(typeof s.message === "string" && s.message.includes("no"), true);
+    assertEquals(
+      typeof s.message === "string" && s.message.includes("no"),
+      true,
+    );
   } finally {
     restore();
   }
@@ -292,7 +330,10 @@ Deno.test("status: server error → returns unhealthy (does not throw)", async (
 Deno.test("client: two in-flight requests resolved by id (out of order)", async () => {
   const { restore } = installMockWs();
   try {
-    const c = new WebSocketClient({ url: "ws://h", reconnect: { enabled: false } });
+    const c = new WebSocketClient({
+      url: "ws://h",
+      reconnect: { enabled: false },
+    });
     const a = c.status();
     const b = c.read(["mutable://x"]);
     await waitForFrames(2);
@@ -302,8 +343,16 @@ Deno.test("client: two in-flight requests resolved by id (out of order)", async 
     >;
     assertEquals(statusFrame.type, "status");
     assertEquals(readFrame.type, "read");
-    ws.pushMessage({ id: readFrame.id, success: true, data: [["mutable://x", 1]] });
-    ws.pushMessage({ id: statusFrame.id, success: true, data: { status: "healthy" } });
+    ws.pushMessage({
+      id: readFrame.id,
+      success: true,
+      data: [["mutable://x", 1]],
+    });
+    ws.pushMessage({
+      id: statusFrame.id,
+      success: true,
+      data: { status: "healthy" },
+    });
     assertEquals(await b, [["mutable://x", 1]]);
     assertEquals((await a).status, "healthy");
   } finally {
@@ -323,8 +372,14 @@ Deno.test("preSend: hook can mutate envelope before send", async () => {
         (env as Record<string, unknown>).auth = "Bearer x";
       },
     });
-    await rpc(c.status(), (id) => ({ id, success: true, data: { status: "ok" } }));
-    const sent = MockWebSocket.instances[0].sentFrames[0] as Record<string, unknown>;
+    await rpc(
+      c.status(),
+      (id) => ({ id, success: true, data: { status: "ok" } }),
+    );
+    const sent = MockWebSocket.instances[0].sentFrames[0] as Record<
+      string,
+      unknown
+    >;
     assertEquals(sent.auth, "Bearer x");
   } finally {
     restore();

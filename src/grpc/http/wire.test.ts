@@ -12,10 +12,7 @@
 
 import { assertEquals, assertRejects } from "@std/assert";
 import { create, toBinary, toJson } from "@bufbuild/protobuf";
-import {
-  ReadRequestSchema,
-  ReadResponseSchema,
-} from "../proto/gen/b3nd_pb.ts";
+import { ReadRequestSchema, ReadResponseSchema } from "../proto/gen/b3nd_pb.ts";
 import { BadRequest } from "../../router/errors.ts";
 import { okResponse, readRequest } from "./wire.ts";
 

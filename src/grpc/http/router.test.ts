@@ -38,19 +38,28 @@ async function asJson(res: Response): Promise<unknown> {
 // ── detectEncoding ──
 
 Deno.test("detectEncoding: connect+proto / proto / grpc → binary", () => {
-  for (const ct of [
-    "application/connect+proto",
-    "application/proto",
-    "application/grpc",
-    "application/grpc-web+proto",
-  ]) {
+  for (
+    const ct of [
+      "application/connect+proto",
+      "application/proto",
+      "application/grpc",
+      "application/grpc-web+proto",
+    ]
+  ) {
     const r = new Request("http://x", { headers: { "Content-Type": ct } });
     assertEquals(detectEncoding(r), "binary", `${ct} should be binary`);
   }
 });
 
 Deno.test("detectEncoding: anything else (including missing CT) → json", () => {
-  for (const ct of ["application/json", "application/connect+json", "text/plain", ""]) {
+  for (
+    const ct of [
+      "application/json",
+      "application/connect+json",
+      "text/plain",
+      "",
+    ]
+  ) {
     const r = new Request("http://x", { headers: { "Content-Type": ct } });
     assertEquals(detectEncoding(r), "json", `${ct} should be json`);
   }
@@ -64,7 +73,11 @@ Deno.test("grpcMethod: matches the full SERVICE_PREFIX + method path", () => {
   assertEquals(m(rpc("Receive")), true);
   assertEquals(m(rpc("Read")), null);
   assertEquals(
-    m(new Request(`http://test${SERVICE_PREFIX}Receive/extra`, { method: "POST" })),
+    m(
+      new Request(`http://test${SERVICE_PREFIX}Receive/extra`, {
+        method: "POST",
+      }),
+    ),
     null,
   );
 });
@@ -148,7 +161,8 @@ Deno.test("dispatchGrpc: custom matcher (not grpcMethod) participates", async ()
 // ── dispatchGrpc: ctx wiring ──
 
 Deno.test("dispatchGrpc: ctx exposes req, encoding, abort", async () => {
-  let seen: { encoding?: string; reqIsRequest?: boolean; aborted?: boolean } = {};
+  let seen: { encoding?: string; reqIsRequest?: boolean; aborted?: boolean } =
+    {};
   const r = route({
     on: grpcMethod("Status"),
     decode: ({ req, encoding, abort }) => {
@@ -167,7 +181,11 @@ Deno.test("dispatchGrpc: ctx exposes req, encoding, abort", async () => {
     [r],
     rpc("Status", { headers: { "Content-Type": "application/proto" } }),
   );
-  assertEquals(seen, { encoding: "binary", reqIsRequest: true, aborted: false });
+  assertEquals(seen, {
+    encoding: "binary",
+    reqIsRequest: true,
+    aborted: false,
+  });
 });
 
 Deno.test("dispatchGrpc: encoding defaults to json when CT absent", async () => {

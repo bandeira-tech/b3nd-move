@@ -65,7 +65,12 @@ Deno.test("dispatchWs: first matching route wins", async () => {
     encode: (data, { id }) => ({ id, success: true, data }),
   });
   const out = await collect(
-    dispatchWs(fakeRig, [first, second], frame("receive"), new AbortController()),
+    dispatchWs(
+      fakeRig,
+      [first, second],
+      frame("receive"),
+      new AbortController(),
+    ),
   );
   assertEquals(out, [{ id: "f1", success: true, data: "first" }]);
 });
@@ -78,12 +83,22 @@ Deno.test("dispatchWs: custom matcher (not wsData) participates", async () => {
     encode: (d, { id }) => ({ id, success: true, data: d }),
   });
   const hit = await collect(
-    dispatchWs(fakeRig, [r], frame("receive", { magic: true }), new AbortController()),
+    dispatchWs(
+      fakeRig,
+      [r],
+      frame("receive", { magic: true }),
+      new AbortController(),
+    ),
   );
   assertEquals(hit, [{ id: "f1", success: true, data: "ok" }]);
 
   const miss = await collect(
-    dispatchWs(fakeRig, [r], frame("receive", { magic: false }), new AbortController()),
+    dispatchWs(
+      fakeRig,
+      [r],
+      frame("receive", { magic: false }),
+      new AbortController(),
+    ),
   );
   assertEquals(miss[0].success, false);
   assertEquals(miss[0].error, "Unknown type: receive");
@@ -103,7 +118,9 @@ Deno.test("dispatchWs: ctx exposes id, payload, abort", async () => {
     encode: (_d, { id }) => ({ id, success: true, data: null }),
   });
   const abort = new AbortController();
-  await collect(dispatchWs(fakeRig, [r], frame("read", { urls: ["x"] }, "abc"), abort));
+  await collect(
+    dispatchWs(fakeRig, [r], frame("read", { urls: ["x"] }, "abc"), abort),
+  );
   assertEquals(seen.id, "abc");
   assertEquals(seen.payload, { urls: ["x"] });
   assertEquals(seen.aborted, false);
@@ -137,7 +154,12 @@ Deno.test("dispatchWs: action receives forwarded args from decode", async () => 
     encode: (_d, { id }) => ({ id, success: true, data: null }),
   });
   await collect(
-    dispatchWs(fakeRig, [r], frame("receive", { hello: "world" }), new AbortController()),
+    dispatchWs(
+      fakeRig,
+      [r],
+      frame("receive", { hello: "world" }),
+      new AbortController(),
+    ),
   );
   assertEquals(seenArgs, [{ hello: "world" }, 42]);
 });
@@ -276,7 +298,12 @@ Deno.test("dispatchWs: terminates after first matching route (does not fall thro
     encode: (_d, { id }) => ({ id, success: true, data: 2 }),
   });
   await collect(
-    dispatchWs(fakeRig, [first, second], frame("receive"), new AbortController()),
+    dispatchWs(
+      fakeRig,
+      [first, second],
+      frame("receive"),
+      new AbortController(),
+    ),
   );
   assertEquals(secondInvoked, false);
 });

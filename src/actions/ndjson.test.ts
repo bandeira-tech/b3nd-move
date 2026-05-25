@@ -46,7 +46,7 @@ Deno.test("ndjsonResponse: frameEncode shapes per-frame wire JSON", async () => 
   ]);
 });
 
-Deno.test("ndjsonResponse: extraHeaders merged with defaults", async () => {
+Deno.test("ndjsonResponse: extraHeaders merged with defaults", () => {
   const res = ndjsonResponse(iter([]), new AbortController(), undefined, {
     "X-Accel-Buffering": "no",
   });
