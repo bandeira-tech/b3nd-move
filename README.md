@@ -2,195 +2,100 @@
 
 Encoding, transport, decoding. The moving layer for B3nd.
 
-A B3nd node has two sides facing the wire: a **service** that takes incoming
-bytes, decodes them, drives a `Rig` from `@bandeira-tech/b3nd-core`, and encodes
-the response — and a **client** that does the inverse from the other end.
-`b3nd-move` ships both halves for each supported transport, in one canonical
-place, with no re-export indirection between them and your code.
+`@bandeira-tech/b3nd-core` defines a `ProtocolInterfaceNode` — a small surface
+(`receive` / `read` / `observe` / `status`) that every B3nd node speaks — and a
+`Rig` that composes those nodes into routes per operation. `b3nd-move` is the
+wire layer over that surface: for each supported transport it ships a
+**service** (incoming bytes → decode → drive a `Rig` → encode → outgoing bytes)
+and a **client** (the inverse, exposed as a `ProtocolInterfaceNode`). The
+client side is the load-bearing detail: because every client implements the
+core PIN interface, a client over one transport can be wired into a `Rig` as
+the backend for a route served over another transport.
 
-```
-wire bytes  ──►  decode  ──►  Rig (core)  ──►  encode  ──►  wire bytes
-    ▲                                                            │
-    └───────────── client.ts ◄───────────── service.ts ◄─────────┘
-                         (the moving layer)
-```
+Composition falls out of that: any `Rig` can be served over any subset of
+HTTP, WebSocket, gRPC-over-HTTP, and MCP — and any route in that rig can
+itself be backed by a `b3nd-move` client speaking to some upstream node.
 
-Pick a transport, import the side you need:
-
-| Transport         | Client                       | Pure handler                          |
-| ----------------- | ---------------------------- | ------------------------------------- |
-| HTTP              | `b3nd-move/http/client`      | `b3nd-move/http/service`              |
-| WebSocket         | `b3nd-move/ws/client`        | `b3nd-move/ws/service`                |
-| gRPC-over-HTTP    | `b3nd-move/grpc/http/client` | `b3nd-move/grpc/http/service`         |
-| MCP (stdio)       | —                            | `b3nd-move/mcp/service`               |
-| HTTP GET content  | —                            | `b3nd-move/http-get-content/service`  |
-| HTTP POST content | —                            | `b3nd-move/http-post-content/service` |
-
-The last two rows are **specialized facets**, not full transports —
-locked-surface request frontends for narrower jobs. `http-get-content` fronts
-`rig.read` for one URI with a host-controlled response shape (browsers, CDNs,
-`<img src>`); `http-post-content` fronts `rig.receive` for one URI with a
-host-controlled body decoder (browser file uploads, `curl --data-binary`). See
-[`src/http-get-content/`](./src/http-get-content/) and
-[`src/http-post-content/`](./src/http-post-content/).
-
-Plus the proto pieces:
-
-| Subpath                        | Exports                                        |
-| ------------------------------ | ---------------------------------------------- |
-| `b3nd-move/grpc/proto/types`   | generated wire types + schemas + `B3ndService` |
-| `b3nd-move/grpc/proto/convert` | proto ↔ b3nd converters                        |
-
-And the foundational **codecs** module — symmetric `(encode, decode)` pairs over
-one wire envelope, consumed by both content facets so the write side and read
-side can't drift:
-
-| Subpath                  | Codec                                                                      |
-| ------------------------ | -------------------------------------------------------------------------- |
-| `b3nd-move/codecs/json`  | `JSON.stringify` ↔ `req.json()`                                            |
-| `b3nd-move/codecs/text`  | string + content-type ↔ `req.text()`                                       |
-| `b3nd-move/codecs/raw`   | bytes + fixed content-type ↔ `req.arrayBuffer()`                           |
-| `b3nd-move/codecs/field` | `{ [name]: bytes, [ctField]?: ct }` envelope (round-trips both directions) |
-| `b3nd-move/codecs/codec` | `Codec`, `Encoder`, `Decoder`, `ContentResponseInit` types                 |
-
-See [`src/codecs/`](./src/codecs/) for the round-trip rationale.
-
-## The two layers
-
-- **service.ts** — the portable half. A pure `(Request) => Response` (or factory
-  like `buildMcpServer(rig)`). Runs anywhere fetch runs: Deno, Node, Bun,
-  Cloudflare Workers, browsers as request handlers.
-- **client.ts** — a `ProtocolInterfaceNode` over the wire. Works in any
-  fetch-capable environment.
-
-Each layer lives in exactly one file. No barrels. Runtime binding (`Deno.serve`,
-stdio, framework adapters) is **not** in this package — pair a `service` handler
-with whatever your host runtime offers, or use a higher-level SDK / runner that
-wraps it. For local dev this repo ships `dev/serve.ts` plus a `deno task serve`
-wrapper; see [Local dev](#local-dev-serve-task).
-
-## Quick start (any runtime)
+## Example: HTTP-backed reads, WS-backed receives, served over gRPC
 
 ```typescript
 import { connection, Rig } from "@bandeira-tech/b3nd-core";
-import { httpApi } from "@bandeira-tech/b3nd-move/http/service";
-import { grpcHttpApi } from "@bandeira-tech/b3nd-move/grpc/http/service";
-
-// Bring your own backend implementing `ProtocolInterfaceNode`
-// (b3nd-save, a custom node, etc.). Anything with `receive`/`read`/
-// `observe`/`status` plugs in here.
-const backend = /* your ProtocolInterfaceNode */;
-const rig = new Rig({
-  routes: {
-    receive: [connection(backend, ["*"])],
-    read: [connection(backend, ["*"])],
-  },
-});
-
-// Deno
-Deno.serve({ port: 3000 }, httpApi(rig));
-
-// Cloudflare Workers / Bun
-export default { fetch: grpcHttpApi(rig) };
-
-// Node — pair with @hono/node-server, express, node:http, …
-// Add CORS / auth / etc. with whatever middleware your runtime offers.
-```
-
-## Local dev (`serve` task)
-
-For ad-hoc local runs there's a tiny in-repo helper that builds a
-`stubRig`-backed runner (canned echo semantics) and starts the requested
-transports:
-
-```bash
-deno task serve -- --http               # http on :3000
-deno task serve -- --http=4000 --ws     # http on :4000, ws on :8080
-deno task serve -- --grpc=50051 --hostname=127.0.0.1
-deno task serve -- --mcp                # MCP on stdio (must be alone)
-```
-
-The helper lives at [`dev/serve.ts`](./dev/serve.ts) and is intentionally
-outside `src/`. Production runners and SDKs build their own equivalents tuned to
-their host runtime; this is just so contributors and demos have one obvious spot
-to reach for.
-
-## Quick start (client)
-
-```typescript
-import { HttpClient } from "@bandeira-tech/b3nd-move/http/client";
-
-const client = new HttpClient({ url: "http://localhost:3000" });
-await client.receive([["mutable://app/item", { name: "thing" }]]);
-const [out] = await client.read(["mutable://app/item"]);
-```
-
-## Auth & pre-send hooks
-
-Every client takes a single `preSend` function — there is no middleware
-abstraction. Compose behaviors with plain function calls.
-
-```typescript
 import { HttpClient } from "@bandeira-tech/b3nd-move/http/client";
 import { WebSocketClient } from "@bandeira-tech/b3nd-move/ws/client";
-import { GrpcHttpClient } from "@bandeira-tech/b3nd-move/grpc/http/client";
+import { grpcHttpApi } from "@bandeira-tech/b3nd-move/grpc/http/service";
 
-new HttpClient({
-  url,
-  preSend: (r) =>
-    r.headers.set("Authorization", `Bearer ${await tokens.get()}`),
+// Two upstream protocol interface nodes, each reached over a different wire.
+// `HttpClient` and `WebSocketClient` both implement `ProtocolInterfaceNode`,
+// so they plug into a `Rig` route exactly like any in-process backend would.
+const reads = new HttpClient({
+  url: "https://content.example.com",
 });
 
-new GrpcHttpClient({
-  url,
-  preSend: (r) =>
-    r.headers.set("Authorization", `Bearer ${await tokens.get()}`),
+const writes = new WebSocketClient({
+  url: "wss://ingest.example.com",
+  reconnect: { enabled: true, backoff: "exponential" },
 });
 
-// WebSocket: preSend runs per frame. Handshake auth goes in the URL —
-// pass a function if it needs to be computed fresh per (re)connect.
-new WebSocketClient({
-  url: async () => `wss://node?token=${await tokens.get()}`,
-  preSend: (env) => {
-    env.requestId = crypto.randomUUID();
+// One rig, two routes:
+//   - `rig.read(uris)`    → dispatched to the HTTP upstream
+//   - `rig.receive(msgs)` → dispatched to the WS upstream
+// `connection(node, patterns)` claims URI patterns; `["*"]` means "everything".
+const rig = new Rig({
+  routes: {
+    read: [connection(reads, ["*"])],
+    receive: [connection(writes, ["*"])],
   },
 });
+
+// Expose the composed rig as a gRPC-over-HTTP service. The handler is a
+// portable `(Request) => Response`, so any fetch-capable host works.
+Deno.serve({ port: 50051 }, grpcHttpApi(rig));
 ```
 
-The hook shape per client:
+A gRPC client now talks to one endpoint; behind it, reads fan out to an HTTP
+API and receives fan out to a WS API. Swap any layer independently — change
+`grpcHttpApi` to `httpApi` or `wsApi` to re-expose the same rig over a
+different wire, or replace one of the upstream clients with an in-process
+backend without touching the rig consumers. Each client exposes a `preSend`
+hook (headers/query for `HttpClient` and `GrpcHttpClient`, per-frame envelope
+mutation for `WebSocketClient`) for attaching auth and tracing on the
+outbound legs.
 
-| Client            | `preSend` argument                                       |
-| ----------------- | -------------------------------------------------------- |
-| `HttpClient`      | `{ url: URL, headers: Headers, body: BodyInit \| null }` |
-| `GrpcHttpClient`  | `{ url: URL, headers: Headers, body: BodyInit \| null }` |
-| `WebSocketClient` | `envelope: Record<string, unknown>` (mutated in place)   |
+## What's in the box
 
-Composition is just function composition — no framework needed:
+For every transport — **HTTP**, **WebSocket**, **gRPC-over-HTTP**, **MCP** —
+there's a portable service handler (`*/service`) and, where the wire is
+client-friendly, a `ProtocolInterfaceNode` client (`*/client`). Two
+specialized request frontends (`http-get-content`, `http-post-content`) front
+a single URI of `rig.read` / `rig.receive` with a host-controlled
+response/body shape, for browser-native consumers like `<img src>` and
+`<form enctype>` uploads. Underneath both sit the **codecs** — symmetric
+`(encode, decode)` pairs over one wire envelope — and the gRPC proto pieces
+(`grpc/proto/types`, `grpc/proto/convert`) for downstream codegen.
 
-```typescript
-const auth = (r) => r.headers.set("Authorization", `Bearer ${getToken()}`);
-const trace = (r) => r.headers.set("X-Trace", crypto.randomUUID());
+Each layer lives in exactly one file; there are no barrel exports. Runtime
+binding (`Deno.serve`, `node:http`, framework adapters) is **not** part of
+this package — pair a `service` handler with whatever your host runtime
+provides. For local development the repo ships `dev/serve.ts` (run via
+`deno task serve`) which wires a stub rig to any combination of transports
+for ad-hoc testing; see [`dev/serve.ts`](./dev/serve.ts).
 
-new HttpClient({
-  url,
-  preSend: async (r) => {
-    await auth(r);
-    trace(r);
-  },
-});
-```
+## Exports
 
-Browser `WebSocket` cannot send custom headers, which is why WS auth goes in the
-handshake URL or subprotocols — build the URL with the credentials you want
-before opening the socket.
-
-## How rigs compose with transports
-
-Downstream code (CLIs, daemons, browser apps) builds a `Rig` once and aims it at
-one or more transports. The same rig serves HTTP, WebSocket, gRPC, and MCP
-simultaneously — the move layer is the only thing that varies. A CLI that wants
-to serve protocol X over transport Y on encoding Z is constructed by picking the
-right rig and the right `b3nd-move` transports.
+| Subpath                                        | Purpose                                          |
+| ---------------------------------------------- | ------------------------------------------------ |
+| `b3nd-move/http/service`                       | HTTP request handler                             |
+| `b3nd-move/http/client`                        | HTTP PIN client                                  |
+| `b3nd-move/ws/service`                         | WebSocket request handler                        |
+| `b3nd-move/ws/client`                          | WebSocket PIN client                             |
+| `b3nd-move/grpc/http/service`                  | gRPC-over-HTTP request handler                   |
+| `b3nd-move/grpc/http/client`                   | gRPC-over-HTTP PIN client                        |
+| `b3nd-move/mcp/service`                        | MCP stdio server factory                         |
+| `b3nd-move/http-get-content/service`           | Locked-surface `rig.read` front for one URI      |
+| `b3nd-move/http-post-content/service`          | Locked-surface `rig.receive` front for one URI   |
+| `b3nd-move/codecs/{codec,json,text,raw,field}` | Symmetric encode/decode pairs                    |
+| `b3nd-move/grpc/proto/{types,convert}`         | Generated proto types + b3nd converters          |
+| `b3nd-move/errors`                             | Shared error types                               |
 
 ## Development
 
