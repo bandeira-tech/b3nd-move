@@ -82,31 +82,28 @@ const getThing = route({
 Deno.serve({ port: 3000 }, (req) => dispatchHttp(rig, [getThing], req));
 ```
 
-## Exports
+## Transports
 
 Each transport's wire format, route table, and `preSend` hook shape are
-documented in its own README (e.g. [`src/http/`](./src/http/),
-[`src/ws/`](./src/ws/), [`src/grpc/http/`](./src/grpc/http/),
-[`src/mcp/`](./src/mcp/), [`src/codecs/`](./src/codecs/)). Every layer
-lives in one file with no barrel re-exports; runtime binding (`Deno.serve`,
-`node:http`, framework adapters) is the host's job. A `deno task serve`
-helper at [`dev/serve.ts`](./dev/serve.ts) wires a stub rig to any
-combination of transports for ad-hoc testing.
+documented in its own README. Every layer lives in one file with no barrel
+re-exports; runtime binding (`Deno.serve`, `node:http`, framework adapters)
+is the host's job. A `deno task serve` helper at
+[`dev/serve.ts`](./dev/serve.ts) wires a stub rig to any combination of
+transports for ad-hoc testing.
 
-| Subpath                                        | Purpose                                          |
-| ---------------------------------------------- | ------------------------------------------------ |
-| `b3nd-move/http/{service,client}`              | HTTP handler + PIN client                        |
-| `b3nd-move/ws/{service,client}`                | WebSocket handler + PIN client                   |
-| `b3nd-move/grpc/http/{service,client}`         | gRPC-over-HTTP handler + PIN client              |
-| `b3nd-move/mcp/service`                        | MCP stdio server factory                         |
-| `b3nd-move/http-get-content/{service,payload-response-map}` | `rig.read` content facet           |
-| `b3nd-move/http-post-content/{service,payload-decoder}`     | `rig.receive` content facet        |
-| `b3nd-move/http/{router,wire}`                 | `route()`, `dispatchHttp()`, `json()`            |
-| `b3nd-move/router/{route,errors}`              | Generic `Route` shape + `HttpError` hierarchy    |
-| `b3nd-move/actions/standard`                   | Standard rig-bound action functions              |
-| `b3nd-move/codecs/{codec,json,text,raw,field}` | Symmetric encode/decode pairs                    |
-| `b3nd-move/grpc/proto/{types,convert}`         | Generated proto types + b3nd converters          |
-| `b3nd-move/errors`                             | Shared error types                               |
+| Transport                                                                | Expected encoding (outbound) | Expected decoding (inbound)              | Surface                                            |
+| ------------------------------------------------------------------------ | ---------------------------- | ---------------------------------------- | -------------------------------------------------- |
+| [HTTP](./src/http/) — `http/{service,client}`                            | JSON                         | JSON + urlsafe-b64 URI lists + raw bytes | Full PIN (service + client)                        |
+| [WebSocket](./src/ws/) — `ws/{service,client}`                           | JSON envelope per frame      | JSON envelope per frame                  | Full PIN (service + client)                        |
+| [gRPC-over-HTTP](./src/grpc/http/) — `grpc/http/{service,client}`        | protobuf / JSON (per req)    | protobuf / JSON (per req)                | Full PIN (service + client)                        |
+| [MCP](./src/mcp/) — `mcp/service`                                        | JSON-RPC over stdio          | JSON-RPC over stdio                      | Service only; rig surfaced as MCP tools/resources  |
+| [HTTP GET content](./src/http-get-content/) — `http-get-content/service` | host-shaped (`payloadResponseMap`) | URI in path                        | Custom — single-URI `rig.read` facet               |
+| [HTTP POST content](./src/http-post-content/) — `http-post-content/service` | JSON (`ReceiveResult`)    | host-shaped (`payloadDecoder`)           | Custom — single-URI `rig.receive` facet            |
+
+Shared building blocks live under [`codecs/`](./src/codecs/) (symmetric
+encode/decode pairs), `router/{route,errors}` + `http/{router,wire}` +
+`actions/standard` (route construction), and `grpc/proto/{types,convert}`
+(generated protobuf + b3nd converters).
 
 ## Development
 
