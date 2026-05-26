@@ -142,7 +142,7 @@ export const ReadResponseSchema: GenMessage<ReadResponse> = /*@__PURE__*/
  */
 export type ObserveRequest = Message<"b3nd.v1.ObserveRequest"> & {
   /**
-   * URLs to observe — each may be a uri pattern (e.g. "mutable://app/users/*").
+   * URLs to observe — each may be a uri pattern (e.g. "mutable://app/users/**").
    *
    * @generated from field: repeated string urls = 1;
    */

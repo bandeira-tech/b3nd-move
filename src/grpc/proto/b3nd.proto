@@ -64,7 +64,7 @@ message ReadResponse {
 // ── Observe ─────────────────────────────────────────────────────────
 
 message ObserveRequest {
-  // URLs to observe — each may be a uri pattern (e.g. "mutable://app/users/*").
+  // URLs to observe — each may be a uri pattern (e.g. "mutable://app/users/**").
   repeated string urls = 1;
 }
 

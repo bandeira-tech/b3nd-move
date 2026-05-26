@@ -12,7 +12,7 @@ import { payloadDecoder as dec }
   from "@bandeira-tech/b3nd-move/http-post-content/payload-decoder";
 
 const backend = /* your ProtocolInterfaceNode */;
-const rig = new Rig({ routes: { receive: [connection(backend, ["*"])] } });
+const rig = new Rig({ routes: { receive: [connection(backend, ["**"])] } });
 
 Deno.serve({ port: 3000 }, httpPostContentApi(rig, {
   payloadDecoder: dec.byContentType({

@@ -54,7 +54,7 @@ class ContentStubBackend implements ProtocolInterfaceNode {
 }
 
 function buildRig(): Rig {
-  const route = connection(new ContentStubBackend(), ["*"]);
+  const route = connection(new ContentStubBackend(), ["**"]);
   return new Rig({ routes: { receive: [route], read: [route] } });
 }
 

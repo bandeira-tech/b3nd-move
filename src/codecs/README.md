@@ -14,8 +14,8 @@ import { field } from "@bandeira-tech/b3nd-move/codecs/field";
 const backend = /* your ProtocolInterfaceNode */;
 const rig = new Rig({
   routes: {
-    receive: [connection(backend, ["*"])],
-    read:    [connection(backend, ["*"])],
+    receive: [connection(backend, ["**"])],
+    read:    [connection(backend, ["**"])],
   },
 });
 

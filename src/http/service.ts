@@ -38,7 +38,7 @@
  * import { Rig, connection } from "@bandeira-tech/b3nd-core";
  * import { httpApi } from "@bandeira-tech/b3nd-move/http/service";
  *
- * const c = connection(client, ["*"]);
+ * const c = connection(client, ["**"]);
  * const rig = new Rig({ routes: { receive: [c], read: [c], observe: [c] } });
  * Deno.serve({ port: 3000 }, httpApi(rig));
  * ```

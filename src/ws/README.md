@@ -60,7 +60,7 @@ const client = new WebSocketClient({
 await client.receive([["mutable://app/x", { name: "thing" }]]);
 
 const ac = new AbortController();
-for await (const uris of client.observe(["mutable://app/*"], ac.signal)) {
+for await (const uris of client.observe(["mutable://app/**"], ac.signal)) {
   console.log("changed:", uris);
 }
 ```

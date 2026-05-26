@@ -127,7 +127,7 @@ const stubProgram: Program = async (out) => {
  */
 export function stubRig(): Rig {
   const backend = new StubBackend();
-  const route = connection(backend, ["*"]);
+  const route = connection(backend, ["**"]);
   return new Rig({
     routes: {
       receive: [route],
