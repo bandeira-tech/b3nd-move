@@ -54,7 +54,7 @@ const rejectProgram: Program = async (out) => {
 
 export function startHttpPostContentServer(): Promise<ServerHandle> {
   const backend = new ContentPostStubBackend();
-  const route = connection(backend, ["*"]);
+  const route = connection(backend, ["**"]);
   const rig = new Rig({
     routes: { receive: [route], read: [route] },
     programs: { "mutable://t": rejectProgram },

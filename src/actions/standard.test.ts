@@ -49,7 +49,7 @@ class StubBackend implements ProtocolInterfaceNode {
 
 function buildRig(): { rig: Rig; backend: StubBackend } {
   const backend = new StubBackend();
-  const route = connection(backend, ["*"]);
+  const route = connection(backend, ["**"]);
   return {
     rig: new Rig({
       routes: { receive: [route], read: [route], observe: [route] },

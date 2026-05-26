@@ -11,7 +11,7 @@ import { payloadResponseMap as map }
   from "@bandeira-tech/b3nd-move/http-get-content/payload-response-map";
 
 const backend = /* your ProtocolInterfaceNode */;
-const rig = new Rig({ routes: { read: [connection(backend, ["*"])] } });
+const rig = new Rig({ routes: { read: [connection(backend, ["**"])] } });
 
 Deno.serve({ port: 3000 }, httpGetContentApi(rig, {
   payloadResponseMap: map.byExtension({
