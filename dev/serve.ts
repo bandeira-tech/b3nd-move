@@ -116,7 +116,22 @@ function wsTransport(
 ): TransportServer {
   const port = c.port ?? WS_DEFAULTS.port;
   const hostname = c.hostname ?? WS_DEFAULTS.hostname;
-  const handler = wsApi(rig);
+  const attach = wsApi(rig);
+  const sockets = new Set<WebSocket>();
+  const handler = (req: Request): Response => {
+    if (req.headers.get("upgrade") !== "websocket") {
+      return new Response("Not Found", { status: 404 });
+    }
+    const { socket, response } = Deno.upgradeWebSocket(req);
+    sockets.add(socket);
+    socket.addEventListener(
+      "close",
+      () => sockets.delete(socket),
+      { once: true },
+    );
+    attach(socket);
+    return response;
+  };
   let server: Deno.HttpServer | null = null;
   return {
     transport: "ws",
@@ -128,7 +143,7 @@ function wsTransport(
     async stop() {
       // Drain WS connections first — Deno.HttpServer.shutdown waits
       // for in-flight requests, and WS connections are long-lived.
-      await handler.closeAll();
+      await drainSockets(sockets);
       if (server) {
         await server.shutdown();
         server = null;
@@ -220,7 +235,24 @@ function mcpWsTransport(
   const opts: McpServerOptions = {};
   if (c.name) opts.name = c.name;
   if (c.version) opts.version = c.version;
-  const handler = mcpWsApi(rig, opts);
+  const attach = mcpWsApi(rig, opts);
+  const sockets = new Set<WebSocket>();
+  const handler = (req: Request): Response => {
+    if (req.headers.get("upgrade") !== "websocket") {
+      return new Response("Not Found", { status: 404 });
+    }
+    const { socket, response } = Deno.upgradeWebSocket(req, {
+      protocol: "mcp",
+    });
+    sockets.add(socket);
+    socket.addEventListener(
+      "close",
+      () => sockets.delete(socket),
+      { once: true },
+    );
+    attach(socket);
+    return response;
+  };
   let server: Deno.HttpServer | null = null;
   return {
     transport: "mcp-ws",
@@ -232,11 +264,38 @@ function mcpWsTransport(
     async stop() {
       // Drain WS connections first — Deno.HttpServer.shutdown waits
       // for in-flight requests, and WS connections are long-lived.
-      await handler.closeAll();
+      await drainSockets(sockets);
       if (server) {
         await server.shutdown();
         server = null;
       }
     },
   };
+}
+
+/**
+ * Close every still-open socket and wait for their close handshake.
+ * Used by `ws` and `mcp-ws` transports before stopping the listener.
+ */
+function drainSockets(sockets: Set<WebSocket>): Promise<void> {
+  const waits: Promise<void>[] = [];
+  for (const socket of sockets) {
+    if (
+      socket.readyState === WebSocket.CLOSED ||
+      socket.readyState === WebSocket.CLOSING
+    ) continue;
+    waits.push(
+      new Promise<void>((resolve) => {
+        const done = () => resolve();
+        socket.addEventListener("close", done, { once: true });
+        socket.addEventListener("error", done, { once: true });
+        try {
+          socket.close(1001, "server shutting down");
+        } catch {
+          resolve();
+        }
+      }),
+    );
+  }
+  return Promise.all(waits).then(() => {});
 }

@@ -1,120 +1,86 @@
 /**
  * @module
- * MCP service over WebSocket — `mcpWsApi(rig)` as a fetch handler that
- * upgrades the request to a WebSocket and bridges JSON-RPC frames to a
- * fresh `buildMcpServer(rig)`.
+ * MCP service over WebSocket — `mcpWsApi(rig)` returns a function that
+ * attaches a fresh `buildMcpServer(rig)` (wired via
+ * `WebSocketServerTransport`) to an already-open `WebSocket`. The host
+ * owns the upgrade (`Deno.upgradeWebSocket`, CF's `WebSocketPair`,
+ * Node's `ws`) and any cross-socket lifecycle; the library only knows
+ * about one socket at a time.
  *
  * Wire framing (see `./transport.ts`): one JSON-RPC message per frame,
- * no session header (the connection IS the session). MCP has no
- * official WS transport spec — this is a minimal, locally-documented
- * mapping that matches the JSON-RPC envelope the SDK already uses on
- * stdio.
+ * no session header — the connection IS the session. MCP has no
+ * official WS transport spec; this matches the JSON-RPC envelope the
+ * SDK already uses on stdio.
  *
- * Lifecycle:
- *   - Each upgrade mints a new `WebSocketServerTransport` + a new
- *     `Server` (via `buildMcpServer`) — one socket, one MCP session.
- *   - When the socket closes (either side), the transport's `onclose`
- *     fires and the Server's `connect` promise unwinds. Per-socket
- *     state lives only on the stack.
- *   - `closeAll()` waits for every open socket to close. Use it from
- *     a transport server's graceful-shutdown path; without it
- *     `Deno.HttpServer.shutdown()` waits forever on long-lived sockets.
+ * The SDK's `WebSocketClientTransport` requests the `mcp` subprotocol
+ * during the handshake. The host should echo it back when accepting
+ * the upgrade (e.g. `Deno.upgradeWebSocket(req, { protocol: "mcp" })`,
+ * or on CF, pass it to `WebSocketPair` config).
  *
- * Non-upgrade requests get a 404 — same shape as `wsApi`. Compose with
- * `httpApi` upstream to share the same port.
+ * Lifecycle: each call to the attacher mints a new
+ * `WebSocketServerTransport` + a new `Server` — one socket, one MCP
+ * session. When the socket closes, the transport's `onclose` fires and
+ * the `Server` connection unwinds. Per-socket state lives only on the
+ * stack.
  *
- * @example
+ * @example Deno
  * ```ts
- * import { Rig, connection } from "@bandeira-tech/b3nd-core";
- * import { mcpWsApi } from "@bandeira-tech/b3nd-move/mcp/ws/service";
+ * const attach = mcpWsApi(rig);
+ * Deno.serve({ port: 8080 }, (req) => {
+ *   if (req.headers.get("upgrade") !== "websocket") {
+ *     return new Response("Not Found", { status: 404 });
+ *   }
+ *   const { socket, response } = Deno.upgradeWebSocket(req, {
+ *     protocol: "mcp",
+ *   });
+ *   attach(socket);
+ *   return response;
+ * });
+ * ```
  *
- * const c = connection(client, ["**"]);
- * const rig = new Rig({ routes: { receive: [c], read: [c], observe: [c] } });
- * const handler = mcpWsApi(rig);
- * Deno.serve({ port: 8080 }, handler);
- * // ...later:
- * await handler.closeAll();
+ * @example Cloudflare Durable Object
+ * ```ts
+ * export class B3ndMcpSession {
+ *   #attach = mcpWsApi(this.rig);
+ *   fetch(req: Request) {
+ *     const [client, server] = Object.values(
+ *       new WebSocketPair(),
+ *     );
+ *     server.accept();
+ *     this.#attach(server);
+ *     return new Response(null, {
+ *       status: 101,
+ *       webSocket: client,
+ *       headers: { "Sec-WebSocket-Protocol": "mcp" },
+ *     });
+ *   }
+ * }
  * ```
  */
-
-/// <reference lib="deno.ns" />
 
 import type { Rig } from "@bandeira-tech/b3nd-core";
 import { buildMcpServer, type McpServerOptions } from "../service.ts";
 import { WebSocketServerTransport } from "./transport.ts";
 
 /**
- * Fetch handler with a `closeAll` lifecycle hook — same shape as
- * `wsApi`, so graceful-shutdown patterns transfer.
+ * Attach an MCP server to an already-open `WebSocket`. The socket must
+ * be in `CONNECTING` or `OPEN`; the listeners are wired immediately and
+ * the `Server` reacts to JSON-RPC frames as they arrive.
  */
-export interface McpWsApi {
-  (req: Request): Promise<Response>;
-  /**
-   * Close all currently-open MCP WebSocket connections produced by
-   * this handler and wait for their close handshake to settle.
-   * Idempotent.
-   */
-  closeAll(): Promise<void>;
-}
+export type McpWsApi = (socket: WebSocket) => void;
 
 /**
- * Create an MCP request handler backed by a Rig, speaking JSON-RPC
- * over WebSocket. `opts` is forwarded to `buildMcpServer` — controls
- * the server name and version reported in `initialize`.
+ * Build an MCP WS attacher bound to a Rig. `opts` is forwarded to
+ * `buildMcpServer` — controls the server name and version reported in
+ * `initialize`.
  */
 export function mcpWsApi(rig: Rig, opts?: McpServerOptions): McpWsApi {
-  const sockets = new Set<WebSocket>();
-
-  const handler = (req: Request): Promise<Response> => {
-    if (req.headers.get("upgrade") !== "websocket") {
-      return Promise.resolve(new Response("Not Found", { status: 404 }));
-    }
-
-    // The SDK's `WebSocketClientTransport` opens with the `mcp`
-    // subprotocol; echo it back so the handshake succeeds.
-    const { socket, response } = Deno.upgradeWebSocket(req, {
-      protocol: "mcp",
-    });
-    sockets.add(socket);
-    socket.addEventListener("close", () => {
-      sockets.delete(socket);
-    }, { once: true });
-
-    socket.addEventListener("open", () => {
-      const transport = new WebSocketServerTransport(socket);
-      const server = buildMcpServer(rig, opts);
-      // `connect` calls `transport.start()`, which wires the socket
-      // listeners. We don't await — the handler returns the upgrade
-      // response synchronously; the Server lives until the socket
-      // closes (transport.onclose unwinds it).
-      void server.connect(transport);
-    }, { once: true });
-
-    return Promise.resolve(response);
+  return (socket: WebSocket): void => {
+    const transport = new WebSocketServerTransport(socket);
+    const server = buildMcpServer(rig, opts);
+    // `connect` calls `transport.start()` which wires the socket
+    // listeners. The attacher returns synchronously; the Server lives
+    // until the socket closes (transport.onclose unwinds it).
+    void server.connect(transport);
   };
-
-  (handler as McpWsApi).closeAll = (): Promise<void> => {
-    const waits: Promise<void>[] = [];
-    for (const socket of sockets) {
-      if (
-        socket.readyState === WebSocket.CLOSED ||
-        socket.readyState === WebSocket.CLOSING
-      ) continue;
-      waits.push(
-        new Promise<void>((resolve) => {
-          const done = () => resolve();
-          socket.addEventListener("close", done, { once: true });
-          socket.addEventListener("error", done, { once: true });
-          try {
-            socket.close(1001, "server shutting down");
-          } catch {
-            resolve();
-          }
-        }),
-      );
-    }
-    return Promise.all(waits).then(() => {});
-  };
-
-  return handler as McpWsApi;
 }
