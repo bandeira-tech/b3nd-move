@@ -12,6 +12,8 @@
  *   deno task serve --http --ws --grpc   # all three on defaults
  *   deno task serve --grpc=50051 --hostname=127.0.0.1
  *   deno task serve --mcp                # MCP on stdio (must be alone)
+ *   deno task serve --mcp-http           # MCP over Streamable HTTP on :3001
+ *   deno task serve --mcp-ws             # MCP over WebSocket on :8081
  */
 
 /// <reference lib="deno.ns" />
@@ -29,6 +31,8 @@ Flags:
   --grpc[=PORT]      Start gRPC-HTTP transport (default port 50051)
   --mcp              Start MCP transport over stdio (mutually exclusive
                      with the network transports — stdout is the wire)
+  --mcp-http[=PORT]  Start MCP over Streamable HTTP (default port 3001)
+  --mcp-ws[=PORT]    Start MCP over WebSocket (default port 8081)
   --hostname=HOST    Bind hostname for network transports (default 0.0.0.0)
   -h, --help         Show this message
 
@@ -94,6 +98,22 @@ function parseArgs(argv: string[]): ParsedArgs {
     }
     if (arg === "--mcp") {
       out.configs.push({ transport: "mcp" });
+      continue;
+    }
+    if (arg === "--mcp-http" || arg.startsWith("--mcp-http=")) {
+      const port = parsePortFlag(arg, "--mcp-http");
+      out.configs.push({
+        transport: "mcp-http",
+        ...(port !== undefined && { port }),
+      });
+      continue;
+    }
+    if (arg === "--mcp-ws" || arg.startsWith("--mcp-ws=")) {
+      const port = parsePortFlag(arg, "--mcp-ws");
+      out.configs.push({
+        transport: "mcp-ws",
+        ...(port !== undefined && { port }),
+      });
       continue;
     }
     if (arg.startsWith("--hostname=")) {

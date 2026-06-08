@@ -27,6 +27,8 @@ import { httpApi } from "../src/http/service.ts";
 import { wsApi } from "../src/ws/service.ts";
 import { grpcHttpApi } from "../src/grpc/http/service.ts";
 import { buildMcpServer, type McpServerOptions } from "../src/mcp/service.ts";
+import { mcpHttpApi } from "../src/mcp/http/service.ts";
+import { mcpWsApi } from "../src/mcp/ws/service.ts";
 
 export interface TransportServer {
   readonly transport: string;
@@ -44,11 +46,27 @@ export type ServerConfig =
   }
   | { transport: "ws"; port?: number; hostname?: string }
   | { transport: "grpc-http"; port?: number; hostname?: string }
-  | { transport: "mcp"; name?: string; version?: string };
+  | { transport: "mcp"; name?: string; version?: string }
+  | {
+    transport: "mcp-http";
+    port?: number;
+    hostname?: string;
+    name?: string;
+    version?: string;
+  }
+  | {
+    transport: "mcp-ws";
+    port?: number;
+    hostname?: string;
+    name?: string;
+    version?: string;
+  };
 
 const HTTP_DEFAULTS = { port: 3000, hostname: "0.0.0.0" } as const;
 const WS_DEFAULTS = { port: 8080, hostname: "0.0.0.0" } as const;
 const GRPC_DEFAULTS = { port: 50051, hostname: "0.0.0.0" } as const;
+const MCP_HTTP_DEFAULTS = { port: 3001, hostname: "0.0.0.0" } as const;
+const MCP_WS_DEFAULTS = { port: 8081, hostname: "0.0.0.0" } as const;
 
 /** Build a transport server bound to the rig; not yet started. */
 export function serve(rig: Rig, config: ServerConfig): TransportServer {
@@ -61,6 +79,10 @@ export function serve(rig: Rig, config: ServerConfig): TransportServer {
       return grpcHttpTransport(rig, config);
     case "mcp":
       return mcpTransport(rig, config);
+    case "mcp-http":
+      return mcpHttpTransport(rig, config);
+    case "mcp-ws":
+      return mcpWsTransport(rig, config);
   }
 }
 
@@ -158,6 +180,63 @@ function mcpTransport(
     async stop() {
       await transport?.close();
       transport = null;
+    },
+  };
+}
+
+function mcpHttpTransport(
+  rig: Rig,
+  c: Extract<ServerConfig, { transport: "mcp-http" }>,
+): TransportServer {
+  const port = c.port ?? MCP_HTTP_DEFAULTS.port;
+  const hostname = c.hostname ?? MCP_HTTP_DEFAULTS.hostname;
+  const opts: McpServerOptions = {};
+  if (c.name) opts.name = c.name;
+  if (c.version) opts.version = c.version;
+  const handler = mcpHttpApi(rig, opts);
+  let server: Deno.HttpServer | null = null;
+  return {
+    transport: "mcp-http",
+    address: `http://${hostname}:${port}`,
+    start() {
+      server = Deno.serve({ port, hostname }, handler);
+      return Promise.resolve();
+    },
+    async stop() {
+      if (server) {
+        await server.shutdown();
+        server = null;
+      }
+    },
+  };
+}
+
+function mcpWsTransport(
+  rig: Rig,
+  c: Extract<ServerConfig, { transport: "mcp-ws" }>,
+): TransportServer {
+  const port = c.port ?? MCP_WS_DEFAULTS.port;
+  const hostname = c.hostname ?? MCP_WS_DEFAULTS.hostname;
+  const opts: McpServerOptions = {};
+  if (c.name) opts.name = c.name;
+  if (c.version) opts.version = c.version;
+  const handler = mcpWsApi(rig, opts);
+  let server: Deno.HttpServer | null = null;
+  return {
+    transport: "mcp-ws",
+    address: `ws://${hostname}:${port}`,
+    start() {
+      server = Deno.serve({ port, hostname }, handler);
+      return Promise.resolve();
+    },
+    async stop() {
+      // Drain WS connections first — Deno.HttpServer.shutdown waits
+      // for in-flight requests, and WS connections are long-lived.
+      await handler.closeAll();
+      if (server) {
+        await server.shutdown();
+        server = null;
+      }
     },
   };
 }

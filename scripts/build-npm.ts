@@ -14,11 +14,13 @@
  *   • `./grpc/http/client`   — `GrpcHttpClient`
  *   • `./grpc/proto/types`   — generated wire types + schemas
  *   • `./grpc/proto/convert` — converters between proto and b3nd types
+ *   • `./mcp/service`        — `buildMcpServer(rig)` (transport-agnostic)
+ *   • `./mcp/http/service`   — `mcpHttpApi(rig)` (pure fetch handler)
  *
- * The Deno-only slices (`./http/server`, `./ws/server`, `./grpc/http/server`,
- * `./mcp/*`) call `Deno.serve` or speak stdio and stay JSR-only. Node
- * consumers feed `httpApi(rig)` / `grpcHttpApi(rig)` to their own HTTP
- * runtime — Hono, Express, raw `node:http`, Cloudflare Workers, …
+ * The Deno-only slices (`./ws/service` uses `Deno.upgradeWebSocket`;
+ * `./mcp/ws/service` likewise) stay JSR-only. Node consumers feed
+ * `httpApi(rig)` / `grpcHttpApi(rig)` / `mcpHttpApi(rig)` to their own
+ * HTTP runtime — Hono, Express, raw `node:http`, Cloudflare Workers, …
  */
 
 import { build, emptyDir } from "jsr:@deno/dnt@^0.42.1";
@@ -36,6 +38,8 @@ await build({
     { name: "./grpc/http/client", path: "./src/grpc/http/client.ts" },
     { name: "./grpc/proto/types", path: "./src/grpc/proto/gen/b3nd_pb.ts" },
     { name: "./grpc/proto/convert", path: "./src/grpc/proto/convert.ts" },
+    { name: "./mcp/service", path: "./src/mcp/service.ts" },
+    { name: "./mcp/http/service", path: "./src/mcp/http/service.ts" },
   ],
   outDir: "./npm",
   shims: { deno: false },
