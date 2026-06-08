@@ -1,8 +1,11 @@
 /**
  * @module
- * WebSocket service — `wsApi(rig)` as a fetch handler that upgrades the
- * request to a WebSocket and bridges b3nd-core's WS wire protocol to a
- * `Rig`.
+ * WebSocket service — `wsApi(rig)` returns a function that attaches the
+ * b3nd WS wire protocol to an already-open `WebSocket`. The host is
+ * responsible for the upgrade (`Deno.upgradeWebSocket`, CF's
+ * `WebSocketPair`, Node's `ws`) and for any cross-socket lifecycle
+ * (drain on shutdown, tracking, etc.) — the library only knows about
+ * one socket at a time.
  *
  * Wire protocol (matches `@bandeira-tech/b3nd-core`'s `WebSocketClient`):
  *
@@ -24,18 +27,39 @@
  *
  * Per-type routes (`./{status,receive,read,observe,observe-cancel}.ts`)
  * own their decode/action/encode; `dispatchWs` in `./router.ts` runs
- * the table. The service's only jobs are the WS lifecycle (upgrade,
- * per-socket `observes` map, graceful shutdown) and assembling the
- * route table — `observe` and `observe-cancel` are factories that
- * close over the per-socket map.
+ * the table. `observe` and `observe-cancel` close over a per-socket
+ * `observes` map; the map is created fresh inside `attach` so two
+ * sockets can't collide on the same observe id.
  *
- * Non-upgrade requests get a 404 — the handler does only the WS path.
- * Compose with `withCors` upstream if browser clients hit this directly.
+ * On socket close, every active observe is aborted and the map is
+ * cleared. Graceful drain across many sockets is the host's job — it
+ * has every socket it ever passed in.
  *
- * The returned handler exposes `closeAll()` so a transport server can
- * tear down all active sockets gracefully before stopping the listener
- * — important because `Deno.HttpServer.shutdown()` waits for in-flight
- * requests but WS connections are long-lived.
+ * @example Deno
+ * ```ts
+ * const attach = wsApi(rig);
+ * Deno.serve({ port: 8080 }, (req) => {
+ *   if (req.headers.get("upgrade") !== "websocket") {
+ *     return new Response("Not Found", { status: 404 });
+ *   }
+ *   const { socket, response } = Deno.upgradeWebSocket(req);
+ *   attach(socket);
+ *   return response;
+ * });
+ * ```
+ *
+ * @example Cloudflare Durable Object
+ * ```ts
+ * export class B3ndSession {
+ *   #attach = wsApi(this.rig);
+ *   fetch(req: Request) {
+ *     const [client, server] = Object.values(new WebSocketPair());
+ *     server.accept();
+ *     this.#attach(server);
+ *     return new Response(null, { status: 101, webSocket: client });
+ *   }
+ * }
+ * ```
  */
 
 import type { Rig } from "@bandeira-tech/b3nd-core/rig";
@@ -48,36 +72,19 @@ import { receiveRoute } from "./receive.ts";
 import { statusRoute } from "./status.ts";
 
 /**
- * Fetch handler with a `closeAll` lifecycle hook.
- *
- * Still satisfies `(Request) => Promise<Response>` for any caller that
- * doesn't care about graceful shutdown.
+ * Attach the b3nd WS wire protocol to an already-open `WebSocket`. The
+ * socket must be in the `CONNECTING` or `OPEN` state — `attach` wires
+ * the listeners and returns immediately; the actual dispatch happens
+ * when frames arrive.
  */
-export interface WsApi {
-  (req: Request): Promise<Response>;
-  /**
-   * Close all currently-open WebSocket connections produced by this
-   * handler and wait for their close handshake to settle. Idempotent.
-   */
-  closeAll(): Promise<void>;
-}
+export type WsApi = (socket: WebSocket) => void;
 
 /**
- * Create a WebSocket request handler backed by a Rig.
- *
- * Returns a fetch handler that — alongside the standard
- * `(Request) => Promise<Response>` call signature — exposes
- * `closeAll()` for graceful teardown.
+ * Build a b3nd WS attacher bound to a Rig. The returned function takes
+ * one socket and wires it up; call it once per upgraded connection.
  */
 export function wsApi(rig: Rig): WsApi {
-  const sockets = new Set<WebSocket>();
-
-  const handler = (req: Request): Promise<Response> => {
-    if (req.headers.get("upgrade") !== "websocket") {
-      return Promise.resolve(new Response("Not Found", { status: 404 }));
-    }
-
-    const { socket, response } = Deno.upgradeWebSocket(req);
+  return (socket: WebSocket): void => {
     const observes = new Map<string, AbortController>();
     const routes = [
       statusRoute,
@@ -86,7 +93,6 @@ export function wsApi(rig: Rig): WsApi {
       observeRoute(observes),
       observeCancelRoute(observes),
     ];
-    sockets.add(socket);
 
     const send = (msg: WebSocketResponse) => {
       if (socket.readyState === WebSocket.OPEN) {
@@ -94,9 +100,9 @@ export function wsApi(rig: Rig): WsApi {
       }
     };
 
-    socket.onmessage = (event) => {
+    socket.addEventListener("message", (event: MessageEvent) => {
       void handleMessage(event);
-    };
+    });
 
     async function handleMessage(event: MessageEvent): Promise<void> {
       let frame: WebSocketRequest;
@@ -112,37 +118,9 @@ export function wsApi(rig: Rig): WsApi {
       }
     }
 
-    socket.onclose = () => {
+    socket.addEventListener("close", () => {
       for (const abort of observes.values()) abort.abort();
       observes.clear();
-      sockets.delete(socket);
-    };
-
-    return Promise.resolve(response);
+    });
   };
-
-  (handler as WsApi).closeAll = (): Promise<void> => {
-    const waits: Promise<void>[] = [];
-    for (const socket of sockets) {
-      if (
-        socket.readyState === WebSocket.CLOSED ||
-        socket.readyState === WebSocket.CLOSING
-      ) continue;
-      waits.push(
-        new Promise<void>((resolve) => {
-          const done = () => resolve();
-          socket.addEventListener("close", done, { once: true });
-          socket.addEventListener("error", done, { once: true });
-          try {
-            socket.close(1001, "server shutting down");
-          } catch {
-            resolve();
-          }
-        }),
-      );
-    }
-    return Promise.all(waits).then(() => {});
-  };
-
-  return handler as WsApi;
 }
