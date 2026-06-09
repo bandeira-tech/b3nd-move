@@ -12,8 +12,6 @@ import {
   statusAction,
 } from "../actions/standard.ts";
 
-const noSignal = new AbortController().signal;
-
 export interface McpServerOptions {
   name?: string;
   version?: string;
@@ -63,6 +61,12 @@ const TOOLS = [
 ];
 
 export function buildMcpServer(rig: Rig, opts: McpServerOptions = {}): Server {
+  // Created lazily, not at module top — `new AbortController()` at global
+  // scope is disallowed on Cloudflare Workers ("disallowed operation called
+  // within global scope"). buildMcpServer is invoked per request, so this
+  // runs inside a handler context.
+  const noSignal = new AbortController().signal;
+
   const server = new Server(
     { name: opts.name ?? "b3nd-mcp", version: opts.version ?? "0.1.0" },
     { capabilities: { tools: {}, resources: {} } },
