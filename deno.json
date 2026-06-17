@@ -1,6 +1,6 @@
 {
   "name": "@bandeira-tech/b3nd-move",
-  "version": "0.17.1",
+  "version": "0.18.1",
   "description": "B3nd Move — encoding, transport, decoding. Portable service handlers and clients for each transport (HTTP, WebSocket, gRPC-HTTP, MCP).",
   "exports": {
     "./errors": "./src/errors.ts",
@@ -35,22 +35,13 @@
     "@std/assert": "jsr:@std/assert@^1.0.15",
     "@bufbuild/protobuf": "npm:@bufbuild/protobuf@^2.2.0",
     "@bufbuild/protobuf/codegenv2": "npm:@bufbuild/protobuf@^2.2.0/codegenv2",
-    "@modelcontextprotocol/sdk/client/index.js": "npm:@modelcontextprotocol/sdk@^1.0.0/client/index.js",
-    "@modelcontextprotocol/sdk/inMemory.js": "npm:@modelcontextprotocol/sdk@^1.0.0/inMemory.js",
-    "@modelcontextprotocol/sdk/server/index.js": "npm:@modelcontextprotocol/sdk@^1.0.0/server/index.js",
-    "@modelcontextprotocol/sdk/server/stdio.js": "npm:@modelcontextprotocol/sdk@^1.0.0/server/stdio.js",
-    "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js": "npm:@modelcontextprotocol/sdk@^1.0.0/server/webStandardStreamableHttp.js",
-    "@modelcontextprotocol/sdk/client/streamableHttp.js": "npm:@modelcontextprotocol/sdk@^1.0.0/client/streamableHttp.js",
-    "@modelcontextprotocol/sdk/client/websocket.js": "npm:@modelcontextprotocol/sdk@^1.0.0/client/websocket.js",
-    "@modelcontextprotocol/sdk/types.js": "npm:@modelcontextprotocol/sdk@^1.0.0/types.js",
-    "@modelcontextprotocol/sdk/shared/transport.js": "npm:@modelcontextprotocol/sdk@^1.0.0/shared/transport.js",
     "@astral/astral": "jsr:@astral/astral@^0.5.3",
     "@luca/esbuild-deno-loader": "jsr:@luca/esbuild-deno-loader@^0.11.1",
     "@std/path": "jsr:@std/path@^1.0.0",
     "esbuild": "npm:esbuild@^0.24.0"
   },
   "tasks": {
-    "check": "deno check src/errors.ts src/actions/standard.ts src/actions/validate.ts src/actions/ndjson.ts src/router/route.ts src/router/errors.ts src/http/router.ts src/codecs/codec.ts src/codecs/json.ts src/codecs/text.ts src/codecs/raw.ts src/codecs/field.ts src/http/service.ts src/http/client.ts src/http/wire.ts src/http/status.ts src/http/receive.ts src/http/read.ts src/http/observe.ts src/http-get-content/service.ts src/http-get-content/route.ts src/http-get-content/payload-response-map.ts src/http-post-content/service.ts src/http-post-content/route.ts src/http-post-content/payload-decoder.ts src/ws/router.ts src/ws/service.ts src/ws/client.ts src/ws/status.ts src/ws/receive.ts src/ws/read.ts src/ws/observe.ts src/ws/observe-cancel.ts src/grpc/http/router.ts src/grpc/http/wire.ts src/grpc/http/service.ts src/grpc/http/client.ts src/grpc/http/status.ts src/grpc/http/receive.ts src/grpc/http/read.ts src/grpc/http/observe.ts src/grpc/proto/convert.ts src/grpc/proto/gen/b3nd_pb.ts src/mcp/service.ts src/mcp/http/service.ts src/mcp/ws/service.ts src/mcp/ws/transport.ts dev/serve.ts dev/main.ts tests/suites/mcp-spec.ts tests/suites/move-suite.ts",
+    "check": "deno check src/errors.ts src/actions/standard.ts src/actions/validate.ts src/actions/ndjson.ts src/router/route.ts src/router/errors.ts src/http/router.ts src/codecs/codec.ts src/codecs/json.ts src/codecs/text.ts src/codecs/raw.ts src/codecs/field.ts src/http/service.ts src/http/client.ts src/http/wire.ts src/http/status.ts src/http/receive.ts src/http/read.ts src/http/observe.ts src/http-get-content/service.ts src/http-get-content/route.ts src/http-get-content/payload-response-map.ts src/http-post-content/service.ts src/http-post-content/route.ts src/http-post-content/payload-decoder.ts src/ws/router.ts src/ws/service.ts src/ws/client.ts src/ws/status.ts src/ws/receive.ts src/ws/read.ts src/ws/observe.ts src/ws/observe-cancel.ts src/grpc/http/router.ts src/grpc/http/wire.ts src/grpc/http/service.ts src/grpc/http/client.ts src/grpc/http/status.ts src/grpc/http/receive.ts src/grpc/http/read.ts src/grpc/http/observe.ts src/grpc/proto/convert.ts src/grpc/proto/gen/b3nd_pb.ts src/mcp/wire.ts src/mcp/server.ts src/mcp/web-streamable-http-transport.ts src/mcp/service.ts src/mcp/http/service.ts src/mcp/ws/service.ts src/mcp/ws/transport.ts dev/serve.ts dev/main.ts tests/suites/mcp-spec.ts tests/suites/move-suite.ts",
     "test": "deno test --allow-all src/",
     "test:integration:deno": "deno test --allow-all tests/integration/deno/",
     "test:integration:http": "deno test --allow-all tests/integration/browser/http.test.ts",
@@ -85,11 +76,14 @@
       "src/grpc/proto/b3nd.proto",
       "src/**/*.test.ts",
       "tests/",
+      "dev/",
       "node_modules/",
       "npm/",
+      ".claude/",
       ".env*",
       "*.test.ts",
-      "*.lock"
+      "*.lock",
+      "MCP-STATELESS-THIN.md"
     ]
   }
 }

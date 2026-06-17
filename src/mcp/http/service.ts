@@ -59,7 +59,7 @@
  * ```
  */
 
-import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
+import { WebStandardStreamableHTTPServerTransport } from "../web-streamable-http-transport.ts";
 import type { Rig } from "@bandeira-tech/b3nd-core";
 import { buildMcpServer, type McpServerOptions } from "../service.ts";
 

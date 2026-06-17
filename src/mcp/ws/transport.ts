@@ -18,8 +18,8 @@
  * sans the framing layer. Documented locally in `./README.md`.
  */
 
-import type { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
-import type { JSONRPCMessage } from "@modelcontextprotocol/sdk/types.js";
+import type { Transport } from "../web-streamable-http-transport.ts";
+import type { JSONRPCMessage } from "../wire.ts";
 
 /**
  * `Transport` impl that wraps a server-side `WebSocket`. The socket is

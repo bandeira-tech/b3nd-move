@@ -1,3 +1,4 @@
+// deno-lint-ignore-file no-import-prefix
 /**
  * MCP transport factory for integration tests.
  *
@@ -11,8 +12,8 @@
  * Used by `mcpSpec` (the MCP analog of `moveSuite`).
  */
 
-import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
+import { Client } from "npm:@modelcontextprotocol/sdk@^1.0.0/client/index.js";
+import { InMemoryTransport } from "npm:@modelcontextprotocol/sdk@^1.0.0/inMemory.js";
 import type { Rig } from "@bandeira-tech/b3nd-core/rig";
 import { buildMcpServer } from "../../src/mcp/service.ts";
 

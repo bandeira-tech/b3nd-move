@@ -1,59 +1,55 @@
 # Proposal — stateless thin MCP for b3nd-move
 
-Drop `@modelcontextprotocol/sdk` as a runtime dependency. Replace the
-SDK-backed `Server` + `WebStandardStreamableHTTPServerTransport` with a
-small hand-rolled JSON-RPC dispatcher + Streamable HTTP transport that
-targets the **2026-07-28 protocol revision** (currently RC). The new
-revision is stateless at the protocol layer, which removes ~90% of what
-the SDK was buying us.
+Drop `@modelcontextprotocol/sdk` as a runtime dependency. Replace the SDK-backed
+`Server` + `WebStandardStreamableHTTPServerTransport` with a small hand-rolled
+JSON-RPC dispatcher + Streamable HTTP transport that targets the **2026-07-28
+protocol revision** (currently RC). The new revision is stateless at the
+protocol layer, which removes ~90% of what the SDK was buying us.
 
 The branch this doc lives on is `mcp-stateless-thin` — a worktree under
 `.claude/worktrees/mcp-stateless-thin`. Pick up from here.
 
 ## TL;DR
 
-- **Problem:** Vercel Edge rejects b3nd-move outright. Root cause is the
-  MCP SDK declared in `dependencies` (manifest-poisoning, not import
-  graph). Cloudflare Workers tolerates it via `nodejs_compat`; nobody
-  else will.
+- **Problem:** Vercel Edge rejects b3nd-move outright. Root cause is the MCP SDK
+  declared in `dependencies` (manifest-poisoning, not import graph). Cloudflare
+  Workers tolerates it via `nodejs_compat`; nobody else will.
 - **Spec change in our favor:** RC 2026-07-28 removes the
-  `initialize`/`initialized` handshake, removes `Mcp-Session-Id`, and
-  removes the standalone GET stream. What's left is JSON-RPC over POST
-  with three required headers. Tiny.
-- **Proposal:** Hand-roll the transport + dispatcher (~250 LOC total),
-  drop the SDK from `dependencies` (keep it in `devDependencies` for
-  test conformance via `@modelcontextprotocol/sdk/inMemory.js` until we
-  replace those tests too). Unblocks Vercel Edge and every other
-  isolate runtime that has an allowlist.
-- **Scope:** HTTP transport + the rig dispatcher. WS and stdio stay
-  SDK-free in spirit; WS is already a thin wrapper, stdio lives in
-  `dev/` and can keep using the SDK until someone needs it elsewhere.
-- **Risk:** spec conformance bugs. Mitigation: ship the new transport
-  alongside the old one for one minor version, validate against
-  `@modelcontextprotocol/inspector` and Claude Desktop, then delete the
-  SDK path.
+  `initialize`/`initialized` handshake, removes `Mcp-Session-Id`, and removes
+  the standalone GET stream. What's left is JSON-RPC over POST with three
+  required headers. Tiny.
+- **Proposal:** Hand-roll the transport + dispatcher (~250 LOC total), drop the
+  SDK from `dependencies` (keep it in `devDependencies` for test conformance via
+  `@modelcontextprotocol/sdk/inMemory.js` until we replace those tests too).
+  Unblocks Vercel Edge and every other isolate runtime that has an allowlist.
+- **Scope:** HTTP transport + the rig dispatcher. WS and stdio stay SDK-free in
+  spirit; WS is already a thin wrapper, stdio lives in `dev/` and can keep using
+  the SDK until someone needs it elsewhere.
+- **Risk:** spec conformance bugs. Mitigation: ship the new transport alongside
+  the old one for one minor version, validate against
+  `@modelcontextprotocol/inspector` and Claude Desktop, then delete the SDK
+  path.
 
 ## The problem in detail
 
-`cf.demo.b3nd` works on Cloudflare Workers because CF Workers carries
-the `nodejs_compat` flag — `node:tls`, `node:http`, `node:stream`,
-`node:crypto` all polyfill. The MCP SDK's server barrel re-exports
-modules that use those (`sse.js`, `stdio.js`), and CF's bundler
-shims them.
+`cf.demo.b3nd` works on Cloudflare Workers because CF Workers carries the
+`nodejs_compat` flag — `node:tls`, `node:http`, `node:stream`, `node:crypto` all
+polyfill. The MCP SDK's server barrel re-exports modules that use those
+(`sse.js`, `stdio.js`), and CF's bundler shims them.
 
-Vercel Edge has no such polyfill. More importantly, Vercel's bundler
-does **manifest-based package rejection**: if a package's
-`package.json` declares a dependency that the bundler considers Edge-
-unsafe, every module exported by that package is rejected — even ones
-that don't transitively import the bad bits. We confirmed this
-empirically (see [Diagnostic findings](#diagnostic-findings)).
+Vercel Edge has no such polyfill. More importantly, Vercel's bundler does
+**manifest-based package rejection**: if a package's `package.json` declares a
+dependency that the bundler considers Edge- unsafe, every module exported by
+that package is rejected — even ones that don't transitively import the bad
+bits. We confirmed this empirically (see
+[Diagnostic findings](#diagnostic-findings)).
 
-So: b3nd-move depending on `@modelcontextprotocol/sdk` poisons every
-module b3nd-move exports — `router/errors`, `http/service`,
-`http-get-content/service`, the lot. The first consumer to hit this
-was [`b3nd-free/src/vercel/`](https://github.com/rafb43/b3nd-free/tree/main/src/vercel),
-which has to run on the Node serverless runtime as a workaround. We
-want it back on Edge.
+So: b3nd-move depending on `@modelcontextprotocol/sdk` poisons every module
+b3nd-move exports — `router/errors`, `http/service`, `http-get-content/service`,
+the lot. The first consumer to hit this was
+[`b3nd-free/src/vercel/`](https://github.com/rafb43/b3nd-free/tree/main/src/vercel),
+which has to run on the Node serverless runtime as a workaround. We want it back
+on Edge.
 
 The same problem will hit anyone trying b3nd-move on:
 
@@ -65,35 +61,36 @@ The same problem will hit anyone trying b3nd-move on:
 
 ## Diagnostic findings
 
-Four-stub experiment against Vercel Edge — each stub imported one
-package, then deployed and checked the bundle error list.
+Four-stub experiment against Vercel Edge — each stub imported one package, then
+deployed and checked the bundle error list.
 
-| Stub                                                            | Result      |
-|-----------------------------------------------------------------|-------------|
-| `@jsr/bandeira-tech__b3nd-save`                                 | ✓ deploys   |
-| `@jsr/bandeira-tech__b3nd-core`                                 | ✓ deploys   |
-| `@bufbuild/protobuf`                                            | ✓ deploys   |
-| `@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js` | ✗ rejected  |
-| `@jsr/bandeira-tech__b3nd-move/router/errors` *(pure error classes, zero imports)* | ✗ rejected |
-| `@jsr/bandeira-tech__b3nd-move/http/service`                    | ✗ rejected  |
+| Stub                                                                               | Result     |
+| ---------------------------------------------------------------------------------- | ---------- |
+| `@jsr/bandeira-tech__b3nd-save`                                                    | ✓ deploys  |
+| `@jsr/bandeira-tech__b3nd-core`                                                    | ✓ deploys  |
+| `@bufbuild/protobuf`                                                               | ✓ deploys  |
+| `@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js`                    | ✗ rejected |
+| `@jsr/bandeira-tech__b3nd-move/router/errors` _(pure error classes, zero imports)_ | ✗ rejected |
+| `@jsr/bandeira-tech__b3nd-move/http/service`                                       | ✗ rejected |
 
 Conclusions:
 
-1. The JSR shim format is innocent — `b3nd-save` and `b3nd-core` deploy
-   fine. Don't go chasing publishing-pipeline ghosts.
-2. `@modelcontextprotocol/sdk` is the only direct offender among
-   b3nd-move's three deps. `@bufbuild/protobuf` is fine.
-3. `router/errors.js` has zero imports and got rejected anyway —
-   manifest-level rejection, not import-graph analysis.
-4. **The only way to unblock b3nd-move on Vercel Edge is to remove MCP
-   SDK from its `dependencies`.** No clever import path or tree-shake
-   trick gets us out of this.
+1. The JSR shim format is innocent — `b3nd-save` and `b3nd-core` deploy fine.
+   Don't go chasing publishing-pipeline ghosts.
+2. `@modelcontextprotocol/sdk` is the only direct offender among b3nd-move's
+   three deps. `@bufbuild/protobuf` is fine.
+3. `router/errors.js` has zero imports and got rejected anyway — manifest-level
+   rejection, not import-graph analysis.
+4. **The only way to unblock b3nd-move on Vercel Edge is to remove MCP SDK from
+   its `dependencies`.** No clever import path or tree-shake trick gets us out
+   of this.
 
 Tested with Vercel CLI 54.14.0, Edge runtime, June 2026.
 
 ## The 2026-07-28 RC — the part that makes this cheap
 
-Blog post: <https://blog.modelcontextprotocol.io/posts/2026-07-28-release-candidate/>
+Blog post:
+<https://blog.modelcontextprotocol.io/posts/2026-07-28-release-candidate/>
 
 Draft spec for the transport:
 <https://modelcontextprotocol.io/specification/draft/basic/transports/streamable-http>
@@ -104,82 +101,80 @@ Things removed from Streamable HTTP that we no longer need to implement:
 - ❌ `Mcp-Session-Id` header and protocol-level sessions (SEP-2567)
 - ❌ Standalone GET stream for server-initiated messages
 - ❌ Stream resumability via `Last-Event-ID`
-- ❌ Server-initiated JSON-RPC requests on SSE streams (replaced by
-  embedded `InputRequiredResult` per MRTR, which our toolset doesn't
-  use)
+- ❌ Server-initiated JSON-RPC requests on SSE streams (replaced by embedded
+  `InputRequiredResult` per MRTR, which our toolset doesn't use)
 
 Things still required:
 
 - ✅ JSON-RPC 2.0 envelope (UTF-8)
 - ✅ `POST` to the single MCP endpoint
-- ✅ Three request headers: `MCP-Protocol-Version`, `Mcp-Method`, and
-  `Mcp-Name` (for `tools/call` / `resources/read` / `prompts/get`)
+- ✅ Three request headers: `MCP-Protocol-Version`, `Mcp-Method`, and `Mcp-Name`
+  (for `tools/call` / `resources/read` / `prompts/get`)
 - ✅ Response is either `application/json` (one JSON-RPC response) or
-  `text/event-stream` (SSE — for `notifications/progress` etc.
-  before the final response)
-- ✅ Server-side header↔body validation; mismatch → `400 Bad Request`
-  with JSON-RPC error code `-32001` (`HeaderMismatch`)
+  `text/event-stream` (SSE — for `notifications/progress` etc. before the final
+  response)
+- ✅ Server-side header↔body validation; mismatch → `400 Bad Request` with
+  JSON-RPC error code `-32001` (`HeaderMismatch`)
 - ✅ `Origin` header validation; invalid → `403 Forbidden`
 - ✅ Notifications: `202 Accepted`, no body
 - ✅ Unknown method: `404 Not Found` with JSON-RPC error `-32601`
 - ✅ Unsupported protocol version: `400 Bad Request` with
   `UnsupportedProtocolVersionError` carrying `supported` versions
-- ✅ Backwards compat: old clients still try `initialize` first; the
-  spec recommends a detection dance (see below)
+- ✅ Backwards compat: old clients still try `initialize` first; the spec
+  recommends a detection dance (see below)
 
-For b3nd's surface (`b3nd_receive`, `b3nd_read`, `b3nd_status`,
-`b3nd://*` resources), we don't need progress notifications, sampling,
-elicitation, or roots. **A pure POST→`application/json` server covers
-100% of the b3nd use case.** SSE is opt-in; we can ship without it
-initially.
+For b3nd's surface (`b3nd_receive`, `b3nd_read`, `b3nd_status`, `b3nd://*`
+resources), we don't need progress notifications, sampling, elicitation, or
+roots. **A pure POST→`application/json` server covers 100% of the b3nd use
+case.** SSE is opt-in; we can ship without it initially.
 
 ## Scope of work on this branch
 
-| Step | File                                       | Action                                                              |
-|------|--------------------------------------------|---------------------------------------------------------------------|
-| 1    | `deno.json` `imports`                      | Remove `@modelcontextprotocol/sdk/*` runtime imports; keep `inMemory.js`/`client/*` only for tests, behind a `tests/` import scope |
-| 2    | `src/mcp/wire.ts` *(new)*                  | JSON-RPC envelope types + parse/serialize + error codes             |
-| 3    | `src/mcp/dispatcher.ts` *(new)*            | `buildMcpDispatcher(rig, opts)` — pure method→handler map, no SDK   |
-| 4    | `src/mcp/service.ts` *(refactor)*          | Re-exports `buildMcpDispatcher` as `buildMcpServer` for one version (deprecation shim); tool/resource definitions stay as `const TOOLS`/`const RESOURCES` |
-| 5    | `src/mcp/http/service.ts` *(rewrite)*      | Hand-rolled Streamable HTTP — POST handler, header validation, dispatch, response shaping |
-| 6    | `src/mcp/ws/service.ts` *(refactor)*       | Already a thin transport-shim — point it at `buildMcpDispatcher` directly, drop the SDK `Transport` interface |
-| 7    | `tests/mcp/*`                              | Replace InMemoryTransport-based conformance tests with direct dispatcher tests; add a Streamable HTTP wire-level test using `fetch` against the new transport |
-| 8    | `dev/serve.ts` (stdio)                     | Either drop stdio support, or keep the SDK path as a CLI-only build (not shipped to consumers). Stdio is dev-time, not runtime. |
-| 9    | `deno.json`                                | Bump version → `0.18.0`. Removing a `dependencies` entry is a minor on JSR semver because consumers can no longer rely on the SDK being installed transitively |
-| 10   | `README.md` + `src/mcp/README.md`          | Document the protocol revision, the dropped SDK, and migration notes |
+| Step | File                                  | Action                                                                                                                                                         |
+| ---- | ------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1    | `deno.json` `imports`                 | Remove `@modelcontextprotocol/sdk/*` runtime imports; keep `inMemory.js`/`client/*` only for tests, behind a `tests/` import scope                             |
+| 2    | `src/mcp/wire.ts` _(new)_             | JSON-RPC envelope types + parse/serialize + error codes                                                                                                        |
+| 3    | `src/mcp/dispatcher.ts` _(new)_       | `buildMcpDispatcher(rig, opts)` — pure method→handler map, no SDK                                                                                              |
+| 4    | `src/mcp/service.ts` _(refactor)_     | Re-exports `buildMcpDispatcher` as `buildMcpServer` for one version (deprecation shim); tool/resource definitions stay as `const TOOLS`/`const RESOURCES`      |
+| 5    | `src/mcp/http/service.ts` _(rewrite)_ | Hand-rolled Streamable HTTP — POST handler, header validation, dispatch, response shaping                                                                      |
+| 6    | `src/mcp/ws/service.ts` _(refactor)_  | Already a thin transport-shim — point it at `buildMcpDispatcher` directly, drop the SDK `Transport` interface                                                  |
+| 7    | `tests/mcp/*`                         | Replace InMemoryTransport-based conformance tests with direct dispatcher tests; add a Streamable HTTP wire-level test using `fetch` against the new transport  |
+| 8    | `dev/serve.ts` (stdio)                | Either drop stdio support, or keep the SDK path as a CLI-only build (not shipped to consumers). Stdio is dev-time, not runtime.                                |
+| 9    | `deno.json`                           | Bump version → `0.18.0`. Removing a `dependencies` entry is a minor on JSR semver because consumers can no longer rely on the SDK being installed transitively |
+| 10   | `README.md` + `src/mcp/README.md`     | Document the protocol revision, the dropped SDK, and migration notes                                                                                           |
 
-The pieces marked *new* / *rewrite* should be self-contained — about
-250 LOC total, breakdown below.
+The pieces marked _new_ / _rewrite_ should be self-contained — about 250 LOC
+total, breakdown below.
 
 ## Wire format reference (2026-07-28)
 
-Quoted-where-it-matters from the spec; not exhaustive. Verbatim spec
-links at the bottom of this doc.
+Quoted-where-it-matters from the spec; not exhaustive. Verbatim spec links at
+the bottom of this doc.
 
 ### Endpoint
 
-Single path, server-defined (commonly `/mcp`). Accepts **POST only**.
-GET and DELETE → `405 Method Not Allowed`.
+Single path, server-defined (commonly `/mcp`). Accepts **POST only**. GET and
+DELETE → `405 Method Not Allowed`.
 
 ### Required request headers
 
-| Header                  | Required for              | Value                                       |
-|-------------------------|---------------------------|---------------------------------------------|
-| `Content-Type`          | all POSTs                 | `application/json`                          |
-| `Accept`                | all POSTs                 | MUST list both `application/json` and `text/event-stream` |
-| `MCP-Protocol-Version`  | all POSTs                 | e.g. `2026-07-28` — MUST match `_meta.io.modelcontextprotocol/protocolVersion` in body |
-| `Mcp-Method`            | all POSTs                 | echoes `method` from JSON-RPC body          |
-| `Mcp-Name`              | `tools/call`, `resources/read`, `prompts/get` | echoes `params.name` or `params.uri`         |
-| `Mcp-Param-{Name}`      | when the tool's schema marks a param with `x-mcp-header` | encoded per spec §Value Encoding (incl. base64 for non-ASCII / sentinel-collisions) |
-| `Origin`                | (browser clients)         | server MUST validate; invalid → `403`       |
+| Header                 | Required for                                             | Value                                                                                  |
+| ---------------------- | -------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| `Content-Type`         | all POSTs                                                | `application/json`                                                                     |
+| `Accept`               | all POSTs                                                | MUST list both `application/json` and `text/event-stream`                              |
+| `MCP-Protocol-Version` | all POSTs                                                | e.g. `2026-07-28` — MUST match `_meta.io.modelcontextprotocol/protocolVersion` in body |
+| `Mcp-Method`           | all POSTs                                                | echoes `method` from JSON-RPC body                                                     |
+| `Mcp-Name`             | `tools/call`, `resources/read`, `prompts/get`            | echoes `params.name` or `params.uri`                                                   |
+| `Mcp-Param-{Name}`     | when the tool's schema marks a param with `x-mcp-header` | encoded per spec §Value Encoding (incl. base64 for non-ASCII / sentinel-collisions)    |
+| `Origin`               | (browser clients)                                        | server MUST validate; invalid → `403`                                                  |
 
-If any required standard header is missing OR a header value doesn't
-match the body, respond `400 Bad Request` with JSON-RPC error
-`-32001` (`HeaderMismatch`).
+If any required standard header is missing OR a header value doesn't match the
+body, respond `400 Bad Request` with JSON-RPC error `-32001` (`HeaderMismatch`).
 
 ### Body — JSON-RPC 2.0
 
 Request:
+
 ```json
 {
   "jsonrpc": "2.0",
@@ -199,23 +194,23 @@ Request:
 
 Notification: same shape, no `id`.
 
-The client **MUST NOT** send JSON-RPC responses (the protocol no longer
-allows server-initiated requests). Only requests and notifications are
-inbound; responses are always outbound.
+The client **MUST NOT** send JSON-RPC responses (the protocol no longer allows
+server-initiated requests). Only requests and notifications are inbound;
+responses are always outbound.
 
 ### Response shapes
 
-| Body kind     | Status | Content-Type             | Body                                                   |
-|---------------|--------|--------------------------|--------------------------------------------------------|
-| Request → result | `200` | `application/json`     | single JSON-RPC response                               |
-| Request → result via streaming | `200` | `text/event-stream` | SSE — notifications, then final response, then close   |
-| Notification (accepted) | `202` | n/a | empty body                                              |
-| Notification (rejected) | `400` | n/a (or json) | optional JSON-RPC error (no `id`)                  |
-| Validation failure      | `400` | `application/json` | JSON-RPC error `-32001` `HeaderMismatch`            |
-| Unknown method          | `404` | `application/json` | JSON-RPC error `-32601` `Method not found`          |
-| Unsupported version     | `400` | `application/json` | JSON-RPC error `UnsupportedProtocolVersionError`    |
-| Bad Origin              | `403` | n/a (or json) | optional JSON-RPC error (no `id`)                  |
-| Old GET/DELETE          | `405` | n/a | none                                                   |
+| Body kind                      | Status | Content-Type        | Body                                                 |
+| ------------------------------ | ------ | ------------------- | ---------------------------------------------------- |
+| Request → result               | `200`  | `application/json`  | single JSON-RPC response                             |
+| Request → result via streaming | `200`  | `text/event-stream` | SSE — notifications, then final response, then close |
+| Notification (accepted)        | `202`  | n/a                 | empty body                                           |
+| Notification (rejected)        | `400`  | n/a (or json)       | optional JSON-RPC error (no `id`)                    |
+| Validation failure             | `400`  | `application/json`  | JSON-RPC error `-32001` `HeaderMismatch`             |
+| Unknown method                 | `404`  | `application/json`  | JSON-RPC error `-32601` `Method not found`           |
+| Unsupported version            | `400`  | `application/json`  | JSON-RPC error `UnsupportedProtocolVersionError`     |
+| Bad Origin                     | `403`  | n/a (or json)       | optional JSON-RPC error (no `id`)                    |
+| Old GET/DELETE                 | `405`  | n/a                 | none                                                 |
 
 ### SSE response format
 
@@ -227,32 +222,32 @@ When choosing `text/event-stream`:
 - Per-event `id:` not required (no resumability in this revision)
 - Closing the stream from the client = cancellation
 
-For b3nd's three tools we never need to send progress notifications,
-so the JSON branch is always sufficient. SSE is a future-proofing
-hook; defer the implementation until a tool actually needs progress.
+For b3nd's three tools we never need to send progress notifications, so the JSON
+branch is always sufficient. SSE is a future-proofing hook; defer the
+implementation until a tool actually needs progress.
 
 ### Backwards compatibility (old clients with initialize)
 
 The spec recommends:
 
 - Client tries modern POST first.
-- On `400` the client checks the body — modern servers reply with a
-  recognized JSON-RPC error; old servers don't.
+- On `400` the client checks the body — modern servers reply with a recognized
+  JSON-RPC error; old servers don't.
 - If not recognized, client falls back to `initialize`.
 
-For *server-side* backwards compat (an old client speaking 2025-06-18
-to a new b3nd-move server):
+For _server-side_ backwards compat (an old client speaking 2025-06-18 to a new
+b3nd-move server):
 
-- The spec allows the server to treat a POST without
-  `MCP-Protocol-Version` as `2025-03-26` (legacy).
-- Easier: don't bother. Old clients will see `400 HeaderMismatch`
-  with our advertised `supported: ["2026-07-28"]` and the client
-  library handles fallback if it supports both eras.
-- This is a fine choice for b3nd because b3nd's MCP surface targets
-  modern Claude/MCP-Inspector clients that already track the spec.
+- The spec allows the server to treat a POST without `MCP-Protocol-Version` as
+  `2025-03-26` (legacy).
+- Easier: don't bother. Old clients will see `400 HeaderMismatch` with our
+  advertised `supported: ["2026-07-28"]` and the client library handles fallback
+  if it supports both eras.
+- This is a fine choice for b3nd because b3nd's MCP surface targets modern
+  Claude/MCP-Inspector clients that already track the spec.
 
-Decision: server-side backwards compat is out of scope for this
-branch. Document the cutover; ship.
+Decision: server-side backwards compat is out of scope for this branch. Document
+the cutover; ship.
 
 ## Package layout after this branch
 
@@ -277,8 +272,8 @@ tests/mcp/
 
 ## Implementation skeleton
 
-The next agent should fill these in. The shapes below are TS that
-typechecks at the boundaries; the bodies are stubs.
+The next agent should fill these in. The shapes below are TS that typechecks at
+the boundaries; the bodies are stubs.
 
 ### `src/mcp/wire.ts`
 
@@ -342,8 +337,7 @@ export const JSON_RPC_ERRORS = {
 export const MCP_PROTOCOL_VERSION = "2026-07-28";
 export const MCP_SUPPORTED_VERSIONS = [MCP_PROTOCOL_VERSION] as const;
 
-export const META_PROTOCOL_VERSION =
-  "io.modelcontextprotocol/protocolVersion";
+export const META_PROTOCOL_VERSION = "io.modelcontextprotocol/protocolVersion";
 export const META_CLIENT_INFO = "io.modelcontextprotocol/clientInfo";
 export const META_CLIENT_CAPABILITIES =
   "io.modelcontextprotocol/clientCapabilities";
@@ -474,13 +468,13 @@ import {
 import {
   JSON_RPC_ERRORS,
   jsonRpcError,
+  type JsonRpcErrorResponse,
+  type JsonRpcNotification,
+  type JsonRpcRequest,
   MCP_PROTOCOL_VERSION,
   MCP_SUPPORTED_VERSIONS,
   META_PROTOCOL_VERSION,
   parseEnvelope,
-  type JsonRpcErrorResponse,
-  type JsonRpcRequest,
-  type JsonRpcNotification,
 } from "../wire.ts";
 
 const ACCEPTED_ORIGINS_DEFAULT: ReadonlySet<string> | "any" = "any";
@@ -515,16 +509,22 @@ export function mcpHttpApi(
     const versionHeader = req.headers.get("mcp-protocol-version");
     if (!versionHeader) {
       return jsonRpcResponse(
-        jsonRpcError(null, JSON_RPC_ERRORS.HEADER_MISMATCH,
-          "Missing MCP-Protocol-Version header"),
+        jsonRpcError(
+          null,
+          JSON_RPC_ERRORS.HEADER_MISMATCH,
+          "Missing MCP-Protocol-Version header",
+        ),
         400,
       );
     }
     if (!MCP_SUPPORTED_VERSIONS.includes(versionHeader as never)) {
       return jsonRpcResponse(
-        jsonRpcError(null, JSON_RPC_ERRORS.HEADER_MISMATCH,
+        jsonRpcError(
+          null,
+          JSON_RPC_ERRORS.HEADER_MISMATCH,
           `Unsupported protocol version: ${versionHeader}`,
-          { supported: MCP_SUPPORTED_VERSIONS }),
+          { supported: MCP_SUPPORTED_VERSIONS },
+        ),
         400,
       );
     }
@@ -540,9 +540,11 @@ export function mcpHttpApi(
     const methodHeader = req.headers.get("mcp-method");
     if (methodHeader !== envelope.method) {
       return jsonRpcResponse(
-        jsonRpcError("id" in envelope ? envelope.id : null,
+        jsonRpcError(
+          "id" in envelope ? envelope.id : null,
           JSON_RPC_ERRORS.HEADER_MISMATCH,
-          `Mcp-Method header (${methodHeader}) does not match body (${envelope.method})`),
+          `Mcp-Method header (${methodHeader}) does not match body (${envelope.method})`,
+        ),
         400,
       );
     }
@@ -554,15 +556,16 @@ export function mcpHttpApi(
       envelope.method === "prompts/get"
     ) {
       const nameHeader = req.headers.get("mcp-name");
-      const bodyName =
-        envelope.method === "resources/read"
-          ? (envelope.params?.uri as string | undefined)
-          : (envelope.params?.name as string | undefined);
+      const bodyName = envelope.method === "resources/read"
+        ? (envelope.params?.uri as string | undefined)
+        : (envelope.params?.name as string | undefined);
       if (!nameHeader || nameHeader !== bodyName) {
         return jsonRpcResponse(
-          jsonRpcError("id" in envelope ? envelope.id : null,
+          jsonRpcError(
+            "id" in envelope ? envelope.id : null,
             JSON_RPC_ERRORS.HEADER_MISMATCH,
-            `Mcp-Name header does not match ${envelope.method} target`),
+            `Mcp-Name header does not match ${envelope.method} target`,
+          ),
           400,
         );
       }
@@ -574,9 +577,11 @@ export function mcpHttpApi(
         ?.[META_PROTOCOL_VERSION];
     if (metaVersion !== versionHeader) {
       return jsonRpcResponse(
-        jsonRpcError("id" in envelope ? envelope.id : null,
+        jsonRpcError(
+          "id" in envelope ? envelope.id : null,
           JSON_RPC_ERRORS.HEADER_MISMATCH,
-          "_meta.protocolVersion does not match MCP-Protocol-Version header"),
+          "_meta.protocolVersion does not match MCP-Protocol-Version header",
+        ),
         400,
       );
     }
@@ -592,8 +597,11 @@ export function mcpHttpApi(
     const handler = dispatcher.methods.get(envelope.method);
     if (!handler) {
       return jsonRpcResponse(
-        jsonRpcError(envelope.id, JSON_RPC_ERRORS.METHOD_NOT_FOUND,
-          `Method not found: ${envelope.method}`),
+        jsonRpcError(
+          envelope.id,
+          JSON_RPC_ERRORS.METHOD_NOT_FOUND,
+          `Method not found: ${envelope.method}`,
+        ),
         404,
       );
     }
@@ -624,14 +632,13 @@ function jsonRpcResponse(body: unknown, status: number): Response {
 ```
 
 That's the whole HTTP transport — ~120 LOC including comments and
-header-validation branches. Drop-in replacement for the old `mcpHttpApi`,
-same exported signature.
+header-validation branches. Drop-in replacement for the old `mcpHttpApi`, same
+exported signature.
 
 ### `src/mcp/service.ts` shim
 
-Keep the file but reduce it to a re-export plus a deprecation note,
-so consumers who imported `buildMcpServer` keep working through one
-minor cycle:
+Keep the file but reduce it to a re-export plus a deprecation note, so consumers
+who imported `buildMcpServer` keep working through one minor cycle:
 
 ```ts
 /**
@@ -642,43 +649,41 @@ export { buildMcpDispatcher as buildMcpServer } from "./dispatcher.ts";
 export type { McpDispatcherOptions as McpServerOptions } from "./dispatcher.ts";
 ```
 
-Move the `TOOLS` const definition into `dispatcher.ts`. It's the same
-data, just a different home.
+Move the `TOOLS` const definition into `dispatcher.ts`. It's the same data, just
+a different home.
 
 ## Migration
 
 For consumers (cf.demo.b3nd, vercel.demo.b3nd, anyone else):
 
-- `mcpHttpApi(rig, { name, version })` — unchanged signature, still
-  returns a `(Request) => Promise<Response>`.
-- `buildMcpServer` continues to work in 0.18.0 via the shim; emits a
-  deprecation log (optional). Delete in 0.19.0.
+- `mcpHttpApi(rig, { name, version })` — unchanged signature, still returns a
+  `(Request) => Promise<Response>`.
+- `buildMcpServer` continues to work in 0.18.0 via the shim; emits a deprecation
+  log (optional). Delete in 0.19.0.
 - Tool input shapes unchanged — `b3nd_receive`/`b3nd_read`/`b3nd_status`
   parameters and outputs are identical.
 - Resource URI scheme unchanged — `b3nd://<program>`.
-- **Client-facing breaking change**: clients speaking 2025-06-18 with
-  the old `initialize` handshake will get `400 HeaderMismatch` from
-  the server. The spec's recommended fallback is for clients to detect
-  modern vs. legacy by inspecting that 400 response. Modern Claude
-  Desktop / MCP Inspector should handle this automatically; older
-  clients pinned to 2025-06-18 won't.
+- **Client-facing breaking change**: clients speaking 2025-06-18 with the old
+  `initialize` handshake will get `400 HeaderMismatch` from the server. The
+  spec's recommended fallback is for clients to detect modern vs. legacy by
+  inspecting that 400 response. Modern Claude Desktop / MCP Inspector should
+  handle this automatically; older clients pinned to 2025-06-18 won't.
 
-Bundle wins: drop `@modelcontextprotocol/sdk` from `dependencies`
-(keep in `devDependencies` for tests) and the bundle shrinks
-considerably. b3nd-move now deploys on Vercel Edge, Deno Deploy,
-Netlify Edge, etc. The cloudflare image keeps working unchanged.
+Bundle wins: drop `@modelcontextprotocol/sdk` from `dependencies` (keep in
+`devDependencies` for tests) and the bundle shrinks considerably. b3nd-move now
+deploys on Vercel Edge, Deno Deploy, Netlify Edge, etc. The cloudflare image
+keeps working unchanged.
 
 ## Testing
 
 Replace tests in two phases:
 
-1. **Unit tests on the dispatcher.** `tests/mcp/dispatcher.test.ts` —
-   construct a Rig with a MemoryStore, build the dispatcher, call
-   handlers directly. No transport involved. Covers tool dispatch and
-   resource read end-to-end.
+1. **Unit tests on the dispatcher.** `tests/mcp/dispatcher.test.ts` — construct
+   a Rig with a MemoryStore, build the dispatcher, call handlers directly. No
+   transport involved. Covers tool dispatch and resource read end-to-end.
 
-2. **Wire-level integration tests on the HTTP transport.** Use
-   `fetch()` against `mcpHttpApi(rig)` directly. Tests cover:
+2. **Wire-level integration tests on the HTTP transport.** Use `fetch()` against
+   `mcpHttpApi(rig)` directly. Tests cover:
    - Missing/mismatched `MCP-Protocol-Version` → `400 -32001`
    - Missing/mismatched `Mcp-Method` → `400 -32001`
    - Missing/mismatched `Mcp-Name` on `tools/call` → `400 -32001`
@@ -691,69 +696,66 @@ Replace tests in two phases:
    - Bad origin → `403`
    - GET / DELETE → `405`
 
-3. **Conformance smoke against `@modelcontextprotocol/inspector`**
-   (manual or scripted). Inspector speaks the modern wire — verifying
-   our server passes its checks is the best external validation.
+3. **Conformance smoke against `@modelcontextprotocol/inspector`** (manual or
+   scripted). Inspector speaks the modern wire — verifying our server passes its
+   checks is the best external validation.
 
-The existing `InMemoryTransport`-based SDK conformance tests should be
-deleted, not migrated. They were testing SDK glue we no longer use.
+The existing `InMemoryTransport`-based SDK conformance tests should be deleted,
+not migrated. They were testing SDK glue we no longer use.
 
 ## What this branch should NOT do
 
 - Don't touch stdio. `dev/serve.ts` can keep using the SDK; it's a CLI
   dev-server, not a published surface.
-- Don't add SSE support. Sketch the response branch comment in the
-  HTTP handler, but the `application/json` path covers every b3nd tool
-  currently. Adding SSE properly means adding a `text/event-stream`
-  encoder, a `ReadableStream` writer, and progress-notification
-  plumbing through the dispatcher — all premature for what we serve.
-- Don't add MRTR (Multi Round-Trip Requests / `InputRequiredResult`).
-  b3nd's tools are pure RPC. No sampling, no elicitation, no roots.
-- Don't try to keep backwards compat with the 2025-06-18 transport on
-  the server side. Document the cutover; modern clients handle it
-  via the standard fallback dance.
+- Don't add SSE support. Sketch the response branch comment in the HTTP handler,
+  but the `application/json` path covers every b3nd tool currently. Adding SSE
+  properly means adding a `text/event-stream` encoder, a `ReadableStream`
+  writer, and progress-notification plumbing through the dispatcher — all
+  premature for what we serve.
+- Don't add MRTR (Multi Round-Trip Requests / `InputRequiredResult`). b3nd's
+  tools are pure RPC. No sampling, no elicitation, no roots.
+- Don't try to keep backwards compat with the 2025-06-18 transport on the server
+  side. Document the cutover; modern clients handle it via the standard fallback
+  dance.
 
 ## Open questions for the next agent
 
-1. **Should `buildMcpServer` shim throw a runtime warning on first
-   call, or stay silent?** Lean silent — the deprecation lives in the
-   TSDoc and CHANGELOG. Loud runtime warnings are user-hostile when
-   the consumer can't fix it without a version bump.
+1. **Should `buildMcpServer` shim throw a runtime warning on first call, or stay
+   silent?** Lean silent — the deprecation lives in the TSDoc and CHANGELOG.
+   Loud runtime warnings are user-hostile when the consumer can't fix it without
+   a version bump.
 
-2. **`x-mcp-header` annotations** — the spec says clients **MUST**
-   support `Mcp-Param-{Name}` mirroring of tool parameters tagged with
-   `x-mcp-header`. Our server **MAY** designate them. b3nd's three
-   current tools don't need this. Skip for now; revisit when a real
-   use case appears.
+2. **`x-mcp-header` annotations** — the spec says clients **MUST** support
+   `Mcp-Param-{Name}` mirroring of tool parameters tagged with `x-mcp-header`.
+   Our server **MAY** designate them. b3nd's three current tools don't need
+   this. Skip for now; revisit when a real use case appears.
 
-3. **`server/discover` method** — included in the skeleton dispatcher.
-   The spec hints at it but doesn't seem to require it at the server
-   layer. Check the final spec when 2026-07-28 ships; remove if not
-   normative.
+3. **`server/discover` method** — included in the skeleton dispatcher. The spec
+   hints at it but doesn't seem to require it at the server layer. Check the
+   final spec when 2026-07-28 ships; remove if not normative.
 
-4. **WS transport** — the existing `src/mcp/ws/service.ts` already
-   adapts a WebSocket as an SDK `Transport`. With the dispatcher
-   model, WS becomes:
+4. **WS transport** — the existing `src/mcp/ws/service.ts` already adapts a
+   WebSocket as an SDK `Transport`. With the dispatcher model, WS becomes:
    - Receive `socket.message` → parse JSON-RPC envelope
    - Dispatch through `buildMcpDispatcher` methods map
    - Send response with `socket.send(JSON.stringify(response))`
 
-   ~30 LOC. Worth bundling into this branch; the WS path is small
-   enough that doing it now is cheaper than coming back. The
-   `transport.ts` file disappears entirely.
+   ~30 LOC. Worth bundling into this branch; the WS path is small enough that
+   doing it now is cheaper than coming back. The `transport.ts` file disappears
+   entirely.
 
-5. **stdio** — same story as WS but bigger. The b3nd-move stdio
-   surface is dev-only (`dev/serve.ts --mcp`). Either:
+5. **stdio** — same story as WS but bigger. The b3nd-move stdio surface is
+   dev-only (`dev/serve.ts --mcp`). Either:
    - Move it to a separate dev-only package, or
    - Leave it depending on the SDK as a dev dependency only
 
-   The second option is simpler and doesn't break Claude Desktop
-   integration paths.
+   The second option is simpler and doesn't break Claude Desktop integration
+   paths.
 
-6. **Verify the spec is final** before merging. The 2026-07-28 RC may
-   still churn. If `Mcp-Method` / `Mcp-Name` names change between RC
-   and GA, this branch needs a rename pass. Keep the wire constants
-   in `wire.ts` so future churn is one file.
+6. **Verify the spec is final** before merging. The 2026-07-28 RC may still
+   churn. If `Mcp-Method` / `Mcp-Name` names change between RC and GA, this
+   branch needs a rename pass. Keep the wire constants in `wire.ts` so future
+   churn is one file.
 
 ## Reference URLs
 
@@ -767,20 +769,20 @@ deleted, not migrated. They were testing SDK glue we no longer use.
   <https://modelcontextprotocol.io/specification/draft/changelog>
 - Current (2025-06-18) Streamable HTTP, for comparison:
   <https://modelcontextprotocol.io/specification/2025-06-18/basic/transports>
-- The diagnostic experiment that confirmed manifest-poisoning was the
-  root cause: PR in `b3nd-free` repo, branch
-  `feat(vercel): ship the image — Node runtime + pg + provision script`
-  (see commit history; the diagnostic stubs lived briefly in
+- The diagnostic experiment that confirmed manifest-poisoning was the root
+  cause: PR in `b3nd-free` repo, branch
+  `feat(vercel): ship the image — Node runtime + pg + provision script` (see
+  commit history; the diagnostic stubs lived briefly in
   `src/vercel/api/diag/*.ts` and were not pushed).
 
 ## Related work upstream
 
-The MCP project has open issues about node-deps and Edge compat — worth
-checking before starting:
+The MCP project has open issues about node-deps and Edge compat — worth checking
+before starting:
 
 - <https://github.com/modelcontextprotocol/typescript-sdk/issues?q=is%3Aissue+edge>
 - <https://github.com/modelcontextprotocol/typescript-sdk/issues?q=is%3Aissue+node%3Atls>
 
-If the SDK fixes its barrel exports in a future release such that
-Vercel Edge accepts it, this proposal becomes obsolete and we can
-revert to using the SDK. Not betting on it.
+If the SDK fixes its barrel exports in a future release such that Vercel Edge
+accepts it, this proposal becomes obsolete and we can revert to using the SDK.
+Not betting on it.

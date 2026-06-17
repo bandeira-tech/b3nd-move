@@ -1,3 +1,4 @@
+// deno-lint-ignore-file no-import-prefix
 /**
  * MCP-over-HTTP transport factory for integration tests.
  *
@@ -14,8 +15,8 @@
 
 /// <reference lib="deno.ns" />
 
-import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
+import { Client } from "npm:@modelcontextprotocol/sdk@^1.0.0/client/index.js";
+import { StreamableHTTPClientTransport } from "npm:@modelcontextprotocol/sdk@^1.0.0/client/streamableHttp.js";
 import type { Rig } from "@bandeira-tech/b3nd-core/rig";
 import { mcpHttpApi } from "../../src/mcp/http/service.ts";
 

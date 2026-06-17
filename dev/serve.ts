@@ -1,3 +1,4 @@
+// deno-lint-ignore-file no-import-prefix
 /**
  * Local-dev convenience: spin up b3nd-move transports against a rig.
  *
@@ -21,7 +22,7 @@
 
 /// <reference lib="deno.ns" />
 
-import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { StdioServerTransport } from "npm:@modelcontextprotocol/sdk@^1.0.0/server/stdio.js";
 import type { Rig } from "@bandeira-tech/b3nd-core";
 import { httpApi } from "../src/http/service.ts";
 import { wsApi } from "../src/ws/service.ts";

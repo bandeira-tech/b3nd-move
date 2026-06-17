@@ -1,3 +1,4 @@
+// deno-lint-ignore-file no-import-prefix
 /**
  * @module
  * MCP tool spec — a fixed set of `Deno.test`s exercising the
@@ -15,7 +16,7 @@
  */
 
 import { assert, assertEquals } from "@std/assert";
-import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import type { Client } from "npm:@modelcontextprotocol/sdk@^1.0.0/client/index.js";
 
 /**
  * Factory for an in-process MCP server + connected SDK client.
