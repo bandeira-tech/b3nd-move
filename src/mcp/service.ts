@@ -1,16 +1,24 @@
-import { Server } from "@modelcontextprotocol/sdk/server/index.js";
-import {
-  CallToolRequestSchema,
-  ListResourcesRequestSchema,
-  ListToolsRequestSchema,
-  ReadResourceRequestSchema,
-} from "@modelcontextprotocol/sdk/types.js";
+/**
+ * @module
+ * Build the MCP request dispatcher for a `Rig` — three tools (receive,
+ * read, status) plus the `b3nd://*` resource surface.
+ *
+ * Returns a `MinimalServer` configured with the b3nd handlers. Same
+ * external contract as before (`buildMcpServer(rig, opts)`), now backed
+ * by our own dispatcher instead of the SDK's `Server`. Method routing
+ * is by JSON-RPC method name (string) rather than Zod schema.
+ *
+ * See ../../MCP-STATELESS-THIN.md for the rationale (drop SDK runtime
+ * dep; unblock Vercel Edge etc.).
+ */
+
 import type { Rig } from "@bandeira-tech/b3nd-core";
 import {
   readAction,
   receiveAction,
   statusAction,
 } from "../actions/standard.ts";
+import { MinimalServer } from "./server.ts";
 
 export interface McpServerOptions {
   name?: string;
@@ -60,33 +68,29 @@ const TOOLS = [
   },
 ];
 
-export function buildMcpServer(rig: Rig, opts: McpServerOptions = {}): Server {
-  // Created lazily, not at module top — `new AbortController()` at global
-  // scope is disallowed on Cloudflare Workers ("disallowed operation called
-  // within global scope"). buildMcpServer is invoked per request, so this
-  // runs inside a handler context.
-  const noSignal = new AbortController().signal;
-
-  const server = new Server(
+export function buildMcpServer(
+  rig: Rig,
+  opts: McpServerOptions = {},
+): MinimalServer {
+  const server = new MinimalServer(
     { name: opts.name ?? "b3nd-mcp", version: opts.version ?? "0.1.0" },
-    { capabilities: { tools: {}, resources: {} } },
+    { tools: {}, resources: {} },
   );
 
-  server.setRequestHandler(
-    ListToolsRequestSchema,
-    () => Promise.resolve({ tools: TOOLS }),
-  );
+  server.setRequestHandler("tools/list", () => ({ tools: TOOLS }));
 
-  server.setRequestHandler(CallToolRequestSchema, async (
-    request: { params: { name: string; arguments?: Record<string, unknown> } },
-  ) => {
-    const { name, arguments: args } = request.params;
+  server.setRequestHandler("tools/call", async (request, ctx) => {
+    const params = request.params as {
+      name: string;
+      arguments?: Record<string, unknown>;
+    };
+    const { name, arguments: args } = params;
 
     try {
       switch (name) {
         case "b3nd_receive": {
           const { messages } = args as { messages: [string, unknown][] };
-          const results = await receiveAction(rig, [messages], noSignal);
+          const results = await receiveAction(rig, [messages], ctx.signal);
           return {
             content: [{
               type: "text",
@@ -106,7 +110,7 @@ export function buildMcpServer(rig: Rig, opts: McpServerOptions = {}): Server {
 
         case "b3nd_read": {
           const { urls } = args as { urls: string[] };
-          const outputs = await readAction(rig, [urls], noSignal);
+          const outputs = await readAction(rig, [urls], ctx.signal);
           return {
             content: [{
               type: "text",
@@ -120,9 +124,12 @@ export function buildMcpServer(rig: Rig, opts: McpServerOptions = {}): Server {
         }
 
         case "b3nd_status": {
-          const result = await statusAction(rig, [], noSignal);
+          const result = await statusAction(rig, [], ctx.signal);
           return {
-            content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+            content: [{
+              type: "text",
+              text: JSON.stringify(result, null, 2),
+            }],
           };
         }
 
@@ -144,9 +151,9 @@ export function buildMcpServer(rig: Rig, opts: McpServerOptions = {}): Server {
     }
   });
 
-  server.setRequestHandler(ListResourcesRequestSchema, async () => {
+  server.setRequestHandler("resources/list", async (_, ctx) => {
     try {
-      const status = await statusAction(rig, [], noSignal);
+      const status = await statusAction(rig, [], ctx.signal);
       return {
         resources: (status.schema ?? []).map((program) => ({
           uri: `b3nd://${program}`,
@@ -160,13 +167,12 @@ export function buildMcpServer(rig: Rig, opts: McpServerOptions = {}): Server {
     }
   });
 
-  server.setRequestHandler(ReadResourceRequestSchema, async (
-    request: { params: { uri: string } },
-  ) => {
-    const resourceUri = request.params.uri;
+  server.setRequestHandler("resources/read", async (request, ctx) => {
+    const params = request.params as { uri: string };
+    const resourceUri = params.uri;
     const b3ndUri = resourceUri.replace(/^b3nd:\/\//, "");
     try {
-      const [output] = await readAction(rig, [[b3ndUri]], noSignal);
+      const [output] = await readAction(rig, [[b3ndUri]], ctx.signal);
       const [, payload] = output;
       return {
         contents: [{
