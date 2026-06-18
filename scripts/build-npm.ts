@@ -45,6 +45,11 @@ await build({
   shims: { deno: false },
   test: false,
   scriptModule: false,
+  // dnt 0.42.3 emits `_dnt.polyfills.ts` that references `require`/`module`
+  // for runtime CJS/ESM detection. The deno source is already type-checked
+  // via `deno task check`; skip dnt's redundant npm-side typecheck so the
+  // polyfill doesn't fail without `@types/node` in lib.
+  typeCheck: "none",
   // KNOWN LIMITATION (dnt 0.42.x): mappings keyed on the resolved JSR
   // URL trip an internal `dnt bug - Could not find the mapping` panic
   // (verified across the canon and core builds). Until upstream is
