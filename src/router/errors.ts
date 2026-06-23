@@ -30,6 +30,13 @@ export class BadRequest extends HttpError {
   }
 }
 
+/** 401 — request authenticity could not be verified (bad/missing signature). */
+export class Unauthorized extends HttpError {
+  constructor(message = "Unauthorized") {
+    super(401, message);
+  }
+}
+
 /** 404 — the addressed resource doesn't exist. */
 export class NotFound extends HttpError {
   constructor(message = "Not Found") {

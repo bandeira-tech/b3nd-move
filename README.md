@@ -97,14 +97,15 @@ re-exports; runtime binding (`Deno.serve`, `node:http`, framework adapters) is
 the host's job. A `deno task serve` helper at [`dev/serve.ts`](./dev/serve.ts)
 wires a stub rig to any combination of transports for ad-hoc testing.
 
-| Transport                                                                   | Expected encoding (outbound)       | Expected decoding (inbound)              | Surface                                           |
-| --------------------------------------------------------------------------- | ---------------------------------- | ---------------------------------------- | ------------------------------------------------- |
-| [HTTP](./src/http/) — `http/{service,client}`                               | JSON                               | JSON + urlsafe-b64 URI lists + raw bytes | Full PIN (service + client)                       |
-| [WebSocket](./src/ws/) — `ws/{service,client}`                              | JSON envelope per frame            | JSON envelope per frame                  | Full PIN (service + client)                       |
-| [gRPC-over-HTTP](./src/grpc/http/) — `grpc/http/{service,client}`           | protobuf / JSON (per req)          | protobuf / JSON (per req)                | Full PIN (service + client)                       |
-| [MCP](./src/mcp/) — `mcp/service`                                           | JSON-RPC over stdio                | JSON-RPC over stdio                      | Service only; rig surfaced as MCP tools/resources |
-| [HTTP GET content](./src/http-get-content/) — `http-get-content/service`    | host-shaped (`payloadResponseMap`) | URI in path                              | Custom — single-URI `rig.read` facet              |
-| [HTTP POST content](./src/http-post-content/) — `http-post-content/service` | JSON (`ReceiveResult`)             | host-shaped (`payloadDecoder`)           | Custom — single-URI `rig.receive` facet           |
+| Transport                                                                   | Expected encoding (outbound)       | Expected decoding (inbound)              | Surface                                                          |
+| --------------------------------------------------------------------------- | ---------------------------------- | ---------------------------------------- | ---------------------------------------------------------------- |
+| [HTTP](./src/http/) — `http/{service,client}`                               | JSON                               | JSON + urlsafe-b64 URI lists + raw bytes | Full PIN (service + client)                                      |
+| [WebSocket](./src/ws/) — `ws/{service,client}`                              | JSON envelope per frame            | JSON envelope per frame                  | Full PIN (service + client)                                      |
+| [gRPC-over-HTTP](./src/grpc/http/) — `grpc/http/{service,client}`           | protobuf / JSON (per req)          | protobuf / JSON (per req)                | Full PIN (service + client)                                      |
+| [MCP](./src/mcp/) — `mcp/service`                                           | JSON-RPC over stdio                | JSON-RPC over stdio                      | Service only; rig surfaced as MCP tools/resources                |
+| [HTTP GET content](./src/http-get-content/) — `http-get-content/service`    | host-shaped (`payloadResponseMap`) | URI in path                              | Custom — single-URI `rig.read` facet                             |
+| [HTTP POST content](./src/http-post-content/) — `http-post-content/service` | JSON (`ReceiveResult`)             | host-shaped (`payloadDecoder`)           | Custom — single-URI `rig.receive` facet                          |
+| [Webhooks](./src/webhooks/) — `webhooks/{in,out}/service`                   | signed JSON push (out)             | host-shaped per source (verify + decode) | Service pair — inbound `receive`, outbound `read`/`observe` push |
 
 Shared building blocks live under [`codecs/`](./src/codecs/) (symmetric
 encode/decode pairs), `router/{route,errors}` + `http/{router,wire}` +
