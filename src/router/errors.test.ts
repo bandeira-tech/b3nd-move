@@ -5,7 +5,13 @@
  */
 
 import { assertEquals } from "@std/assert";
-import { BadRequest, HttpError, InternalError, NotFound } from "./errors.ts";
+import {
+  BadRequest,
+  HttpError,
+  InternalError,
+  NotFound,
+  Unauthorized,
+} from "./errors.ts";
 
 Deno.test("HttpError: status + message + name preserved on subclass", () => {
   const e = new HttpError(418, "teapot");
@@ -27,6 +33,14 @@ Deno.test("NotFound: 404 default 'Not Found' message; overridable", () => {
   assertEquals(new NotFound().message, "Not Found");
   assertEquals(new NotFound().status, 404);
   assertEquals(new NotFound("gone").message, "gone");
+});
+
+Deno.test("Unauthorized: 401 default 'Unauthorized' message; overridable", () => {
+  assertEquals(new Unauthorized().message, "Unauthorized");
+  assertEquals(new Unauthorized().status, 401);
+  assertEquals(new Unauthorized("bad sig").message, "bad sig");
+  assertEquals(new Unauthorized().name, "Unauthorized");
+  assertEquals(new Unauthorized() instanceof HttpError, true);
 });
 
 Deno.test("InternalError: 500 + name='InternalError'", () => {

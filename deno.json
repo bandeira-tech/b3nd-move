@@ -28,7 +28,13 @@
     "./grpc/proto/convert": "./src/grpc/proto/convert.ts",
     "./mcp/service": "./src/mcp/service.ts",
     "./mcp/http/service": "./src/mcp/http/service.ts",
-    "./mcp/ws/service": "./src/mcp/ws/service.ts"
+    "./mcp/ws/service": "./src/mcp/ws/service.ts",
+    "./webhooks/service": "./src/webhooks/service.ts",
+    "./webhooks/in/service": "./src/webhooks/in/service.ts",
+    "./webhooks/in/source": "./src/webhooks/in/source.ts",
+    "./webhooks/out/service": "./src/webhooks/out/service.ts",
+    "./webhooks/out/sender": "./src/webhooks/out/sender.ts",
+    "./webhooks/out/bridge": "./src/webhooks/out/bridge.ts"
   },
   "imports": {
     "@bandeira-tech/b3nd-core": "jsr:@bandeira-tech/b3nd-core@^0.22.0",
@@ -41,7 +47,7 @@
     "esbuild": "npm:esbuild@^0.24.0"
   },
   "tasks": {
-    "check": "deno check src/errors.ts src/actions/standard.ts src/actions/validate.ts src/actions/ndjson.ts src/router/route.ts src/router/errors.ts src/http/router.ts src/codecs/codec.ts src/codecs/json.ts src/codecs/text.ts src/codecs/raw.ts src/codecs/field.ts src/http/service.ts src/http/client.ts src/http/wire.ts src/http/status.ts src/http/receive.ts src/http/read.ts src/http/observe.ts src/http-get-content/service.ts src/http-get-content/route.ts src/http-get-content/payload-response-map.ts src/http-post-content/service.ts src/http-post-content/route.ts src/http-post-content/payload-decoder.ts src/ws/router.ts src/ws/service.ts src/ws/client.ts src/ws/status.ts src/ws/receive.ts src/ws/read.ts src/ws/observe.ts src/ws/observe-cancel.ts src/grpc/http/router.ts src/grpc/http/wire.ts src/grpc/http/service.ts src/grpc/http/client.ts src/grpc/http/status.ts src/grpc/http/receive.ts src/grpc/http/read.ts src/grpc/http/observe.ts src/grpc/proto/convert.ts src/grpc/proto/gen/b3nd_pb.ts src/mcp/wire.ts src/mcp/server.ts src/mcp/web-streamable-http-transport.ts src/mcp/service.ts src/mcp/http/service.ts src/mcp/ws/service.ts src/mcp/ws/transport.ts dev/serve.ts dev/main.ts tests/suites/mcp-spec.ts tests/suites/move-suite.ts",
+    "check": "deno check src/errors.ts src/actions/standard.ts src/actions/validate.ts src/actions/ndjson.ts src/router/route.ts src/router/errors.ts src/http/router.ts src/codecs/codec.ts src/codecs/json.ts src/codecs/text.ts src/codecs/raw.ts src/codecs/field.ts src/http/service.ts src/http/client.ts src/http/wire.ts src/http/status.ts src/http/receive.ts src/http/read.ts src/http/observe.ts src/http-get-content/service.ts src/http-get-content/route.ts src/http-get-content/payload-response-map.ts src/http-post-content/service.ts src/http-post-content/route.ts src/http-post-content/payload-decoder.ts src/ws/router.ts src/ws/service.ts src/ws/client.ts src/ws/status.ts src/ws/receive.ts src/ws/read.ts src/ws/observe.ts src/ws/observe-cancel.ts src/grpc/http/router.ts src/grpc/http/wire.ts src/grpc/http/service.ts src/grpc/http/client.ts src/grpc/http/status.ts src/grpc/http/receive.ts src/grpc/http/read.ts src/grpc/http/observe.ts src/grpc/proto/convert.ts src/grpc/proto/gen/b3nd_pb.ts src/mcp/wire.ts src/mcp/server.ts src/mcp/web-streamable-http-transport.ts src/mcp/service.ts src/mcp/http/service.ts src/mcp/ws/service.ts src/mcp/ws/transport.ts src/webhooks/hmac.ts src/webhooks/in/source.ts src/webhooks/in/service.ts src/webhooks/out/sender.ts src/webhooks/out/bridge.ts src/webhooks/out/service.ts src/webhooks/service.ts dev/serve.ts dev/main.ts tests/suites/mcp-spec.ts tests/suites/move-suite.ts",
     "test": "deno test --allow-all src/",
     "test:integration:deno": "deno test --allow-all tests/integration/deno/",
     "test:integration:http": "deno test --allow-all tests/integration/browser/http.test.ts",

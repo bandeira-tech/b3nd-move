@@ -52,3 +52,5 @@ transports at once, see [`dev/serve.ts`](../dev/serve.ts) and the
 - [`grpc/http/`](./grpc/http/README.md) — gRPC-over-HTTP (JSON + binary)
 - [`grpc/proto/`](./grpc/proto/README.md) — generated wire types + converters
 - [`mcp/`](./mcp/README.md) — Model Context Protocol (stdio)
+- [`webhooks/`](./webhooks/README.md) — external HTTP cooperation: deliveries in
+  (`rig.receive`), `read`/`observe` results pushed out
