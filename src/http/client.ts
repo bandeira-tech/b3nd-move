@@ -5,10 +5,11 @@
  * batch route packs its string list into the `?u=<b64>` query slot
  * (see `../codecs/url-list.ts`) so routing / auth / observability
  * can decide on a request without parsing the body. The receive
- * body is opaque: `application/octet-stream` carrying the same
- * `bytes-list` framing at `lenSize: 4` (see
- * `../codecs/bytes-list.ts`) — the move layer never JSON-parses
- * payloads.
+ * request body and the read response body are both opaque
+ * `application/octet-stream`: receive uses `bytes-list` framing
+ * (see `../codecs/bytes-list.ts`), read uses `outputs-frame` (see
+ * `../codecs/outputs-frame.ts`). The move layer never JSON-parses
+ * `Uint8Array` payloads in either direction.
  *
  *   GET  /api/v1/status            — status (sole status endpoint)
  *   POST /api/v1/receive?u=<b64>   — `u=` is a URI list (resource
@@ -16,7 +17,9 @@
  *                                   body: framed payload bytes
  *   POST /api/v1/read?u=<b64>      — `u=` is a URL list (locators —
  *                                   may carry patterns / listings /
- *                                   queries); no body
+ *                                   queries); no request body; the
+ *                                   response is an outputs-frame
+ *                                   stream (uri + payload per slot)
  *   POST /api/v1/observe?u=<b64>   — `u=` is a URL list; no body;
  *                                   NDJSON response of frames
  *
@@ -34,6 +37,7 @@ import type {
 } from "@bandeira-tech/b3nd-core/types";
 import { RequestError, TimeoutError, TransportError } from "../errors.ts";
 import { encodeBytesList } from "../codecs/bytes-list.ts";
+import { decodeOutputsFrame } from "../codecs/outputs-frame.ts";
 import { encodeUrlList } from "../codecs/url-list.ts";
 
 /** The request about to go on the wire. Mutate any field. */
@@ -263,7 +267,18 @@ export class HttpClient implements ProtocolInterfaceNode {
         },
       );
     }
-    return await response.json() as Output<T>[];
+    const buf = new Uint8Array(await response.arrayBuffer());
+    try {
+      return decodeOutputsFrame(buf) as Output<T>[];
+    } catch (e) {
+      throw new RequestError(
+        "http",
+        `read failed: malformed outputs-frame response: ${
+          e instanceof Error ? e.message : String(e)
+        }`,
+        { status: response.status, operation: "read" },
+      );
+    }
   }
 
   async *observe(

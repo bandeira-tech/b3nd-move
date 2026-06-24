@@ -15,6 +15,7 @@ import { assertEquals, assertRejects } from "@std/assert";
 import { HttpClient } from "./client.ts";
 import { RequestError, TransportError } from "../errors.ts";
 import { decodeBytesList } from "../codecs/bytes-list.ts";
+import { encodeOutputsFrame } from "../codecs/outputs-frame.ts";
 import { decodeUrlList } from "../codecs/url-list.ts";
 
 interface Captured {
@@ -120,7 +121,7 @@ Deno.test("read: empty urls returns [] without fetch", async () => {
   }
 });
 
-Deno.test("read: POST /api/v1/read?u=<b64> with no body, parses JSON Output[]", async () => {
+Deno.test("read: POST /api/v1/read?u=<b64> with no body, parses outputs-frame", async () => {
   const expected: [string, unknown][] = [
     ["mutable://x", { a: 1 }],
     ["mutable://y", { b: 2 }],
@@ -129,7 +130,10 @@ Deno.test("read: POST /api/v1/read?u=<b64> with no body, parses JSON Output[]", 
     assertEquals(c.method, "POST");
     assertEquals(c.url.pathname, "/api/v1/read");
     assertEquals(c.body, null);
-    return new Response(JSON.stringify(expected), { status: 200 });
+    return new Response(encodeOutputsFrame(expected) as unknown as BodyInit, {
+      status: 200,
+      headers: { "Content-Type": "application/octet-stream" },
+    });
   });
   try {
     const out = await new HttpClient({ url: "http://h" }).read([
@@ -139,6 +143,70 @@ Deno.test("read: POST /api/v1/read?u=<b64> with no body, parses JSON Output[]", 
     assertEquals(out, expected);
     const u = calls[0].url.searchParams.get("u");
     assertEquals(decodeUrlList(u!), ["mutable://x", "mutable://y"]);
+  } finally {
+    restore();
+  }
+});
+
+Deno.test("read: bytes payloads round-trip without JSON mangling", async () => {
+  // The bug this fixes: prior JSON response shape mangled Uint8Array
+  // payloads into `{"0":1,"1":2,…}` and the client cast them through
+  // as if they were still bytes. Pure-bytes responses must come back
+  // as `Uint8Array` instances with identical contents.
+  const original = new Uint8Array([0, 1, 2, 250, 251, 255]);
+  const expected: [string, Uint8Array][] = [["mutable://b", original]];
+  const { restore } = spyFetch(() =>
+    new Response(encodeOutputsFrame(expected) as unknown as BodyInit, {
+      status: 200,
+      headers: { "Content-Type": "application/octet-stream" },
+    })
+  );
+  try {
+    const out = await new HttpClient({ url: "http://h" }).read<Uint8Array>([
+      "mutable://b",
+    ]);
+    assertEquals(out.length, 1);
+    assertEquals(out[0][0], "mutable://b");
+    const payload = out[0][1];
+    // Must be raw bytes, not a JSON-mangled object.
+    assertEquals(payload instanceof Uint8Array, true);
+    assertEquals(Array.from(payload as Uint8Array), Array.from(original));
+  } finally {
+    restore();
+  }
+});
+
+Deno.test("read: null payload (miss sentinel) survives the round-trip", async () => {
+  const expected: [string, unknown][] = [["mutable://miss", null]];
+  const { restore } = spyFetch(() =>
+    new Response(encodeOutputsFrame(expected) as unknown as BodyInit, {
+      status: 200,
+      headers: { "Content-Type": "application/octet-stream" },
+    })
+  );
+  try {
+    const out = await new HttpClient({ url: "http://h" }).read(["mutable://miss"]);
+    assertEquals(out, [["mutable://miss", null]]);
+  } finally {
+    restore();
+  }
+});
+
+Deno.test("read: malformed response body → RequestError with operation=read", async () => {
+  const { restore } = spyFetch(() =>
+    new Response(new Uint8Array([0xff, 0xff, 0xff]), {
+      status: 200,
+      headers: { "Content-Type": "application/octet-stream" },
+    })
+  );
+  try {
+    const err = await assertRejects(
+      () => new HttpClient({ url: "http://h" }).read(["mutable://x"]),
+      RequestError,
+      "malformed outputs-frame",
+    );
+    assertEquals(err.operation, "read");
+    assertEquals(err.transport, "http");
   } finally {
     restore();
   }
@@ -390,7 +458,10 @@ Deno.test("observe: pre-aborted signal swallows fetch error and returns", async 
 
 Deno.test("preSend: hook fires before fetch and can mutate headers/url", async () => {
   const { calls, restore } = spyFetch(() =>
-    new Response("{}", { status: 200 })
+    new Response(
+      encodeOutputsFrame([["mutable://x", null]]) as unknown as BodyInit,
+      { status: 200, headers: { "Content-Type": "application/octet-stream" } },
+    )
   );
   try {
     const c = new HttpClient({
@@ -410,7 +481,10 @@ Deno.test("preSend: hook fires before fetch and can mutate headers/url", async (
 
 Deno.test("preSend: async hook is awaited", async () => {
   const { calls, restore } = spyFetch(() =>
-    new Response("{}", { status: 200 })
+    new Response(
+      encodeOutputsFrame([["mutable://x", null]]) as unknown as BodyInit,
+      { status: 200, headers: { "Content-Type": "application/octet-stream" } },
+    )
   );
   try {
     const c = new HttpClient({
@@ -443,7 +517,10 @@ Deno.test("config: trailing slash on baseUrl is stripped", async () => {
 
 Deno.test("config: custom default headers are sent on every request", async () => {
   const { calls, restore } = spyFetch(() =>
-    new Response("{}", { status: 200 })
+    new Response(
+      encodeOutputsFrame([["mutable://x", null]]) as unknown as BodyInit,
+      { status: 200, headers: { "Content-Type": "application/octet-stream" } },
+    )
   );
   try {
     const c = new HttpClient({

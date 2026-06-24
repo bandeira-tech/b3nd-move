@@ -9,7 +9,9 @@
  */
 
 import { assertEquals } from "@std/assert";
+import type { Output } from "@bandeira-tech/b3nd-core/types";
 import { HttpClient } from "../../../src/http/client.ts";
+import { encodeOutputsFrame } from "../../../src/codecs/outputs-frame.ts";
 
 function createClientWithServer(handler: (req: Request) => Response): {
   client: HttpClient;
@@ -62,14 +64,17 @@ Deno.test("read: network error throws", async () => {
 
 Deno.test("read: ls-mode passes through Output[] from server", async () => {
   const { client, server } = createClientWithServer(() => {
-    const mockOutputs = [
+    const mockOutputs: Output[] = [
       ["mutable://open/test/item1", { value: 1 }],
       ["mutable://open/test/item2", { value: 2 }],
     ];
-    return new Response(JSON.stringify(mockOutputs), {
-      status: 200,
-      headers: { "Content-Type": "application/json" },
-    });
+    return new Response(
+      encodeOutputsFrame(mockOutputs) as unknown as BodyInit,
+      {
+        status: 200,
+        headers: { "Content-Type": "application/octet-stream" },
+      },
+    );
   });
 
   try {

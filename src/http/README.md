@@ -1,6 +1,8 @@
 # http
 
-HTTP transport for B3nd. JSON over `fetch`, with NDJSON streaming for observe.
+HTTP transport for B3nd. Bytes over `fetch` for the body-shaped routes
+(`receive` request, `read` response), JSON for response-shaped scalars
+(`status`, `receive` ack), NDJSON for streaming (`observe`).
 
 ## Surface
 
@@ -15,10 +17,13 @@ HTTP transport for B3nd. JSON over `fetch`, with NDJSON streaming for observe.
 **Wire shape.** Every batch route packs its string list into the `?u=<b64>`
 query slot so routing / auth / observability can decide on a request without
 parsing the body. The body carries only what's body-shaped: opaque payload bytes
-on `receive`, nothing on `read` or `observe`. Both the `?u=` value and the
-`receive` body use the same length-prefixed `bytes-list` framing — `lenSize: 2`
-for the string list (wrapped in url-safe base64), `lenSize: 4` for the receive
-body (raw bytes). See [`../codecs/url-list.ts`](../codecs/url-list.ts) and
+on `receive`, no request body on `read` or `observe`. Both the `?u=` value and
+the `receive` body use the same length-prefixed `bytes-list` framing —
+`lenSize: 2` for the string list (wrapped in url-safe base64), `lenSize: 4` for
+the receive body (raw bytes). The `read` response body uses a third codec,
+[`outputs-frame`](../codecs/outputs-frame.ts), so payload `Uint8Array`s come
+back verbatim — no `JSON.stringify` ever touches the bytes. See
+[`../codecs/url-list.ts`](../codecs/url-list.ts) and
 [`../codecs/bytes-list.ts`](../codecs/bytes-list.ts).
 
 The strings on each route differ in semantic, even though the codec is shared:
@@ -29,12 +34,12 @@ The strings on each route differ in semantic, even though the codec is shared:
   info: pattern matches, listings, paging, filters. The move layer flies them
   opaquely to the persistence layer; only the executing client interprets them.
 
-| Method | Path                      | `?u=` semantic | Body                 | Maps to                |
-| ------ | ------------------------- | -------------- | -------------------- | ---------------------- |
-| `GET`  | `/api/v1/status`          | —              | —                    | `rig.status()`         |
-| `POST` | `/api/v1/receive?u=<b64>` | URI list       | framed payload bytes | `rig.receive(outputs)` |
-| `POST` | `/api/v1/read?u=<b64>`    | URL list       | —                    | `rig.read(urls)`       |
-| `POST` | `/api/v1/observe?u=<b64>` | URL list       | —                    | `rig.observe(urls)`    |
+| Method | Path                      | `?u=` semantic | Request body         | Response body        | Maps to                |
+| ------ | ------------------------- | -------------- | -------------------- | -------------------- | ---------------------- |
+| `GET`  | `/api/v1/status`          | —              | —                    | JSON                 | `rig.status()`         |
+| `POST` | `/api/v1/receive?u=<b64>` | URI list       | framed payload bytes | JSON `ReceiveResult[]` | `rig.receive(outputs)` |
+| `POST` | `/api/v1/read?u=<b64>`    | URL list       | —                    | outputs-frame        | `rig.read(urls)`       |
+| `POST` | `/api/v1/observe?u=<b64>` | URL list       | —                    | NDJSON of `string[]` | `rig.observe(urls)`    |
 
 `receive` is opaque end-to-end: the route slices the body into per-URI
 `Uint8Array` views and hands `Output<Uint8Array>[]` to the rig — no JSON parse,
@@ -42,6 +47,14 @@ no payload allocation beyond the view. Producing apps encode their payload
 schema once at the edge using whatever codec they share with the consumer
 (proto, JSON, raw bytes, anything). The move layer doesn't know or care. Length
 mismatch between URI count and payload count → 400.
+
+`read` is opaque end-to-end the other direction: the route hands the rig's
+`Output[]` to `encodeOutputsFrame`, which packs each slot as
+`<u8 flag><u16 uri-len><uri-utf8><u32 payload-len><payload>`. `flag = 1`
+shuttles the payload as raw bytes (Uint8Array round-trips byte-for-byte);
+`flag = 0` is a JSON-fallback for non-bytes payloads (the same shape gRPC
+uses via `payloadIsBinary`). The client decodes the frame and returns
+`Output[]` — `Uint8Array` instances stay `Uint8Array`, no JSON-mangling.
 
 **Observe.** `POST /api/v1/observe?u=…` returns an `application/x-ndjson`
 stream; each line is a JSON-encoded `string[]` — the batch of urls that fired —
