@@ -34,12 +34,12 @@ The strings on each route differ in semantic, even though the codec is shared:
   info: pattern matches, listings, paging, filters. The move layer flies them
   opaquely to the persistence layer; only the executing client interprets them.
 
-| Method | Path                      | `?u=` semantic | Request body         | Response body        | Maps to                |
-| ------ | ------------------------- | -------------- | -------------------- | -------------------- | ---------------------- |
-| `GET`  | `/api/v1/status`          | —              | —                    | JSON                 | `rig.status()`         |
+| Method | Path                      | `?u=` semantic | Request body         | Response body          | Maps to                |
+| ------ | ------------------------- | -------------- | -------------------- | ---------------------- | ---------------------- |
+| `GET`  | `/api/v1/status`          | —              | —                    | JSON                   | `rig.status()`         |
 | `POST` | `/api/v1/receive?u=<b64>` | URI list       | framed payload bytes | JSON `ReceiveResult[]` | `rig.receive(outputs)` |
-| `POST` | `/api/v1/read?u=<b64>`    | URL list       | —                    | outputs-frame        | `rig.read(urls)`       |
-| `POST` | `/api/v1/observe?u=<b64>` | URL list       | —                    | NDJSON of `string[]` | `rig.observe(urls)`    |
+| `POST` | `/api/v1/read?u=<b64>`    | URL list       | —                    | outputs-frame          | `rig.read(urls)`       |
+| `POST` | `/api/v1/observe?u=<b64>` | URL list       | —                    | NDJSON of `string[]`   | `rig.observe(urls)`    |
 
 `receive` is opaque end-to-end: the route slices the body into per-URI
 `Uint8Array` views and hands `Output<Uint8Array>[]` to the rig — no JSON parse,
@@ -52,9 +52,9 @@ mismatch between URI count and payload count → 400.
 `Output[]` to `encodeOutputsFrame`, which packs each slot as
 `<u8 flag><u16 uri-len><uri-utf8><u32 payload-len><payload>`. `flag = 1`
 shuttles the payload as raw bytes (Uint8Array round-trips byte-for-byte);
-`flag = 0` is a JSON-fallback for non-bytes payloads (the same shape gRPC
-uses via `payloadIsBinary`). The client decodes the frame and returns
-`Output[]` — `Uint8Array` instances stay `Uint8Array`, no JSON-mangling.
+`flag = 0` is a JSON-fallback for non-bytes payloads (the same shape gRPC uses
+via `payloadIsBinary`). The client decodes the frame and returns `Output[]` —
+`Uint8Array` instances stay `Uint8Array`, no JSON-mangling.
 
 **Observe.** `POST /api/v1/observe?u=…` returns an `application/x-ndjson`
 stream; each line is a JSON-encoded `string[]` — the batch of urls that fired —

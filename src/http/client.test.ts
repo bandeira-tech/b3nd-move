@@ -185,7 +185,9 @@ Deno.test("read: null payload (miss sentinel) survives the round-trip", async ()
     })
   );
   try {
-    const out = await new HttpClient({ url: "http://h" }).read(["mutable://miss"]);
+    const out = await new HttpClient({ url: "http://h" }).read([
+      "mutable://miss",
+    ]);
     assertEquals(out, [["mutable://miss", null]]);
   } finally {
     restore();

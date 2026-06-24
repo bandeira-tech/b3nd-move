@@ -73,7 +73,10 @@ Deno.test("empty list encodes to empty buffer; empty buffer decodes to []", () =
 });
 
 Deno.test("decoded raw-bytes payload is a view into the input buffer", () => {
-  const buf = encodeOutputsFrame([["mutable://v", new Uint8Array([0xaa, 0xbb])]]);
+  const buf = encodeOutputsFrame([[
+    "mutable://v",
+    new Uint8Array([0xaa, 0xbb]),
+  ]]);
   const [, payload] = decodeOutputsFrame(buf)[0];
   // Mutate the source buffer at the payload offset; the view must follow.
   // Frame: [flag=1][uri-len=11 hi][uri-len=11 lo][...11 uri bytes...][payload-len 4 bytes][payload...]
@@ -158,7 +161,11 @@ Deno.test("decode: rejects truncated payload length", () => {
 Deno.test("decode: rejects truncated payload body", () => {
   // flag=1, uri-len=1, "x", payload-len=10, but only 2 payload bytes
   const buf = new Uint8Array([1, 0, 1, 0x78, 0, 0, 0, 10, 0xaa, 0xbb]);
-  assertThrows(() => decodeOutputsFrame(buf), TypeError, "Truncated payload body");
+  assertThrows(
+    () => decodeOutputsFrame(buf),
+    TypeError,
+    "Truncated payload body",
+  );
 });
 
 Deno.test("decode: rejects empty URI in slot", () => {
