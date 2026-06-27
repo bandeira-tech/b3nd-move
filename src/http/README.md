@@ -61,10 +61,13 @@ via `payloadIsBinary`). The client decodes the frame and returns `Output[]` —
 > streams) may return `ReadableStream<Uint8Array>` per slot. `readAction` in
 > [`../actions/standard.ts`](../actions/standard.ts) materializes those streams
 > to `Uint8Array` before the result reaches any transport encoder — every wire
-> b3nd-move ships (this one, WS, gRPC) needs concrete payloads, so the
-> materialize lives at the shared action layer where every transport benefits
-> automatically. The HTTP route never sees a stream; it encodes the bytes
-> verbatim into `flag = 1` slots.
+> b3nd-move ships (this one, WS, gRPC, MCP) needs a concrete payload per slot,
+> so the materialize lives at the shared action layer. HTTP and gRPC deliver
+> those bytes end-to-end (binary wire formats); WS and MCP normalize the _shape_
+> (stream → `Uint8Array`) but their JSON envelopes do not preserve `Uint8Array`
+> byte-encoding — a `Uint8Array` payload becomes `{"0":n,"1":n,…}` on those
+> wires. Bytes round-trip on WS / MCP is a follow-up. The HTTP route never sees
+> a stream; it encodes the bytes verbatim into `flag = 1` slots.
 >
 > Materialization is per-slot and parallel (`Promise.all`); a 4-slot read of
 > streaming sources completes in roughly the slowest single fetch, not their
