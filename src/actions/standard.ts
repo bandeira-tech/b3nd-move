@@ -43,14 +43,14 @@ export const receiveAction: Action<
  * materialized to `Uint8Array` before the result reaches the transport
  * encoder.
  *
- * Every wire b3nd-move ships (HTTP `outputs-frame`, WS JSON envelope,
- * gRPC `ReadResponse`) needs a concrete payload per slot — none of
- * them can serialize a `ReadableStream` as-is. The materialize lives
- * here, at the shared action, so every transport gets the right shape
+ * HTTP and gRPC deliver bytes end-to-end (binary wire formats). WS and
+ * MCP normalize the *shape* (stream → `Uint8Array`) but their JSON
+ * envelopes do not preserve `Uint8Array` byte-encoding — a `Uint8Array`
+ * payload becomes `{"0":n,"1":n,…}` on those wires. Bytes round-trip
+ * on WS / MCP is a follow-up. The materialize still lives here, at the
+ * shared action, so every transport gets a concrete payload per slot
  * without demanding upstream clients (b3nd-save fs/s3/ipfs, custom
  * adapters, …) pre-conform to any particular wire's pre-condition.
- * Streaming is the medium's natural shape; this action transforms it
- * for delivery.
  *
  * Materialization is per-slot and parallel (`Promise.all`); other
  * payload shapes (`Uint8Array`, JSON-able, `null`) pass through
@@ -58,6 +58,12 @@ export const receiveAction: Action<
  * 2 GB allocation in the route handler. Hosts that need true streaming
  * use the in-process Rig directly (`rig.read()` returns the union
  * shape unchanged) rather than going through a wire.
+ *
+ * The dispatcher's per-request `AbortSignal` flows into the stream
+ * pump via `pipeTo({ signal })`, so an aborted request cancels stream
+ * consumption at chunk boundaries and the rejection propagates through
+ * `Promise.all` to the encoder — the runtime closes the response
+ * naturally.
  *
  * Background: round-3 of the payload-shape contract at
  * `immutable://open/cc-chat/20260624224342-payload-contract/` — each
@@ -67,23 +73,41 @@ export const receiveAction: Action<
 export const readAction: Action<
   readonly [urls: string[]],
   Promise<Output[]>
-> = async (rig, [urls]) => {
+> = async (rig, [urls], signal) => {
   const outs = await rig.read(urls);
-  return materializeStreams(outs);
+  return materializeStreams(outs, signal);
 };
 
-function materializeStreams(outs: readonly Output[]): Promise<Output[]> {
+function materializeStreams(
+  outs: readonly Output[],
+  signal: AbortSignal,
+): Promise<Output[]> {
   return Promise.all(outs.map(async ([uri, payload]) => {
     if (
       payload &&
       typeof payload === "object" &&
       typeof (payload as ReadableStream<Uint8Array>).getReader === "function"
     ) {
-      const bytes = new Uint8Array(
-        await new Response(payload as ReadableStream<Uint8Array>)
-          .arrayBuffer(),
+      // Use pipeTo with signal so an abort cancels the stream cleanly
+      // at chunk boundaries — Response.arrayBuffer() has no cancel hook.
+      const chunks: Uint8Array[] = [];
+      let total = 0;
+      await (payload as ReadableStream<Uint8Array>).pipeTo(
+        new WritableStream<Uint8Array>({
+          write(chunk) {
+            chunks.push(chunk);
+            total += chunk.byteLength;
+          },
+        }),
+        { signal },
       );
-      return [uri, bytes] as Output;
+      const merged = new Uint8Array(total);
+      let off = 0;
+      for (const c of chunks) {
+        merged.set(c, off);
+        off += c.byteLength;
+      }
+      return [uri, merged] as Output;
     }
     return [uri, payload] as Output;
   }));

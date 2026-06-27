@@ -4,7 +4,7 @@
  * forwarding args and the per-request signal.
  */
 
-import { assertEquals } from "@std/assert";
+import { assertEquals, assertRejects } from "@std/assert";
 import { connection, Rig } from "@bandeira-tech/b3nd-core/rig";
 import type {
   Output,
@@ -173,6 +173,100 @@ Deno.test("readAction passes Uint8Array / null / JSON-able through untouched", a
   assertEquals(outs[0][1] instanceof Uint8Array, true);
   assertEquals(outs[1][1], null);
   assertEquals(outs[2][1], { foo: 1 });
+});
+
+Deno.test("readAction rejects when signal is already aborted before stream pump", async () => {
+  class StreamingNode implements ProtocolInterfaceNode {
+    read<T = unknown>(urls: string[]): Promise<Output<T>[]> {
+      return Promise.resolve(urls.map((u): Output<T> => {
+        const stream = new ReadableStream<Uint8Array>({
+          start(c) {
+            c.enqueue(new TextEncoder().encode("data"));
+            c.close();
+          },
+        });
+        return [u, stream] as unknown as Output<T>;
+      }));
+    }
+    receive(): Promise<ReceiveResult[]> {
+      return Promise.resolve([]);
+    }
+    async *observe() {
+      yield [] as readonly string[];
+    }
+    status(): Promise<StatusResult> {
+      return Promise.resolve({ status: "healthy" });
+    }
+  }
+  const node = new StreamingNode();
+  const rig = new Rig({
+    routes: {
+      receive: [connection(node, ["s://**"])],
+      read: [connection(node, ["s://**"])],
+      observe: [connection(node, ["s://**"])],
+    },
+  });
+  const ac = new AbortController();
+  ac.abort();
+  await assertRejects(
+    () => readAction(rig, [["s://x"]], ac.signal),
+    Error,
+  );
+});
+
+Deno.test("readAction rejects when signal aborts mid-stream (no leak)", async () => {
+  let cancelled = false;
+  class SlowStreamingNode implements ProtocolInterfaceNode {
+    read<T = unknown>(urls: string[]): Promise<Output<T>[]> {
+      return Promise.resolve(urls.map((u): Output<T> => {
+        const stream = new ReadableStream<Uint8Array>({
+          start(c) {
+            // Enqueue first chunk synchronously; never close on its own.
+            c.enqueue(new TextEncoder().encode("first"));
+          },
+          cancel() {
+            cancelled = true;
+          },
+        });
+        return [u, stream] as unknown as Output<T>;
+      }));
+    }
+    receive(): Promise<ReceiveResult[]> {
+      return Promise.resolve([]);
+    }
+    async *observe() {
+      yield [] as readonly string[];
+    }
+    status(): Promise<StatusResult> {
+      return Promise.resolve({ status: "healthy" });
+    }
+  }
+  const node = new SlowStreamingNode();
+  const rig = new Rig({
+    routes: {
+      receive: [connection(node, ["s://**"])],
+      read: [connection(node, ["s://**"])],
+      observe: [connection(node, ["s://**"])],
+    },
+  });
+  const ac = new AbortController();
+  const p = readAction(rig, [["s://slow"]], ac.signal);
+  // Schedule abort after the pipe has started consuming.
+  queueMicrotask(() => ac.abort());
+  await assertRejects(() => p, Error);
+  assertEquals(cancelled, true);
+});
+
+Deno.test("readAction does not invoke pipeTo for non-stream payloads (signal ignored)", async () => {
+  // Sanity: a fresh AbortController that we abort BEFORE call should
+  // not affect non-stream payloads, since materializeStreams short-
+  // circuits before touching pipeTo.
+  const { rig } = buildRig(); // StubBackend returns { echo: u }
+  const ac = new AbortController();
+  ac.abort();
+  const outs = await readAction(rig, [["mutable://t/a"]], ac.signal);
+  assertEquals(outs.length, 1);
+  assertEquals(outs[0][0], "mutable://t/a");
 });
 
 Deno.test("observeAction → AsyncIterable streams uri batches", async () => {
