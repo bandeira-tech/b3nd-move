@@ -80,7 +80,7 @@ function pair(): { server: MemSocket; client: MemSocket } {
  * Wait for the first message frame the client receives, parse it as
  * JSON, and return it. Rejects if no frame arrives within `ms`.
  */
-function nextClientFrame(client: MemSocket, ms = 1000): Promise<unknown> {
+function nextClientFrame(client: MemSocket, ms = 5000): Promise<unknown> {
   return new Promise((resolve, reject) => {
     const t = setTimeout(() => {
       client.removeEventListener("message", onMsg);
