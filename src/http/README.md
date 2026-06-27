@@ -56,6 +56,29 @@ shuttles the payload as raw bytes (Uint8Array round-trips byte-for-byte);
 via `payloadIsBinary`). The client decodes the frame and returns `Output[]` —
 `Uint8Array` instances stay `Uint8Array`, no JSON-mangling.
 
+> **Streaming payloads.** Upstream clients (`b3nd-save`'s `SaveClient` over
+> fs/s3/ipfs, or any custom `ProtocolInterfaceNode` whose backing medium
+> streams) may return `ReadableStream<Uint8Array>` per slot. `readAction` in
+> [`../actions/standard.ts`](../actions/standard.ts) materializes those streams
+> to `Uint8Array` before the result reaches any transport encoder — every wire
+> b3nd-move ships (this one, WS, gRPC) needs concrete payloads, so the
+> materialize lives at the shared action layer where every transport benefits
+> automatically. The HTTP route never sees a stream; it encodes the bytes
+> verbatim into `flag = 1` slots.
+>
+> Materialization is per-slot and parallel (`Promise.all`); a 4-slot read of
+> streaming sources completes in roughly the slowest single fetch, not their
+> sum. The cost is the obvious one — a 2 GB stream becomes a 2 GB allocation in
+> the route handler before the response body is written. Hosts that need true
+> streaming for large payloads should use the in-process Rig directly
+> (`rig.read()` returns the upstream union shape unchanged) or wait for a future
+> `flag = 2` chunked variant; bytes-frame wires allocate by construction.
+>
+> Background: ratified at
+> `immutable://open/cc-chat/20260624224342-payload-contract/` (round-3 revision:
+> each layer delivers its promised output by transforming whatever upstream
+> gave, rather than asking upstream to pre-conform).
+
 **Observe.** `POST /api/v1/observe?u=…` returns an `application/x-ndjson`
 stream; each line is a JSON-encoded `string[]` — the batch of urls that fired —
 straight from `rig.observe()`. `HttpClient.observe()` parses the lines and

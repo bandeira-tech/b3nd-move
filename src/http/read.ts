@@ -12,6 +12,13 @@
  * symmetric. Non-bytes payloads are JSON-encoded per slot (flag=0)
  * as a fallback so structured payloads still survive the trip.
  *
+ * Stream payloads from upstream stores (`b3nd-save`'s `SaveClient`
+ * over fs/s3/ipfs, or any custom `ProtocolInterfaceNode` whose backing
+ * medium streams) are materialized to `Uint8Array` by `readAction` in
+ * `../actions/standard.ts` — every wire b3nd-move ships needs concrete
+ * payloads, so the materialization lives at the shared action layer,
+ * not in any single transport.
+ *
  * The `?u=` encoding is defined in `../codecs/url-list.ts`
  * (url-safe-base64 of length-prefixed `<u16 url-len><url-utf8>`
  * records). Decode failures surface as `BadRequest` via the
