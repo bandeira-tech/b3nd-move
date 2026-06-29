@@ -69,11 +69,17 @@ via `payloadIsBinary`). The client decodes the frame and returns `Output[]` —
 > wires. Bytes round-trip on WS / MCP is a follow-up. The HTTP route never sees
 > a stream; it encodes the bytes verbatim into `flag = 1` slots.
 >
-> Materialization is per-slot and parallel (`Promise.all`); a 4-slot read of
-> streaming sources completes in roughly the slowest single fetch, not their
-> sum. The cost is the obvious one — a 2 GB stream becomes a 2 GB allocation in
-> the route handler before the response body is written. Hosts that need true
-> streaming for large payloads should use the in-process Rig directly
+> Materialization is per-slot, scheduled through a host-injectable seam — the
+> default scheduler is `Promise.all`, so a 4-slot read of streaming sources
+> completes in roughly the slowest single fetch, not their sum. The cost is the
+> obvious one — a 2 GB stream becomes a 2 GB allocation in the route handler
+> before the response body is written, and 1000 concurrent stream pumps allocate
+> 1000 buffers. Hosts that need to cap fan-out (concurrency, byte budget,
+> backpressure) build their own action via `makeReadAction(scheduler)` — see
+> [`../actions/scheduler.ts`](../actions/scheduler.ts) for the `Scheduler`
+> contract. **Operational policy is host-owned** (cores stay puritan);
+> `b3nd-move` ships the seam and the most permissive default. Hosts that need
+> true streaming for large payloads should use the in-process Rig directly
 > (`rig.read()` returns the upstream union shape unchanged) or wait for a future
 > `flag = 2` chunked variant; bytes-frame wires allocate by construction.
 >
