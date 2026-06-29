@@ -228,22 +228,17 @@ Deno.test(
 );
 
 Deno.test(
-  "WS read: KNOWN LIMITATION — socket close does NOT cancel in-flight unary read (no per-frame cancel)",
+  "WS read: socket close cancels in-flight unary read (per-frame inFlight set)",
   async () => {
-    // dev-impl's M4 threads `AbortSignal` through `materializeStreams`
-    // so the action layer can cancel an in-flight stream pump when the
-    // dispatcher signal fires. The WS dispatcher creates a per-frame
-    // `AbortController`, but `wsApi`'s close listener today only
-    // aborts entries in the per-socket `observes` map — unary frames
-    // (read/receive/status) are not registered there. Net: a client
-    // dropping mid-read leaves the materialize pump running until the
-    // upstream stream closes on its own.
-    //
-    // This test pins that current behavior. The day WS grows a
-    // per-frame cancel surface (e.g. close → abort every in-flight
-    // frame's controller, or an "observe-cancel"-style frame for read),
-    // `node.cancelled` will flip to `true` and this assertion fires —
-    // forcing a coordinated docs/test update.
+    // PR #50 M4 threads `AbortSignal` through `materializeStreams` so
+    // the action layer can cancel an in-flight stream pump when the
+    // dispatcher signal fires. Issue #4 closes the gap one level up:
+    // `wsApi` now tracks every dispatched frame's `AbortController` in
+    // a per-socket `inFlight` set (separate from the `observes` map so
+    // observe's richer lifecycle stays clean) and aborts every entry
+    // on socket close OR error. Net: a client dropping mid-read
+    // cancels the upstream stream pump at the next chunk boundary —
+    // matching what HTTP/gRPC get for free from the runtime.
     const node = new NeverClosingNode();
     const rig = buildRig(node);
     const attach = wsApi(rig);
@@ -266,14 +261,18 @@ Deno.test(
     server.close();
 
     await new Promise<void>((r) => setTimeout(r, 30));
-    // No envelope reached the client (the never-closing stream is
-    // still being pumped):
+    // No success envelope reached the client (the never-closing stream
+    // got cancelled, so materialize rejected — and the socket is closed,
+    // so the error envelope wouldn't be sent either):
     assertEquals(received, false);
-    // And the upstream stream's `cancel()` was NOT called — the gap:
+    // The upstream stream's `cancel()` WAS called — the per-frame
+    // `AbortController` was registered in `inFlight`, aborted on
+    // socket close, and flowed through `materializeStreamsWith` into
+    // `pipeTo({ signal })`:
     assertEquals(
       node.cancelled,
-      false,
-      "WS gained per-frame cancel — update docs + remove this KNOWN LIMITATION",
+      true,
+      "Socket close did not cancel the upstream stream — Issue #4 regressed",
     );
   },
 );
