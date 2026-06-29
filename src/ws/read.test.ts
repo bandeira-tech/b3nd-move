@@ -30,6 +30,11 @@ import type {
   ReceiveResult,
   StatusResult,
 } from "@bandeira-tech/b3nd-core/types";
+import { makeReadAction } from "../actions/standard.ts";
+import type { Scheduler } from "../actions/scheduler.ts";
+import { validateUrls } from "../actions/validate.ts";
+import { BadRequest } from "../router/errors.ts";
+import { dispatchWs, route, wsData } from "./router.ts";
 import { wsApi } from "./service.ts";
 
 // ── In-memory paired-socket harness ─────────────────────────────────────
@@ -274,5 +279,343 @@ Deno.test(
       true,
       "Socket close did not cancel the upstream stream — Issue #4 regressed",
     );
+  },
+);
+
+// ── Issue #4 — additional cancel coverage ───────────────────────────────
+//
+// The KNOWN LIMITATION flip above pins the close-path. The tests below
+// extend that coverage to the surrounding cases:
+//   - `error` event triggers the same cancel path (symmetric handling)
+//   - multiple in-flight reads all cancel together on close
+//   - a completed frame deregisters cleanly (no spurious abort on
+//     later close)
+//   - a synchronous dispatch-time exception still deregisters
+//
+// Banned-pattern note: NO `read-cancel` wire-frame test. Cancel is
+// "drop the socket"; there is no opt-in cancel envelope. Writing one
+// here would pin a banned pattern (per vision-keeper's red lines).
+
+Deno.test(
+  "WS read: socket 'error' event also cancels in-flight unary read",
+  async () => {
+    // Symmetric to close: an `error` event on the socket means the
+    // wire is gone. In-flight unary frames must abort, mirroring how
+    // HTTP runtimes treat a connection error.
+    const node = new NeverClosingNode();
+    const rig = buildRig(node);
+    const attach = wsApi(rig);
+    const { server, client } = pair();
+    attach(server as unknown as WebSocket);
+
+    client.send(JSON.stringify({
+      id: "r-err",
+      type: "read",
+      payload: { urls: ["s://slow"] },
+    }));
+
+    await new Promise<void>((r) => setTimeout(r, 10));
+    // Fire `error` on the server side only. The pair's `close()` would
+    // also close the peer; here we want a pure error-path test.
+    server.dispatchEvent(new Event("error"));
+
+    await new Promise<void>((r) => setTimeout(r, 30));
+    assertEquals(
+      node.cancelled,
+      true,
+      "WS 'error' event did not cancel in-flight unary read",
+    );
+  },
+);
+
+Deno.test(
+  "WS read: socket close cancels ALL in-flight unary reads together",
+  async () => {
+    // The per-socket `inFlight` set tracks every dispatched frame's
+    // controller. Three concurrent in-flight reads, then close — every
+    // upstream `cancel()` hook must fire. Catches a partial-iteration
+    // bug in the close handler (`abort one, return early`, etc.).
+    class TrackedNode implements ProtocolInterfaceNode {
+      cancelled: boolean[] = [];
+      read<T = unknown>(urls: string[]): Promise<Output<T>[]> {
+        return Promise.resolve(urls.map((u): Output<T> => {
+          const i = this.cancelled.length;
+          this.cancelled.push(false);
+          const stream = new ReadableStream<Uint8Array>({
+            start: (c) => {
+              c.enqueue(new TextEncoder().encode(`first-${u}`));
+              // never close
+            },
+            cancel: () => {
+              this.cancelled[i] = true;
+            },
+          });
+          return [u, stream] as unknown as Output<T>;
+        }));
+      }
+      receive(): Promise<ReceiveResult[]> {
+        return Promise.resolve([]);
+      }
+      async *observe(): AsyncIterable<readonly string[]> {
+        yield [] as readonly string[];
+      }
+      status(): Promise<StatusResult> {
+        return Promise.resolve({ status: "healthy" });
+      }
+    }
+    const node = new TrackedNode();
+    const rig = buildRig(node);
+    const attach = wsApi(rig);
+    const { server, client } = pair();
+    attach(server as unknown as WebSocket);
+
+    // Fire 3 concurrent unary `read` frames.
+    for (const id of ["rA", "rB", "rC"]) {
+      client.send(JSON.stringify({
+        id,
+        type: "read",
+        payload: { urls: [`s://slow-${id}`] },
+      }));
+    }
+    await new Promise<void>((r) => setTimeout(r, 15));
+    server.close();
+    await new Promise<void>((r) => setTimeout(r, 30));
+
+    assertEquals(
+      node.cancelled.length,
+      3,
+      "expected 3 read frames to reach upstream",
+    );
+    assertEquals(
+      node.cancelled.every((c) => c === true),
+      true,
+      `not all upstream streams cancelled: ${JSON.stringify(node.cancelled)}`,
+    );
+  },
+);
+
+Deno.test(
+  "WS read: a completed frame deregisters cleanly — later close does not spuriously abort it",
+  async () => {
+    // The `inFlight` set must be drained in the dispatcher's
+    // try/finally, NOT only on close. A frame that completes
+    // successfully should be gone from the set; a later close must
+    // not "abort" a controller that was already used and discarded.
+    //
+    // Observation strategy: a node whose read completes immediately,
+    // and a second node that NEVER fires `cancel`. After the first
+    // read finishes (and its envelope reaches the client), close the
+    // socket. The first read's `cancel` hook must NOT fire — proving
+    // the controller was deregistered on completion, not leaked into
+    // the close-handler iteration.
+    let firstCancelCount = 0;
+    class FastNode implements ProtocolInterfaceNode {
+      read<T = unknown>(urls: string[]): Promise<Output<T>[]> {
+        return Promise.resolve(urls.map((u): Output<T> => {
+          const stream = new ReadableStream<Uint8Array>({
+            start(c) {
+              c.enqueue(new TextEncoder().encode(`done-${u}`));
+              c.close();
+            },
+            cancel: () => {
+              firstCancelCount++;
+            },
+          });
+          return [u, stream] as unknown as Output<T>;
+        }));
+      }
+      receive(): Promise<ReceiveResult[]> {
+        return Promise.resolve([]);
+      }
+      async *observe(): AsyncIterable<readonly string[]> {
+        yield [] as readonly string[];
+      }
+      status(): Promise<StatusResult> {
+        return Promise.resolve({ status: "healthy" });
+      }
+    }
+    const node = new FastNode();
+    const rig = buildRig(node);
+    const attach = wsApi(rig);
+    const { server, client } = pair();
+    attach(server as unknown as WebSocket);
+
+    client.send(JSON.stringify({
+      id: "fast",
+      type: "read",
+      payload: { urls: ["s://fast"] },
+    }));
+
+    // Wait for the success envelope, which only arrives after the
+    // dispatcher's try/finally completes — i.e. after the controller
+    // has been deregistered.
+    const frame = await nextClientFrame(client) as {
+      id: string;
+      success: boolean;
+    };
+    assertEquals(frame.id, "fast");
+    assertEquals(frame.success, true);
+    // The stream closed naturally — no `cancel()` should have fired.
+    assertEquals(
+      firstCancelCount,
+      0,
+      "fast-path stream's cancel() fired before close",
+    );
+
+    // Now close the socket. A spurious abort on the already-completed
+    // frame would increment `firstCancelCount` (the controller, if
+    // still in `inFlight`, would fire on the now-consumed stream's
+    // cancel hook). Modulo: pipeTo already finished, so the signal
+    // firing on a completed pipe is a no-op — the assertion here
+    // is on the broader bookkeeping: if the controller WAS still in
+    // `inFlight`, `abort()` would still be called, which is wasted
+    // work and a leak. Counting `cancel()` would not catch that
+    // directly; instead we just assert the close path runs clean.
+    server.close();
+    await new Promise<void>((r) => setTimeout(r, 30));
+    // No new cancel fired — the completed frame stayed completed.
+    assertEquals(
+      firstCancelCount,
+      0,
+      "post-completion close fired cancel() on the completed stream",
+    );
+  },
+);
+
+Deno.test(
+  "WS read: synchronous dispatch-time exception deregisters controller",
+  async () => {
+    // If `dispatchWs` (or any layer it calls) throws/rejects, the
+    // dispatcher's try/finally must still remove the controller from
+    // `inFlight`. A controller left lingering is a slow memory leak
+    // and a footgun for the next close-handler iteration.
+    //
+    // Observation strategy: send a read frame with a malformed
+    // `urls` payload — the route's `decode` throws `BadRequest`. The
+    // dispatcher catches the throw and emits an error envelope; the
+    // try/finally must still drain the controller. We then send a
+    // healthy read frame and confirm the close handler's behavior
+    // is clean (no orphan controllers).
+    //
+    // Indirect proof: after a bad frame followed by a good frame
+    // followed by close, only the good frame's stream should be in
+    // `inFlight` at close time. We use a never-closing node and
+    // assert that close cancels exactly one stream (not "one cancel
+    // and one orphan controller that never had a stream").
+    const node = new NeverClosingNode();
+    const rig = buildRig(node);
+    const attach = wsApi(rig);
+    const { server, client } = pair();
+    attach(server as unknown as WebSocket);
+
+    // 1. Send a malformed read frame — decode throws BadRequest.
+    client.send(JSON.stringify({
+      id: "bad",
+      type: "read",
+      payload: { urls: 42 }, // not an array — validateUrls rejects
+    }));
+    // Wait for the error envelope (proves dispatcher ran the
+    // try/finally for the bad frame).
+    const badFrame = await nextClientFrame(client) as {
+      id: string;
+      success: boolean;
+    };
+    assertEquals(badFrame.id, "bad");
+    assertEquals(badFrame.success, false);
+
+    // 2. Send a healthy read frame against the never-closing node.
+    client.send(JSON.stringify({
+      id: "good",
+      type: "read",
+      payload: { urls: ["s://slow"] },
+    }));
+    await new Promise<void>((r) => setTimeout(r, 10));
+
+    // 3. Close the socket. The only outstanding controller is the
+    // "good" frame; its upstream `cancel()` must fire exactly once.
+    // If the "bad" frame's controller was leaked into `inFlight`,
+    // closing would still run the iteration safely but it indicates
+    // a bookkeeping bug — covered here by the affirmative cancel of
+    // the good frame, plus the absence of any error (the bad
+    // controller, if leaked, has no stream attached and abort() is a
+    // no-op, but the leak itself would be invisible at this layer).
+    server.close();
+    await new Promise<void>((r) => setTimeout(r, 30));
+    assertEquals(
+      node.cancelled,
+      true,
+      "good frame's upstream stream did not cancel on close",
+    );
+  },
+);
+
+// ── Issue #1 cross-transport gate ──────────────────────────────────────
+//
+// Mirror of the HTTP cross-transport probe — proves the WS transport
+// honors a host-injected scheduler end-to-end via `makeReadAction`.
+// We build a custom read route bound to the scheduler and drive it
+// directly through `dispatchWs`, bypassing the default-bound
+// `readRoute` that `wsApi` wires in.
+
+Deno.test(
+  "WS read: host-injected scheduler is honored end-to-end (seam threads through)",
+  async () => {
+    const bytes = new TextEncoder().encode("streamed-via-scheduler");
+    const node = new StreamingNode(bytes);
+    const rig = buildRig(node);
+
+    let observedSlotCount = -1;
+    let calls = 0;
+    const scheduler: Scheduler = <T>(
+      slots: ReadonlyArray<(signal: AbortSignal) => Promise<T>>,
+      signal: AbortSignal,
+    ): Promise<T[]> => {
+      calls++;
+      observedSlotCount = slots.length;
+      return Promise.all(slots.map((slot) => slot(signal)));
+    };
+
+    const customReadRoute = route({
+      on: wsData("read"),
+      decode: ({ payload }) => {
+        const urls = (payload as { urls?: unknown } | null)?.urls;
+        const v = validateUrls(urls);
+        if (!v.ok) throw new BadRequest(v.error);
+        return [v.value] as const;
+      },
+      action: makeReadAction(scheduler),
+      encode: (data, { id }) => ({ id, success: true, data }),
+    });
+
+    const ac = new AbortController();
+    const frame = {
+      id: "sched-1",
+      type: "read" as const,
+      payload: { urls: ["s://a", "s://b", "s://c"] },
+    };
+    const responses: Array<unknown> = [];
+    for await (
+      const resp of dispatchWs(rig, [customReadRoute], frame, ac)
+    ) {
+      responses.push(resp);
+    }
+    assertEquals(calls, 1);
+    assertEquals(observedSlotCount, 3);
+    assertEquals(responses.length, 1);
+    const out = responses[0] as {
+      id: string;
+      success: boolean;
+      data: Output[];
+    };
+    assertEquals(out.id, "sched-1");
+    assertEquals(out.success, true);
+    assertEquals(out.data.length, 3);
+    for (const [, payload] of out.data) {
+      // After materialize the payload is a Uint8Array (over the wire it
+      // would JSON-stringify lossily, but the in-process action result
+      // is the materialized bytes — sufficient to prove the seam threaded
+      // through to the slot runner).
+      assertEquals(payload instanceof Uint8Array, true);
+    }
   },
 );

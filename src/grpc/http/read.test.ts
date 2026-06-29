@@ -19,6 +19,7 @@
  */
 
 import { assertEquals } from "@std/assert";
+import { create } from "@bufbuild/protobuf";
 import { connection, Rig } from "@bandeira-tech/b3nd-core/rig";
 import type {
   Output,
@@ -26,6 +27,13 @@ import type {
   ReceiveResult,
   StatusResult,
 } from "@bandeira-tech/b3nd-core/types";
+import { makeReadAction } from "../../actions/standard.ts";
+import type { Scheduler } from "../../actions/scheduler.ts";
+import { ReadRequestSchema, ReadResponseSchema } from "../proto/gen/b3nd_pb.ts";
+import { outputToProto } from "../proto/convert.ts";
+import { BadRequest } from "../../router/errors.ts";
+import { dispatchGrpc, grpcMethod, route } from "./router.ts";
+import { okResponse, readRequest } from "./wire.ts";
 import { grpcHttpApi } from "./service.ts";
 
 function post(
@@ -172,5 +180,77 @@ Deno.test(
     // Give pipeTo a microtask to invoke cancel().
     await new Promise<void>((r) => setTimeout(r, 10));
     assertEquals(node.cancelled, true);
+  },
+);
+
+// ── Issue #1 cross-transport gate ──────────────────────────────────────
+//
+// Mirror of the HTTP / WS cross-transport probes — proves the gRPC-HTTP
+// transport honors a host-injected scheduler end-to-end. We build a
+// custom read route bound to the scheduler and drive it through
+// `dispatchGrpc` directly, bypassing the default-bound `readRoute`
+// that `grpcHttpApi` wires in.
+
+Deno.test(
+  "gRPC read: host-injected scheduler is honored end-to-end (seam threads through)",
+  async () => {
+    const bytes = new Uint8Array([1, 2, 3, 4, 5]);
+    const node = new StreamingNode(bytes);
+    const rig = buildRig(node);
+
+    let observedSlotCount = -1;
+    let calls = 0;
+    const scheduler: Scheduler = <T>(
+      slots: ReadonlyArray<(signal: AbortSignal) => Promise<T>>,
+      signal: AbortSignal,
+    ): Promise<T[]> => {
+      calls++;
+      observedSlotCount = slots.length;
+      return Promise.all(slots.map((slot) => slot(signal)));
+    };
+
+    const customReadRoute = route({
+      on: grpcMethod("Read"),
+      decode: async ({ req, encoding }) => {
+        const body = await readRequest(req, ReadRequestSchema, encoding);
+        if (!body.urls?.length) throw new BadRequest("Expected urls");
+        return [body.urls] as const;
+      },
+      action: makeReadAction(scheduler),
+      encode: (results, { encoding }) =>
+        okResponse(
+          ReadResponseSchema,
+          create(ReadResponseSchema, {
+            results: results.map(outputToProto),
+          }),
+          encoding,
+        ),
+    });
+
+    const resp = await dispatchGrpc(
+      rig,
+      [customReadRoute],
+      new Request("http://localhost/b3nd.v1.B3ndService/Read", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ urls: ["s://a", "s://b", "s://c"] }),
+      }),
+    );
+    assertEquals(resp.status, 200);
+    assertEquals(calls, 1);
+    assertEquals(observedSlotCount, 3);
+
+    const body = await resp.json() as {
+      results: { uri: string; payload: string; payloadIsBinary: boolean }[];
+    };
+    assertEquals(body.results.length, 3);
+    for (let i = 0; i < 3; i++) {
+      assertEquals(body.results[i].payloadIsBinary, true);
+      const decoded = Uint8Array.from(
+        atob(body.results[i].payload),
+        (c) => c.charCodeAt(0),
+      );
+      assertEquals(Array.from(decoded), Array.from(bytes));
+    }
   },
 );
