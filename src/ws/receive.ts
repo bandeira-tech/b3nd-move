@@ -10,7 +10,7 @@
 import { receiveAction } from "../actions/standard.ts";
 import { BadRequest } from "../router/errors.ts";
 import type { WsBatchCodec } from "./codec.ts";
-import { route, type WsRoute, wsData } from "./router.ts";
+import { route, wsData, type WsRoute } from "./router.ts";
 
 export function receiveRoute(codec: WsBatchCodec): WsRoute {
   return route({

@@ -11,7 +11,7 @@ import type { Output } from "@bandeira-tech/b3nd-core/types";
 import { readAction } from "../actions/standard.ts";
 import { BadRequest } from "../router/errors.ts";
 import type { WsBatchCodec } from "./codec.ts";
-import { route, type WsRoute, wsData } from "./router.ts";
+import { route, wsData, type WsRoute } from "./router.ts";
 
 export function readRoute(codec: WsBatchCodec): WsRoute {
   return route({
