@@ -31,6 +31,7 @@ import type { Output } from "@bandeira-tech/b3nd-core/types";
 import type { HttpBatchCodec } from "../../http/codec.ts";
 import { defaultScheduler, type Scheduler } from "../scheduler.ts";
 import { materializeStreams } from "../materialize.ts";
+import { base64FromBytes, bytesFromBase64 } from "../base64.ts";
 
 export interface HttpNdjsonOptions {
   /** Fan-out scheduler for per-slot stream materialization. Defaults to `Promise.all`. */
@@ -115,20 +116,3 @@ function parseNdjson(text: string): Output[] {
   return out;
 }
 
-// ---------------------------------------------------------------------------
-// Base64 helpers (inline — Task 10 will extract to src/codecs/base64.ts
-// when it becomes the second consumer of these helpers)
-// ---------------------------------------------------------------------------
-
-function base64FromBytes(b: Uint8Array): string {
-  let s = "";
-  for (const byte of b) s += String.fromCharCode(byte);
-  return btoa(s);
-}
-
-function bytesFromBase64(s: string): Uint8Array {
-  const bin = atob(s);
-  const out = new Uint8Array(bin.length);
-  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
-  return out;
-}
