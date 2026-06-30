@@ -175,7 +175,9 @@ Deno.test("read: non-OK response → RequestError with status/body/operation", a
 Deno.test("receive: empty msgs → returns [] without fetch", async () => {
   const { calls, restore } = spyFetch(() => new Response("never"));
   try {
-    const out = await new GrpcHttpClient({ url: "http://h", codec }).receive([]);
+    const out = await new GrpcHttpClient({ url: "http://h", codec }).receive(
+      [],
+    );
     assertEquals(out, []);
     assertEquals(calls.length, 0);
   } finally {

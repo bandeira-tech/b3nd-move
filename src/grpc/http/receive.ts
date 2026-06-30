@@ -15,7 +15,7 @@ import {
 } from "../proto/gen/b3nd_pb.ts";
 import { BadRequest } from "../../router/errors.ts";
 import type { GrpcBatchCodec } from "./codec.ts";
-import { grpcMethod, route, type GrpcRoute } from "./router.ts";
+import { grpcMethod, type GrpcRoute, route } from "./router.ts";
 import { okResponse, readRequest } from "./wire.ts";
 
 export function receiveRoute(codec: GrpcBatchCodec): GrpcRoute {
