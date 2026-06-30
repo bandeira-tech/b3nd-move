@@ -124,7 +124,8 @@ Deno.test("httpNdjson.decode: $bytes tagged payloads are restored to Uint8Array"
   let bin = "";
   for (const b of original) bin += String.fromCharCode(b);
   const b64 = btoa(bin);
-  const line = JSON.stringify({ uri: "s://bin", payload: { $bytes: b64 } }) + "\n";
+  const line = JSON.stringify({ uri: "s://bin", payload: { $bytes: b64 } }) +
+    "\n";
   const req = new Request("http://x/api/v1/receive", {
     method: "POST",
     body: line,
@@ -162,7 +163,8 @@ Deno.test("httpNdjson.decodeReadResponse: $bytes tagged payloads are restored to
   let bin = "";
   for (const b of original) bin += String.fromCharCode(b);
   const b64 = btoa(bin);
-  const line = JSON.stringify({ uri: "s://bytes", payload: { $bytes: b64 } }) + "\n";
+  const line = JSON.stringify({ uri: "s://bytes", payload: { $bytes: b64 } }) +
+    "\n";
   const res = new Response(line, {
     status: 200,
     headers: { "Content-Type": "application/x-ndjson" },
