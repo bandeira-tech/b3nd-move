@@ -2,6 +2,7 @@
 import { assertEquals, assertRejects } from "@std/assert";
 import type { Output } from "@bandeira-tech/b3nd-core/types";
 import { httpOutputsFrame } from "./outputs-frame.ts";
+import type { Scheduler } from "../scheduler.ts";
 import { encodeUrlList } from "../url-list.ts";
 import { encodeBytesList } from "../bytes-list.ts";
 
@@ -104,4 +105,72 @@ Deno.test("httpOutputsFrame.decodeReadResponse: round-trips an encoded read resp
   assertEquals(decoded.length, 1);
   assertEquals(decoded[0][0], "s://hello");
   assertEquals(decoded[0][1], expected);
+});
+
+Deno.test("httpOutputsFrame.encode: 4 concurrent 10ms streams complete in parallel (<35ms)", async () => {
+  // Proves the default scheduler uses Promise.all, not sequential
+  // iteration. Each stream sleeps 10ms; in parallel total ~10ms; in
+  // serial ~40ms. Generous CI headroom at 35ms.
+  const enc = (s: string) => new TextEncoder().encode(s);
+  const dec = (b: Uint8Array) => new TextDecoder().decode(b);
+  const urls = ["s://a", "s://b", "s://c", "s://d"];
+  const outputs: Output[] = urls.map((u) => {
+    const stream = new ReadableStream<Uint8Array>({
+      async start(c) {
+        await new Promise((r) => setTimeout(r, 10));
+        c.enqueue(enc(`payload-for-${u}`));
+        c.close();
+      },
+    });
+    return [u, stream];
+  });
+
+  const t0 = performance.now();
+  const res = await codec.encode(outputs, {
+    req: new Request("http://x/api/v1/read?u=" + encodeUrlList(urls)),
+    signal: new AbortController().signal,
+  });
+  const elapsed = performance.now() - t0;
+
+  assertEquals(
+    elapsed < 35,
+    true,
+    `elapsed=${elapsed.toFixed(1)}ms suggests serial (expected <35ms)`,
+  );
+  assertEquals(res.status, 200);
+
+  // Confirm order is preserved even with parallel scheduling.
+  const { decodeOutputsFrame } = await import("../outputs-frame.ts");
+  const outs = decodeOutputsFrame(new Uint8Array(await res.arrayBuffer()));
+  assertEquals(outs.length, 4);
+  for (let i = 0; i < 4; i++) {
+    assertEquals(outs[i][0], urls[i]);
+    assertEquals(dec(outs[i][1] as Uint8Array), `payload-for-${urls[i]}`);
+  }
+});
+
+Deno.test("httpOutputsFrame: custom scheduler injection is invoked exactly once per encode", async () => {
+  // Asserts that httpOutputsFrame({ scheduler: custom }) actually calls
+  // the injected scheduler — not the default. Scheduler receives the
+  // array of thunks and returns their results.
+  let callCount = 0;
+  const customScheduler: Scheduler = (slots, signal) => {
+    callCount++;
+    return Promise.all(slots.map((s) => s(signal)));
+  };
+
+  const customCodec = httpOutputsFrame({ scheduler: customScheduler });
+  const stream = new ReadableStream<Uint8Array>({
+    start(c) {
+      c.enqueue(new Uint8Array([7, 8, 9]));
+      c.close();
+    },
+  });
+  const outputs: Output[] = [["s://x", stream]];
+  const res = await customCodec.encode(outputs, {
+    req: new Request("http://x/api/v1/read?u=" + encodeUrlList(["s://x"])),
+    signal: new AbortController().signal,
+  });
+  assertEquals(res.status, 200);
+  assertEquals(callCount, 1, "custom scheduler was not invoked during encode");
 });
