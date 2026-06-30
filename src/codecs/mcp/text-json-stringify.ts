@@ -66,7 +66,10 @@ export function mcpTextJsonStringify(
      * Bytes emerge as the lossy `{"0":n,"1":n,…}` shape after JSON.stringify
      * (KNOWN LIMITATION — consistent with today's baked service behavior).
      */
-    async encodeRead(outputs: Output[], ctx: McpEncodeCtx): Promise<McpContent[]> {
+    async encodeRead(
+      outputs: Output[],
+      ctx: McpEncodeCtx,
+    ): Promise<McpContent[]> {
       const concrete = await materializeStreams(outputs, scheduler, ctx.signal);
       const text: McpTextContent = {
         type: "text",
@@ -113,7 +116,11 @@ export function mcpTextJsonStringify(
       resourceUri: string,
       ctx: McpEncodeCtx,
     ): Promise<McpResourceContent[]> {
-      const [concrete] = await materializeStreams([output], scheduler, ctx.signal);
+      const [concrete] = await materializeStreams(
+        [output],
+        scheduler,
+        ctx.signal,
+      );
       const [, payload] = concrete;
       const item: McpResourceContent = {
         type: "resource",

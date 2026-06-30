@@ -55,7 +55,11 @@ Deno.test(
     assertEquals(content[0].type, "text");
     const item = content[0] as { type: "text"; text: string };
     // Must use JSON.stringify with null, 2 (today's exact formatting):
-    const expected = JSON.stringify([{ uri: "b3nd://foo", payload: bytes }], null, 2);
+    const expected = JSON.stringify(
+      [{ uri: "b3nd://foo", payload: bytes }],
+      null,
+      2,
+    );
     assertEquals(item.text, expected);
   },
 );
@@ -73,7 +77,9 @@ Deno.test(
     assertEquals(content.length, 1);
     assertEquals(content[0].type, "text");
     const item = content[0] as { type: "text"; text: string };
-    const parsed = JSON.parse(item.text) as Array<{ uri: string; payload: unknown }>;
+    const parsed = JSON.parse(item.text) as Array<
+      { uri: string; payload: unknown }
+    >;
     assertEquals(parsed.length, 1);
     assertEquals(parsed[0].uri, "b3nd://bar");
     // After JSON.stringify, Uint8Array emerges as the lossy {0:n,1:n,…} shape:
@@ -97,7 +103,9 @@ Deno.test(
 
     assertEquals(content.length, 1);
     const item = content[0] as { type: "text"; text: string };
-    const parsed = JSON.parse(item.text) as Array<{ uri: string; payload: unknown }>;
+    const parsed = JSON.parse(item.text) as Array<
+      { uri: string; payload: unknown }
+    >;
     assertEquals(parsed[0].payload, { hello: "world" });
   },
 );
@@ -115,7 +123,9 @@ Deno.test(
     const content = await codec.encodeRead(outputs, ctx);
 
     const item = content[0] as { type: "text"; text: string };
-    const parsed = JSON.parse(item.text) as Array<{ uri: string; payload: unknown }>;
+    const parsed = JSON.parse(item.text) as Array<
+      { uri: string; payload: unknown }
+    >;
     assertEquals(parsed.length, 2);
     assertEquals(parsed[0].uri, "b3nd://a");
     assertEquals(parsed[1].uri, "b3nd://b");
@@ -132,7 +142,9 @@ Deno.test(
     const ctx = { signal: makeAbortedSignal() };
 
     await assertRejects(
-      async () => { await codec.encodeRead(outputs, ctx); },
+      async () => {
+        await codec.encodeRead(outputs, ctx);
+      },
     );
   },
 );
@@ -153,7 +165,9 @@ Deno.test(
     ];
     const ctx = { signal: makeLiveSignal() };
 
-    const content = await Promise.resolve(codec.encodeReceive(results, outputs, ctx));
+    const content = await Promise.resolve(
+      codec.encodeReceive(results, outputs, ctx),
+    );
 
     assertEquals(content.length, 1);
     assertEquals(content[0].type, "text");
@@ -181,10 +195,14 @@ Deno.test(
     const results: ReceiveResult[] = [{ accepted: true }];
     const ctx = { signal: makeLiveSignal() };
 
-    const content = await Promise.resolve(codec.encodeReceive(results, outputs, ctx));
+    const content = await Promise.resolve(
+      codec.encodeReceive(results, outputs, ctx),
+    );
 
     const item = content[0] as { type: "text"; text: string };
-    const parsed = JSON.parse(item.text) as Array<{ uri: string; accepted: boolean; error?: string }>;
+    const parsed = JSON.parse(item.text) as Array<
+      { uri: string; accepted: boolean; error?: string }
+    >;
     assertEquals("error" in parsed[0], false);
   },
 );
@@ -197,7 +215,9 @@ Deno.test(
     const results: ReceiveResult[] = [{ accepted: true }];
     const ctx = { signal: makeLiveSignal() };
 
-    const content = await Promise.resolve(codec.encodeReceive(results, outputs, ctx));
+    const content = await Promise.resolve(
+      codec.encodeReceive(results, outputs, ctx),
+    );
 
     const item = content[0] as { type: "text"; text: string };
     // The text must be pretty-printed (contain newlines and spaces):
@@ -413,7 +433,9 @@ Deno.test(
     ];
     const ctx = { signal: makeLiveSignal() };
 
-    const content = await Promise.resolve(codec.encodeReceive(results, outputs, ctx));
+    const content = await Promise.resolve(
+      codec.encodeReceive(results, outputs, ctx),
+    );
     const decoded = codec.decodeReceiveResponse(content);
 
     assertEquals(decoded.length, 2);
@@ -432,7 +454,9 @@ Deno.test(
     const results: ReceiveResult[] = [{ accepted: true }];
     const ctx = { signal: makeLiveSignal() };
 
-    const content = await Promise.resolve(codec.encodeReceive(results, outputs, ctx));
+    const content = await Promise.resolve(
+      codec.encodeReceive(results, outputs, ctx),
+    );
     const decoded = codec.decodeReceiveResponse(content);
 
     // ReceiveResult has no uri field — the codec strips it on decode:
