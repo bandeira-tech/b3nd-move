@@ -44,9 +44,13 @@
  *
  * @example Stacked on the same port as httpApi + wsApi
  * ```ts
- * const http = httpApi(rig);
- * const ws   = wsApi(rig);
- * const mcp  = mcpHttpApi(rig);
+ * import { httpOutputsFrame } from "@bandeira-tech/b3nd-move/codecs/http";
+ * import { wsJsonEnvelope } from "@bandeira-tech/b3nd-move/codecs/ws";
+ * import { mcpTextJsonStringify } from "@bandeira-tech/b3nd-move/codecs/mcp";
+ *
+ * const http = httpApi(rig, { codec: httpOutputsFrame() });
+ * const ws   = wsApi(rig, { codec: wsJsonEnvelope() });
+ * const mcp  = mcpHttpApi(rig, { codec: mcpTextJsonStringify() });
  * Deno.serve({ port: 3000 }, (req) => {
  *   if (req.headers.get("upgrade") === "websocket") return ws(req);
  *   if (new URL(req.url).pathname.startsWith("/api/v1/mcp")) return mcp(req);

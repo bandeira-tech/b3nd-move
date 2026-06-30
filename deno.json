@@ -1,6 +1,6 @@
 {
   "name": "@bandeira-tech/b3nd-move",
-  "version": "0.19.0",
+  "version": "0.20.0",
   "description": "B3nd Move — encoding, transport, decoding. Portable service handlers and clients for each transport (HTTP, WebSocket, gRPC-HTTP, MCP).",
   "exports": {
     "./errors": "./src/errors.ts",

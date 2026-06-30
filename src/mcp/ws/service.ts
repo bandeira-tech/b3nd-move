@@ -25,7 +25,9 @@
  *
  * @example Deno
  * ```ts
- * const attach = mcpWsApi(rig);
+ * import { mcpTextJsonStringify } from "@bandeira-tech/b3nd-move/codecs/mcp";
+ *
+ * const attach = mcpWsApi(rig, { codec: mcpTextJsonStringify() });
  * Deno.serve({ port: 8080 }, (req) => {
  *   if (req.headers.get("upgrade") !== "websocket") {
  *     return new Response("Not Found", { status: 404 });
@@ -40,8 +42,10 @@
  *
  * @example Cloudflare Durable Object
  * ```ts
+ * import { mcpTextJsonStringify } from "@bandeira-tech/b3nd-move/codecs/mcp";
+ *
  * export class B3ndMcpSession {
- *   #attach = mcpWsApi(this.rig);
+ *   #attach = mcpWsApi(this.rig, { codec: mcpTextJsonStringify() });
  *   fetch(req: Request) {
  *     const [client, server] = Object.values(
  *       new WebSocketPair(),

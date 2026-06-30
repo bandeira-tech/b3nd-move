@@ -3,9 +3,20 @@
  * Build the MCP request dispatcher for a `Rig` — three tools (receive,
  * read, status) plus the `b3nd://*` resource surface.
  *
- * Returns a `MinimalServer` configured with the b3nd handlers. Same
- * external contract as before (`buildMcpServer(rig, opts)`), now backed
- * by our own dispatcher instead of the SDK's `Server`. Method routing
+ * `buildMcpServer(rig, opts)` requires an operator-declared `McpBatchCodec`
+ * in `opts.codec`. The codec controls how tool-call results are serialized
+ * into MCP `Content[]` items. Two codecs ship in the catalog:
+ *
+ * ```ts
+ * import { buildMcpServer } from "@bandeira-tech/b3nd-move/mcp/service";
+ * import { mcpTextJsonStringify } from "@bandeira-tech/b3nd-move/codecs/mcp";
+ *
+ * const server = buildMcpServer(rig, { codec: mcpTextJsonStringify() });
+ * // or, for byte-faithful resource content:
+ * // const server = buildMcpServer(rig, { codec: mcpResourcePerSlot() });
+ * ```
+ *
+ * Returns a `MinimalServer` configured with the b3nd handlers. Method routing
  * is by JSON-RPC method name (string) rather than Zod schema.
  *
  * See ../../MCP-STATELESS-THIN.md for the rationale (drop SDK runtime
