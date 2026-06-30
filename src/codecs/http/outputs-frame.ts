@@ -34,6 +34,7 @@ import { decodeOutputsFrame, encodeOutputsFrame } from "../outputs-frame.ts";
 import { decodeUrlList } from "../url-list.ts";
 import { decodeBytesList } from "../bytes-list.ts";
 import { defaultScheduler, type Scheduler } from "../scheduler.ts";
+import { materializeStreams } from "../materialize.ts";
 
 export interface HttpOutputsFrameOptions {
   /** Fan-out scheduler for per-slot stream materialization. Defaults to `Promise.all`. */
@@ -46,7 +47,7 @@ export function httpOutputsFrame(
   const scheduler = opts.scheduler ?? defaultScheduler;
   return {
     async encode(outputs, ctx): Promise<Response> {
-      const concrete = await materializeAll(outputs, scheduler, ctx.signal);
+      const concrete = await materializeStreams(outputs, scheduler, ctx.signal);
       // Cast around lib.dom's `BodyInit` not accepting
       // `Uint8Array<ArrayBufferLike>` for typed-array bodies.
       return new Response(
@@ -77,41 +78,4 @@ export function httpOutputsFrame(
       return decodeOutputsFrame(buf);
     },
   };
-}
-
-function materializeAll(
-  outputs: readonly Output[],
-  scheduler: Scheduler,
-  signal: AbortSignal,
-): Promise<Output[]> {
-  const slots = outputs.map(
-    ([uri, payload]) => async (slotSignal: AbortSignal): Promise<Output> => {
-      if (
-        payload &&
-        typeof payload === "object" &&
-        typeof (payload as ReadableStream<Uint8Array>).getReader === "function"
-      ) {
-        const chunks: Uint8Array[] = [];
-        let total = 0;
-        await (payload as ReadableStream<Uint8Array>).pipeTo(
-          new WritableStream<Uint8Array>({
-            write(chunk) {
-              chunks.push(chunk);
-              total += chunk.byteLength;
-            },
-          }),
-          { signal: slotSignal },
-        );
-        const merged = new Uint8Array(total);
-        let off = 0;
-        for (const c of chunks) {
-          merged.set(c, off);
-          off += c.byteLength;
-        }
-        return [uri, merged];
-      }
-      return [uri, payload];
-    },
-  );
-  return scheduler(slots, signal);
 }

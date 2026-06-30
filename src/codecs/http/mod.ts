@@ -10,4 +10,5 @@
 
 export { httpOutputsFrame } from "./outputs-frame.ts";
 export type { HttpOutputsFrameOptions } from "./outputs-frame.ts";
-// httpNdjson added in a later task.
+export { httpNdjson } from "./ndjson.ts";
+export type { HttpNdjsonOptions } from "./ndjson.ts";
