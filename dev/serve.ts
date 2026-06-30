@@ -30,6 +30,7 @@ import { wsApi } from "../src/ws/service.ts";
 import { wsJsonEnvelope } from "../src/codecs/ws/mod.ts";
 import { grpcHttpApi } from "../src/grpc/http/service.ts";
 import { grpcProto } from "../src/codecs/grpc/mod.ts";
+import { withCors } from "../src/cors.ts";
 import { buildMcpServer, type McpServerOptions } from "../src/mcp/service.ts";
 import { mcpHttpApi } from "../src/mcp/http/service.ts";
 import { mcpWsApi } from "../src/mcp/ws/service.ts";
@@ -67,6 +68,12 @@ export type ServerConfig =
     version?: string;
   };
 
+// Local-dev convenience: wrap the fetch-handler transports in permissive
+// `*` CORS so browser shells (b3nd-web-rig et al.) can call this runner
+// cross-origin without extra setup. CORS is upstream of the API — see
+// `../src/cors.ts`. Production runners pick their own origin policy.
+const DEV_CORS = { origin: "*" } as const;
+
 const HTTP_DEFAULTS = { port: 3000, hostname: "0.0.0.0" } as const;
 const WS_DEFAULTS = { port: 8080, hostname: "0.0.0.0" } as const;
 const GRPC_DEFAULTS = { port: 50051, hostname: "0.0.0.0" } as const;
@@ -97,10 +104,10 @@ function httpTransport(
 ): TransportServer {
   const port = c.port ?? HTTP_DEFAULTS.port;
   const hostname = c.hostname ?? HTTP_DEFAULTS.hostname;
-  const handler = httpApi(rig, {
-    codec: httpOutputsFrame(),
-    statusMeta: c.statusMeta,
-  });
+  const handler = withCors(
+    httpApi(rig, { codec: httpOutputsFrame(), statusMeta: c.statusMeta }),
+    DEV_CORS,
+  );
   let server: Deno.HttpServer | null = null;
   return {
     transport: "http",
@@ -166,7 +173,7 @@ function grpcHttpTransport(
 ): TransportServer {
   const port = c.port ?? GRPC_DEFAULTS.port;
   const hostname = c.hostname ?? GRPC_DEFAULTS.hostname;
-  const handler = grpcHttpApi(rig, { codec: grpcProto() });
+  const handler = withCors(grpcHttpApi(rig, { codec: grpcProto() }), DEV_CORS);
   let server: Deno.HttpServer | null = null;
   return {
     transport: "grpc-http",
@@ -216,7 +223,7 @@ function mcpHttpTransport(
   const opts: McpServerOptions = { codec: mcpTextJsonStringify() };
   if (c.name) opts.name = c.name;
   if (c.version) opts.version = c.version;
-  const handler = mcpHttpApi(rig, opts);
+  const handler = withCors(mcpHttpApi(rig, opts), DEV_CORS);
   let server: Deno.HttpServer | null = null;
   return {
     transport: "mcp-http",
