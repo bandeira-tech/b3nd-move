@@ -3,10 +3,11 @@
  * Scheduler — host-supplied callback that decides how to materialize
  * read slots.
  *
- * `readAction` ships a default scheduler — `Promise.all` over the slot
- * runners. Hosts inject their own when they need concurrency,
- * backpressure, or byte-budget enforcement: a p-limit semaphore, a
- * token bucket, a byte-budget queue, whatever matches the workload.
+ * Each materializing codec ships a default scheduler — `Promise.all`
+ * over the slot runners. Hosts inject their own when they need
+ * concurrency, backpressure, or byte-budget enforcement: a p-limit
+ * semaphore, a token bucket, a byte-budget queue, whatever matches
+ * the workload.
  *
  * **Cores stay puritan.** Per the round-3 payload contract
  * (`immutable://open/cc-chat/20260624224342-payload-contract/`),
@@ -35,17 +36,17 @@
  * // Equivalent to: Promise.all(slots.map((s) => s(signal)))
  * ```
  *
- * @example Host-supplied p-limit-style concurrency cap
+ * @example Host-supplied p-limit-style concurrency cap (used with a materializing codec)
  * ```ts
  * import pLimit from "p-limit";
- * import { makeReadAction } from "@bandeira-tech/b3nd-move/actions/standard";
  * import type { Scheduler } from "@bandeira-tech/b3nd-move/codecs/scheduler";
+ * import { httpOutputsFrame } from "@bandeira-tech/b3nd-move/codecs/http";
  *
  * const limit = pLimit(4);
  * const scheduler: Scheduler = (slots, signal) =>
  *   Promise.all(slots.map((slot) => limit(() => slot(signal))));
  *
- * const readAction = makeReadAction(scheduler);
+ * const codec = httpOutputsFrame({ scheduler });
  * ```
  */
 
@@ -69,9 +70,8 @@ export type Scheduler = <T>(
 
 /**
  * Default scheduler: `Promise.all` over the slot runners. Preserves
- * the pre-seam behavior of `readAction`. Use this (implicitly, by
- * calling `readAction` without injection) unless you have an
- * operational reason to swap it.
+ * the pre-seam behavior. Use this (implicitly, via the codec default)
+ * unless you have an operational reason to swap it.
  */
 export const defaultScheduler: Scheduler = <T>(
   slots: ReadonlyArray<(signal: AbortSignal) => Promise<T>>,

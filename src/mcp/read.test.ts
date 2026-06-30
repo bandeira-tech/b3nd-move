@@ -24,11 +24,7 @@ import type {
   ReceiveResult,
   StatusResult,
 } from "@bandeira-tech/b3nd-core/types";
-import { makeReadAction } from "../actions/standard.ts";
-import type { Scheduler } from "../codecs/scheduler.ts";
 import { mcpTextJsonStringify } from "../codecs/mcp/mod.ts";
-import { MinimalServer } from "./server.ts";
-import { WebStandardStreamableHTTPServerTransport } from "./web-streamable-http-transport.ts";
 import { mcpHttpApi } from "./http/service.ts";
 
 // ── Test nodes ─────────────────────────────────────────────────────────
@@ -160,106 +156,5 @@ Deno.test(
     // After JSON.stringify(Uint8Array([10,20,30])) inside MCP's
     // tools/call response text → '{"0":10,"1":20,"2":30}'.
     assertEquals(parsed[0].payload, { "0": 10, "1": 20, "2": 30 });
-  },
-);
-
-// ── Issue #1 cross-transport gate ──────────────────────────────────────
-//
-// Mirror of the HTTP / WS / gRPC cross-transport probes — proves the
-// MCP transport honors a host-injected scheduler end-to-end. The
-// production `buildMcpServer` wires the default-bound `readAction`
-// directly; this test builds a one-shot `MinimalServer` with a custom
-// `tools/call` handler bound to `makeReadAction(scheduler)`, drives it
-// through the same Streamable HTTP transport, and confirms the
-// scheduler observes the slot count and the response round-trips.
-
-function buildCustomMcpHandler(
-  rig: Rig,
-  scheduler: Scheduler,
-): (req: Request) => Promise<Response> {
-  return async (req: Request): Promise<Response> => {
-    const transport = new WebStandardStreamableHTTPServerTransport({
-      sessionIdGenerator: undefined,
-    });
-    const server = new MinimalServer(
-      { name: "test-mcp", version: "0.0.0" },
-      { tools: {}, resources: {} },
-    );
-    const readAction = makeReadAction(scheduler);
-    server.setRequestHandler("tools/call", async (request, ctx) => {
-      const params = request.params as {
-        name: string;
-        arguments?: Record<string, unknown>;
-      };
-      if (params.name !== "b3nd_read") {
-        return {
-          content: [{ type: "text", text: `unsupported: ${params.name}` }],
-          isError: true,
-        };
-      }
-      const { urls } = params.arguments as { urls: string[] };
-      const outputs = await readAction(rig, [urls], ctx.signal);
-      return {
-        content: [{
-          type: "text",
-          text: JSON.stringify(
-            outputs.map(([uri, payload]) => ({ uri, payload })),
-            null,
-            2,
-          ),
-        }],
-      };
-    });
-    await server.connect(transport);
-    return transport.handleRequest(req);
-  };
-}
-
-Deno.test(
-  "MCP b3nd_read: host-injected scheduler is honored end-to-end (seam threads through)",
-  async () => {
-    const bytes = new TextEncoder().encode("mcp-streamed");
-    const node = new StreamingNode(bytes);
-    const rig = buildRig(node);
-
-    let observedSlotCount = -1;
-    let calls = 0;
-    const scheduler: Scheduler = <T>(
-      slots: ReadonlyArray<(signal: AbortSignal) => Promise<T>>,
-      signal: AbortSignal,
-    ): Promise<T[]> => {
-      calls++;
-      observedSlotCount = slots.length;
-      return Promise.all(slots.map((slot) => slot(signal)));
-    };
-    const handler = buildCustomMcpHandler(rig, scheduler);
-
-    const resp = await mcpRequest(handler, {
-      jsonrpc: "2.0",
-      id: 99,
-      method: "tools/call",
-      params: {
-        name: "b3nd_read",
-        arguments: { urls: ["s://a", "s://b", "s://c"] },
-      },
-    });
-    assertEquals(resp.id, 99);
-    assertEquals(calls, 1);
-    assertEquals(observedSlotCount, 3);
-    const text = resp.result!.content[0].text;
-    const parsed = JSON.parse(text) as { uri: string; payload: unknown }[];
-    assertEquals(parsed.length, 3);
-    assertEquals(parsed[0].uri, "s://a");
-    assertEquals(parsed[1].uri, "s://b");
-    assertEquals(parsed[2].uri, "s://c");
-    // After JSON.stringify, the materialized Uint8Array lands as
-    // {"0":n,"1":n,…}. Confirms the bytes were materialized (the slot
-    // was actually run) and shipped through the response envelope.
-    for (let i = 0; i < 3; i++) {
-      assertEquals(
-        parsed[i].payload !== null && typeof parsed[i].payload === "object",
-        true,
-      );
-    }
   },
 );

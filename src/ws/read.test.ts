@@ -30,8 +30,6 @@ import type {
   ReceiveResult,
   StatusResult,
 } from "@bandeira-tech/b3nd-core/types";
-import { makeReadAction } from "../actions/standard.ts";
-import type { Scheduler } from "../codecs/scheduler.ts";
 import { validateUrls } from "../actions/validate.ts";
 import { BadRequest } from "../router/errors.ts";
 import { dispatchWs, route, wsData } from "./router.ts";
@@ -547,76 +545,5 @@ Deno.test(
       true,
       "good frame's upstream stream did not cancel on close",
     );
-  },
-);
-
-// ── Issue #1 cross-transport gate ──────────────────────────────────────
-//
-// Mirror of the HTTP cross-transport probe — proves the WS transport
-// honors a host-injected scheduler end-to-end via `makeReadAction`.
-// We build a custom read route bound to the scheduler and drive it
-// directly through `dispatchWs`, bypassing the default-bound
-// `readRoute` that `wsApi` wires in.
-
-Deno.test(
-  "WS read: host-injected scheduler is honored end-to-end (seam threads through)",
-  async () => {
-    const bytes = new TextEncoder().encode("streamed-via-scheduler");
-    const node = new StreamingNode(bytes);
-    const rig = buildRig(node);
-
-    let observedSlotCount = -1;
-    let calls = 0;
-    const scheduler: Scheduler = <T>(
-      slots: ReadonlyArray<(signal: AbortSignal) => Promise<T>>,
-      signal: AbortSignal,
-    ): Promise<T[]> => {
-      calls++;
-      observedSlotCount = slots.length;
-      return Promise.all(slots.map((slot) => slot(signal)));
-    };
-
-    const customReadRoute = route({
-      on: wsData("read"),
-      decode: ({ payload }) => {
-        const urls = (payload as { urls?: unknown } | null)?.urls;
-        const v = validateUrls(urls);
-        if (!v.ok) throw new BadRequest(v.error);
-        return [v.value] as const;
-      },
-      action: makeReadAction(scheduler),
-      encode: (data, { id }) => ({ id, success: true, data }),
-    });
-
-    const ac = new AbortController();
-    const frame = {
-      id: "sched-1",
-      type: "read" as const,
-      payload: { urls: ["s://a", "s://b", "s://c"] },
-    };
-    const responses: Array<unknown> = [];
-    for await (
-      const resp of dispatchWs(rig, [customReadRoute], frame, ac)
-    ) {
-      responses.push(resp);
-    }
-    assertEquals(calls, 1);
-    assertEquals(observedSlotCount, 3);
-    assertEquals(responses.length, 1);
-    const out = responses[0] as {
-      id: string;
-      success: boolean;
-      data: Output[];
-    };
-    assertEquals(out.id, "sched-1");
-    assertEquals(out.success, true);
-    assertEquals(out.data.length, 3);
-    for (const [, payload] of out.data) {
-      // After materialize the payload is a Uint8Array (over the wire it
-      // would JSON-stringify lossily, but the in-process action result
-      // is the materialized bytes — sufficient to prove the seam threaded
-      // through to the slot runner).
-      assertEquals(payload instanceof Uint8Array, true);
-    }
   },
 );
