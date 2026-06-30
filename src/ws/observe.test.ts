@@ -29,6 +29,9 @@
 
 import { assertEquals } from "@std/assert";
 import { WebSocketClient } from "./client.ts";
+import { wsJsonEnvelope } from "../codecs/ws/mod.ts";
+
+const codec = wsJsonEnvelope();
 
 interface ObserveSub {
   id: string;
@@ -138,6 +141,7 @@ Deno.test("WS observe - subscribe frame shape + event delivery", async () => {
   await withMockWS(async () => {
     const client = new WebSocketClient({
       url: "ws://localhost:0",
+      codec,
       reconnect: { enabled: false },
     });
 
@@ -185,6 +189,7 @@ Deno.test("WS observe - server end-of-stream terminates iterator", async () => {
   await withMockWS(async () => {
     const client = new WebSocketClient({
       url: "ws://localhost:0",
+      codec,
       reconnect: { enabled: false },
     });
 

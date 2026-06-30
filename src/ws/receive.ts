@@ -2,23 +2,35 @@
  * @module
  * `{ type: "receive", payload: Output[] }` → `{ data: ReceiveResult[] }`.
  *
- * Payload is the canonical bare-arg shape (a non-empty `[uri, payload]`
- * array). Validation surfaces as `BadRequest`; the dispatcher renders
- * the message into the envelope's `error` field.
+ * Payload shape and response encoding are delegated to the `WsBatchCodec`
+ * supplied by the operator. `receiveRoute(codec)` returns a `WsRoute` bound
+ * to that codec; the service wires it in via `wsApi(rig, { codec })`.
  */
 
 import { receiveAction } from "../actions/standard.ts";
-import { validateOutputs } from "../actions/validate.ts";
 import { BadRequest } from "../router/errors.ts";
-import { route, wsData } from "./router.ts";
+import type { WsBatchCodec } from "./codec.ts";
+import { route, type WsRoute, wsData } from "./router.ts";
 
-export const receiveRoute = route({
-  on: wsData("receive"),
-  decode: ({ payload }) => {
-    const v = validateOutputs(payload);
-    if (!v.ok) throw new BadRequest(v.error);
-    return [v.value] as const;
-  },
-  action: receiveAction,
-  encode: (data, { id }) => ({ id, success: true, data }),
-});
+export function receiveRoute(codec: WsBatchCodec): WsRoute {
+  return route({
+    on: wsData("receive"),
+    decode: ({ payload }) => {
+      let outputs;
+      try {
+        outputs = codec.decodeReceive(payload);
+      } catch (e) {
+        throw new BadRequest(e instanceof Error ? e.message : String(e));
+      }
+      return [outputs] as const;
+    },
+    action: receiveAction,
+    encode: async (results, { id, abort }) => {
+      const data = await codec.encodeReceive(results, {
+        id,
+        signal: abort.signal,
+      });
+      return { id, success: true, data };
+    },
+  });
+}

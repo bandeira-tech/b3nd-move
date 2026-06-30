@@ -12,6 +12,7 @@ import type {
   StatusResult,
 } from "@bandeira-tech/b3nd-core/types";
 import { RequestError, TimeoutError, TransportError } from "../errors.ts";
+import type { WsBatchCodec } from "./codec.ts";
 
 /**
  * Pre-send hook for WebSocket frames. Receives the envelope about to
@@ -28,6 +29,11 @@ export interface WebSocketClientConfig {
    * handshake — useful when an auth token in the query string rotates.
    */
   url: string | (() => string | Promise<string>);
+  /**
+   * Codec that owns read/receive request encoding and response decoding.
+   * Must match the codec passed to `wsApi` on the server side.
+   */
+  codec: WsBatchCodec;
   /**
    * Pre-send hook. Runs before every outbound frame; mutate the
    * envelope object in place. Compose by chaining function calls
@@ -62,6 +68,7 @@ export interface WebSocketResponse {
 
 export class WebSocketClient implements ProtocolInterfaceNode {
   private config: WebSocketClientConfig;
+  private codec: WsBatchCodec;
   private preSend: WebSocketPreSend | undefined;
   private ws: WebSocket | null = null;
   private connected = false;
@@ -96,6 +103,7 @@ export class WebSocketClient implements ProtocolInterfaceNode {
         ...config.reconnect,
       },
     };
+    this.codec = config.codec;
     this.preSend = config.preSend;
   }
 
@@ -336,17 +344,15 @@ export class WebSocketClient implements ProtocolInterfaceNode {
 
   /**
    * Receive a batch of outputs (unified interface).
-   * Sends a "receive" frame with the encoded batch payload.
+   * Sends a "receive" frame with the codec-encoded payload.
    * @param msgs - Array of `Output` tuples [uri, payload]
    * @returns ReceiveResult[] — one result per output
    */
   async receive(msgs: Output[]): Promise<ReceiveResult[]> {
     try {
-      const results = await this.sendRequest<ReceiveResult[]>(
-        "receive",
-        msgs,
-      );
-      return results;
+      const payload = this.codec.encodeReceiveRequest(msgs);
+      const data = await this.sendRequest<unknown>("receive", payload);
+      return this.codec.decodeReceiveResponse(data);
     } catch (error) {
       // On transport error, return error for every message in the batch
       const errorMsg = error instanceof Error ? error.message : String(error);
@@ -359,12 +365,13 @@ export class WebSocketClient implements ProtocolInterfaceNode {
 
   async read<T = unknown>(urls: string[]): Promise<Output<T>[]> {
     if (urls.length === 0) return [];
-    const outputs = await this.sendRequest<Output<T>[]>("read", { urls });
+    const payload = this.codec.encodeReadRequest(urls);
+    const data = await this.sendRequest<unknown>("read", payload);
     // Payloads pass through as JSON-parsed values. Content semantics
     // (miss representation, binary encoding, etc.) are the caller's
     // concern — opt in via content codecs like
     // `@bandeira-tech/b3nd-canon/binary` if you need them.
-    return Array.isArray(outputs) ? outputs : [outputs];
+    return this.codec.decodeReadResponse(data) as Output<T>[];
   }
 
   async *observe(

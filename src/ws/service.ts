@@ -1,13 +1,13 @@
 /**
  * @module
- * WebSocket service — `wsApi(rig)` returns a function that attaches the
- * b3nd WS wire protocol to an already-open `WebSocket`. The host is
- * responsible for the upgrade (`Deno.upgradeWebSocket`, CF's
+ * WebSocket service — `wsApi(rig, { codec })` returns a function that
+ * attaches the b3nd WS wire protocol to an already-open `WebSocket`. The
+ * host is responsible for the upgrade (`Deno.upgradeWebSocket`, CF's
  * `WebSocketPair`, Node's `ws`) and for any cross-socket lifecycle
  * (drain on shutdown, tracking, etc.) — the library only knows about
  * one socket at a time.
  *
- * Wire protocol (matches `@bandeira-tech/b3nd-core`'s `WebSocketClient`):
+ * Wire protocol (matches `WebSocketClient`):
  *
  *   inbound  → `{ id, type: "receive"|"read"|"observe"|"observe-cancel"|"status", payload }`
  *   outbound → `{ id, success: true,  data }`
@@ -45,7 +45,8 @@
  *
  * @example Deno
  * ```ts
- * const attach = wsApi(rig);
+ * import { wsJsonEnvelope } from "@bandeira-tech/b3nd-move/codecs/ws";
+ * const attach = wsApi(rig, { codec: wsJsonEnvelope() });
  * Deno.serve({ port: 8080 }, (req) => {
  *   if (req.headers.get("upgrade") !== "websocket") {
  *     return new Response("Not Found", { status: 404 });
@@ -58,8 +59,9 @@
  *
  * @example Cloudflare Durable Object
  * ```ts
+ * import { wsJsonEnvelope } from "@bandeira-tech/b3nd-move/codecs/ws";
  * export class B3ndSession {
- *   #attach = wsApi(this.rig);
+ *   #attach = wsApi(this.rig, { codec: wsJsonEnvelope() });
  *   fetch(req: Request) {
  *     const [client, server] = Object.values(new WebSocketPair());
  *     server.accept();
@@ -78,6 +80,7 @@ import { observeCancelRoute } from "./observe-cancel.ts";
 import { readRoute } from "./read.ts";
 import { receiveRoute } from "./receive.ts";
 import { statusRoute } from "./status.ts";
+import type { WsBatchCodec } from "./codec.ts";
 
 /**
  * Attach the b3nd WS wire protocol to an already-open `WebSocket`. The
@@ -87,11 +90,18 @@ import { statusRoute } from "./status.ts";
  */
 export type WsApi = (socket: WebSocket) => void;
 
+/** Options for `wsApi`. */
+export interface WsApiOptions {
+  /** Codec that owns read/receive encode+decode on both server and client. */
+  codec: WsBatchCodec;
+}
+
 /**
  * Build a b3nd WS attacher bound to a Rig. The returned function takes
  * one socket and wires it up; call it once per upgraded connection.
  */
-export function wsApi(rig: Rig): WsApi {
+export function wsApi(rig: Rig, options: WsApiOptions): WsApi {
+  const { codec } = options;
   return (socket: WebSocket): void => {
     const observes = new Map<string, AbortController>();
     // In-flight unary frames (`read`/`receive`/`status`). Tracked
@@ -103,8 +113,8 @@ export function wsApi(rig: Rig): WsApi {
     const inFlight = new Set<AbortController>();
     const routes = [
       statusRoute,
-      receiveRoute,
-      readRoute,
+      receiveRoute(codec),
+      readRoute(codec),
       observeRoute(observes),
       observeCancelRoute(observes),
     ];

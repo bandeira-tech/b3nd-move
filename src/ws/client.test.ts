@@ -15,6 +15,9 @@
 import { assertEquals, assertRejects } from "@std/assert";
 import { WebSocketClient } from "./client.ts";
 import { RequestError } from "../errors.ts";
+import { wsJsonEnvelope } from "../codecs/ws/mod.ts";
+
+const codec = wsJsonEnvelope();
 
 interface MockEvent {
   data?: string;
@@ -128,6 +131,7 @@ Deno.test("client: opens a single socket; subsequent calls reuse it", async () =
   try {
     const c = new WebSocketClient({
       url: "ws://h",
+      codec,
       reconnect: { enabled: false },
     });
     await rpc(
@@ -153,6 +157,7 @@ Deno.test("client: resolves URL provider function on first connect", async () =>
         calls++;
         return Promise.resolve("ws://dynamic/" + calls);
       },
+      codec,
       reconnect: { enabled: false },
     });
     await rpc(
@@ -173,6 +178,7 @@ Deno.test("status: sends { type: 'status', payload: {} }, returns server data", 
   try {
     const c = new WebSocketClient({
       url: "ws://h",
+      codec,
       reconnect: { enabled: false },
     });
     const s = await rpc(
@@ -202,6 +208,7 @@ Deno.test("read: sends { type: 'read', payload: { urls } }, returns Output[]", a
   try {
     const c = new WebSocketClient({
       url: "ws://h",
+      codec,
       reconnect: { enabled: false },
     });
     const expected: [string, unknown][] = [["mutable://a", { v: 1 }]];
@@ -224,6 +231,7 @@ Deno.test("read: empty urls returns [] without sending", async () => {
   try {
     const c = new WebSocketClient({
       url: "ws://h",
+      codec,
       reconnect: { enabled: false },
     });
     const out = await c.read([]);
@@ -239,6 +247,7 @@ Deno.test("receive: sends { type: 'receive', payload: msgs }, returns ReceiveRes
   try {
     const c = new WebSocketClient({
       url: "ws://h",
+      codec,
       reconnect: { enabled: false },
     });
     const out = await rpc(
@@ -260,6 +269,7 @@ Deno.test("receive: on transport error returns per-slot error (does not throw)",
   try {
     const c = new WebSocketClient({
       url: "ws://h",
+      codec,
       reconnect: { enabled: false },
     });
     const out = await rpc(
@@ -285,6 +295,7 @@ Deno.test("read: server { success: false, error } → RequestError", async () =>
   try {
     const c = new WebSocketClient({
       url: "ws://h",
+      codec,
       reconnect: { enabled: false },
     });
     const err = await assertRejects(
@@ -309,6 +320,7 @@ Deno.test("status: server error → returns unhealthy (does not throw)", async (
   try {
     const c = new WebSocketClient({
       url: "ws://h",
+      codec,
       reconnect: { enabled: false },
     });
     const s = await rpc(
@@ -332,6 +344,7 @@ Deno.test("client: two in-flight requests resolved by id (out of order)", async 
   try {
     const c = new WebSocketClient({
       url: "ws://h",
+      codec,
       reconnect: { enabled: false },
     });
     const a = c.status();
@@ -367,6 +380,7 @@ Deno.test("preSend: hook can mutate envelope before send", async () => {
   try {
     const c = new WebSocketClient({
       url: "ws://h",
+      codec,
       reconnect: { enabled: false },
       preSend: (env) => {
         (env as Record<string, unknown>).auth = "Bearer x";

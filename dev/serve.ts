@@ -27,6 +27,7 @@ import type { Rig } from "@bandeira-tech/b3nd-core";
 import { httpApi } from "../src/http/service.ts";
 import { httpOutputsFrame } from "../src/codecs/http/mod.ts";
 import { wsApi } from "../src/ws/service.ts";
+import { wsJsonEnvelope } from "../src/codecs/ws/mod.ts";
 import { grpcHttpApi } from "../src/grpc/http/service.ts";
 import { buildMcpServer, type McpServerOptions } from "../src/mcp/service.ts";
 import { mcpHttpApi } from "../src/mcp/http/service.ts";
@@ -118,7 +119,7 @@ function wsTransport(
 ): TransportServer {
   const port = c.port ?? WS_DEFAULTS.port;
   const hostname = c.hostname ?? WS_DEFAULTS.hostname;
-  const attach = wsApi(rig);
+  const attach = wsApi(rig, { codec: wsJsonEnvelope() });
   const sockets = new Set<WebSocket>();
   const handler = (req: Request): Response => {
     if (req.headers.get("upgrade") !== "websocket") {

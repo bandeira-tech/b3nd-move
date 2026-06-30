@@ -16,8 +16,10 @@ import { startGrpcServer } from "../../factories/grpc.ts";
 import { startWsServer } from "../../factories/ws.ts";
 import { stubRig } from "../../rigs/stub.ts";
 import { httpOutputsFrame } from "../../../src/codecs/http/mod.ts";
+import { wsJsonEnvelope } from "../../../src/codecs/ws/mod.ts";
 
 const codec = httpOutputsFrame();
+const wsCodec = wsJsonEnvelope();
 
 Deno.test("HttpClient preSend — stamps headers and query params on every call", async () => {
   const seen: {
@@ -167,11 +169,12 @@ Deno.test("GrpcHttpClient preSend — stamps headers on rpc", async () => {
 });
 
 Deno.test("WebSocketClient preSend — mutates outbound envelope per frame", async () => {
-  const server = await startWsServer(stubRig());
+  const server = await startWsServer(stubRig(), { codec: wsCodec });
   try {
     let count = 0;
     const client = new WebSocketClient({
       url: server.url,
+      codec: wsCodec,
       reconnect: { enabled: false },
       preSend: (env) => {
         env.stamp = `frame-${count++}`;
@@ -189,7 +192,7 @@ Deno.test("WebSocketClient preSend — mutates outbound envelope per frame", asy
 });
 
 Deno.test("WebSocketClient — url accepts a function for handshake-time token", async () => {
-  const server = await startWsServer(stubRig());
+  const server = await startWsServer(stubRig(), { codec: wsCodec });
   try {
     let calls = 0;
     const client = new WebSocketClient({
@@ -199,6 +202,7 @@ Deno.test("WebSocketClient — url accepts a function for handshake-time token",
         // resolved on each connect — that's what we assert.
         return `${server.url}?token=t-${calls}`;
       },
+      codec: wsCodec,
       reconnect: { enabled: false },
     });
     await client.status();

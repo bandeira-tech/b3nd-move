@@ -1,8 +1,9 @@
 /**
  * WebSocket transport factory for integration tests.
  *
- * Boots `wsApi(rig)` on an ephemeral loopback port. WebSocket handshakes
- * are not subject to CORS in browsers, so there is no `withCors` wrap.
+ * Boots `wsApi(rig, { codec })` on an ephemeral loopback port. WebSocket
+ * handshakes are not subject to CORS in browsers, so there is no `withCors`
+ * wrap.
  *
  * The factory owns the upgrade (`Deno.upgradeWebSocket`) and the
  * drain set — the library only sees one open socket at a time. `stop`
@@ -15,10 +16,18 @@
 
 import type { Rig } from "@bandeira-tech/b3nd-core/rig";
 import { wsApi } from "../../src/ws/service.ts";
+import type { WsBatchCodec } from "../../src/ws/codec.ts";
 import type { ServerHandle } from "./http.ts";
 
-export function startWsServer(rig: Rig): Promise<ServerHandle> {
-  const attach = wsApi(rig);
+export interface WsServerOptions {
+  codec: WsBatchCodec;
+}
+
+export function startWsServer(
+  rig: Rig,
+  options: WsServerOptions,
+): Promise<ServerHandle> {
+  const attach = wsApi(rig, options);
   const sockets = new Set<WebSocket>();
   const handler = (req: Request): Response => {
     if (req.headers.get("upgrade") !== "websocket") {

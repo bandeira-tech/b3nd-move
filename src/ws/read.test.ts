@@ -36,6 +36,7 @@ import { validateUrls } from "../actions/validate.ts";
 import { BadRequest } from "../router/errors.ts";
 import { dispatchWs, route, wsData } from "./router.ts";
 import { wsApi } from "./service.ts";
+import { wsJsonEnvelope } from "../codecs/ws/mod.ts";
 
 // ── In-memory paired-socket harness ─────────────────────────────────────
 
@@ -168,7 +169,7 @@ Deno.test(
   async () => {
     const node = new StreamingNode(new TextEncoder().encode("streamed"));
     const rig = buildRig(node);
-    const attach = wsApi(rig);
+    const attach = wsApi(rig, { codec: wsJsonEnvelope() });
     const { server, client } = pair();
     attach(server as unknown as WebSocket);
 
@@ -209,7 +210,7 @@ Deno.test(
     const bytes = new Uint8Array([10, 20, 30]);
     const node = new StreamingNode(bytes);
     const rig = buildRig(node);
-    const attach = wsApi(rig);
+    const attach = wsApi(rig, { codec: wsJsonEnvelope() });
     const { server, client } = pair();
     attach(server as unknown as WebSocket);
 
@@ -246,7 +247,7 @@ Deno.test(
     // matching what HTTP/gRPC get for free from the runtime.
     const node = new NeverClosingNode();
     const rig = buildRig(node);
-    const attach = wsApi(rig);
+    const attach = wsApi(rig, { codec: wsJsonEnvelope() });
     const { server, client } = pair();
     attach(server as unknown as WebSocket);
 
@@ -304,7 +305,7 @@ Deno.test(
     // HTTP runtimes treat a connection error.
     const node = new NeverClosingNode();
     const rig = buildRig(node);
-    const attach = wsApi(rig);
+    const attach = wsApi(rig, { codec: wsJsonEnvelope() });
     const { server, client } = pair();
     attach(server as unknown as WebSocket);
 
@@ -365,7 +366,7 @@ Deno.test(
     }
     const node = new TrackedNode();
     const rig = buildRig(node);
-    const attach = wsApi(rig);
+    const attach = wsApi(rig, { codec: wsJsonEnvelope() });
     const { server, client } = pair();
     attach(server as unknown as WebSocket);
 
@@ -436,7 +437,7 @@ Deno.test(
     }
     const node = new FastNode();
     const rig = buildRig(node);
-    const attach = wsApi(rig);
+    const attach = wsApi(rig, { codec: wsJsonEnvelope() });
     const { server, client } = pair();
     attach(server as unknown as WebSocket);
 
@@ -504,7 +505,7 @@ Deno.test(
     // and one orphan controller that never had a stream").
     const node = new NeverClosingNode();
     const rig = buildRig(node);
-    const attach = wsApi(rig);
+    const attach = wsApi(rig, { codec: wsJsonEnvelope() });
     const { server, client } = pair();
     attach(server as unknown as WebSocket);
 
