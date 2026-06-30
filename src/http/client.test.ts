@@ -165,7 +165,9 @@ Deno.test("read: bytes payloads round-trip without JSON mangling", async () => {
     })
   );
   try {
-    const out = await new HttpClient({ url: "http://h", codec }).read<Uint8Array>([
+    const out = await new HttpClient({ url: "http://h", codec }).read<
+      Uint8Array
+    >([
       "mutable://b",
     ]);
     assertEquals(out.length, 1);

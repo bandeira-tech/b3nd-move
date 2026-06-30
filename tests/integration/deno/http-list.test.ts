@@ -22,7 +22,10 @@ function createClientWithServer(handler: (req: Request) => Response): {
 } {
   const server = Deno.serve({ port: 0, onListen: () => {} }, handler);
   const addr = server.addr as Deno.NetAddr;
-  const client = new HttpClient({ url: `http://localhost:${addr.port}`, codec });
+  const client = new HttpClient({
+    url: `http://localhost:${addr.port}`,
+    codec,
+  });
   return { client, server };
 }
 
