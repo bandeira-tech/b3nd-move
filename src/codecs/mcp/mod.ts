@@ -15,3 +15,5 @@
 
 export { mcpTextJsonStringify } from "./text-json-stringify.ts";
 export type { McpTextJsonStringifyOptions } from "./text-json-stringify.ts";
+export { mcpResourcePerSlot } from "./resource-per-slot.ts";
+export type { McpResourcePerSlotOptions } from "./resource-per-slot.ts";
