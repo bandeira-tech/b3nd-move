@@ -158,9 +158,10 @@ and a `Deno.serve` lifecycle in one go, use `deno task serve --http` (see
 ## Notes
 
 - `HttpApiOptions.statusMeta` is merged into status responses.
-- `HttpApiOptions.cors` is an operator-declared knob:
-  `httpApi(rig, { codec,
-  cors: true })` emits permissive `*` CORS headers and
-  answers `OPTIONS` preflight for cross-origin browser callers. Off by default.
-  Anything narrower (specific origins, credentials, auth) is your own middleware
-  wrapped around the handler before `Deno.serve` / Hono / etc.
+- CORS, auth, and any other middleware are upstream of the API — wrap the
+  handler before handing it to `Deno.serve` / Hono / etc. The package ships
+  `withCors(handler, { origin, methods?, headers?, maxAge? })`
+  (`@bandeira-tech/b3nd-move/cors`):
+  `withCors(httpApi(rig, { codec }),
+  { origin: "https://app.example.com" })`.
+  Credentialed flows or anything beyond these knobs is your own wrapper.

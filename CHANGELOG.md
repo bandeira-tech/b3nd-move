@@ -31,11 +31,12 @@ and this project adheres to
 - **Wire-aware codec interfaces** per transport: `HttpBatchCodec`
   (`src/http/codec.ts`), `WsBatchCodec` (`src/ws/codec.ts`), `GrpcBatchCodec`
   (`src/grpc/http/codec.ts`), `McpBatchCodec` (`src/mcp/codec.ts`).
-- **Operator-declared `cors?: boolean`** on `httpApi`, `grpcHttpApi`, and
-  `mcpHttpApi`. Off by default; `cors: true` emits permissive `*` CORS headers
-  and answers `OPTIONS` preflight for cross-origin browser callers — declared at
-  the operator's setup site, the same place the codec is declared. Anything
-  narrower stays in the operator's own middleware.
+- **`@bandeira-tech/b3nd-move/cors`** — `withCors(handler, { origin, methods?,
+  headers?, maxAge? })` wraps any fetch handler with CORS headers + `OPTIONS`
+  preflight. CORS is upstream of the API, so it composes around the service
+  rather than living inside it: `withCors(httpApi(rig, { codec }), { origin:
+  "https://app.example.com" })`. Credentialed flows or anything beyond these
+  knobs stay in the operator's own wrapper.
 
 ### Changed (BREAKING)
 

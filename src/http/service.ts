@@ -47,14 +47,17 @@
  *
  * @example Cross-origin browser callers
  * ```ts
- * // Operator opts in to permissive `*` CORS at the setup site.
- * Deno.serve({ port: 3000 }, httpApi(rig, { codec, cors: true }));
+ * import { withCors } from "@bandeira-tech/b3nd-move/cors";
+ * // CORS is upstream of the API — compose it around the handler.
+ * Deno.serve(
+ *   { port: 3000 },
+ *   withCors(httpApi(rig, { codec }), { origin: "https://app.example.com" }),
+ * );
  * ```
  */
 
 import type { Rig } from "@bandeira-tech/b3nd-core/rig";
 import type { HttpBatchCodec } from "./codec.ts";
-import { withCors } from "../cors.ts";
 import { dispatchHttp } from "./router.ts";
 import { observeRoute } from "./observe.ts";
 import { readRoute } from "./read.ts";
@@ -72,13 +75,6 @@ import { statusRoute, type StatusRouteOptions } from "./status.ts";
 export interface HttpApiOptions extends Partial<StatusRouteOptions> {
   /** Operator-declared codec for read responses + receive bodies. Required. */
   codec: HttpBatchCodec;
-  /**
-   * Emit permissive `*` CORS headers and answer `OPTIONS` preflight.
-   * Off by default — the operator opts in at their setup site for
-   * cross-origin browser callers. Anything narrower belongs in the
-   * operator's own middleware. See `../cors.ts`.
-   */
-  cors?: boolean;
 }
 
 // ── API factory ──
@@ -102,6 +98,5 @@ export function httpApi(
     readRoute(options.codec),
     observeRoute,
   ];
-  const handler = (req: Request) => dispatchHttp(rig, routes, req);
-  return options.cors ? withCors(handler) : handler;
+  return (req) => dispatchHttp(rig, routes, req);
 }

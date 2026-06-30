@@ -2,7 +2,7 @@
  * Factory for the GET-content browser integration tests.
  *
  * Boots `httpGetContentApi(rig)` on an ephemeral loopback port behind
- * `withCors("*")`. The rig serves a small deterministic set of
+ * `withCors()`. The rig serves a small deterministic set of
  * payload shapes the browser harness asserts against:
  *
  *   read(`mutable://t/png.png`)   → bytes field    + kind: "image"
@@ -22,7 +22,7 @@ import type {
 } from "@bandeira-tech/b3nd-core/types";
 import { httpGetContentApi } from "../../src/http-get-content/service.ts";
 import { payloadResponseMap as map } from "../../src/http-get-content/payload-response-map.ts";
-import { withCors } from "./cors.ts";
+import { withCors } from "../../src/cors.ts";
 import type { ServerHandle } from "./http.ts";
 
 class ContentStubBackend implements ProtocolInterfaceNode {
@@ -67,7 +67,7 @@ export function startHttpGetContentServer(): Promise<ServerHandle> {
       "*": map.json(),
     }),
   });
-  const handler = withCors(api, "*");
+  const handler = withCors(api, { origin: "*" });
   const server = Deno.serve(
     { port: 0, hostname: "127.0.0.1", onListen: () => {} },
     handler,
