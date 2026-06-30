@@ -181,12 +181,10 @@ The test consolidation from the earlier plan (`2026-06-29-route-decides-material
 2. **Codec catalog ergonomics.** Two codecs ship per wire in v1 (today's + one alternative for HTTP, WS, MCP). Operators outside that range write their own; we provide the per-wire codec interface and examples. Risk: ecosystem fragmentation. Mitigation: the catalog is open seam by design — that's the point. b3nd ships the seam, not the protocol.
 3. **App-dev confusion when codecs mismatch.** Failure mode is "the app doesn't work and the error message doesn't say `codec mismatch`." Mitigation: codecs' decoders surface clear errors when the wire shape isn't what they expect (e.g., `outputs-frame: missing leading flag byte`). Document the pattern. Optional follow-up (not v1): a "codec id" handshake on first request for diagnostic purposes only — never used for negotiation.
 
-### Open questions for review
+### Decisions locked during review
 
-None blocking — but flagging:
-
-- **Should `httpNdjson` ship in v1?** It's the simplest demonstration of a non-trivial alternative on HTTP. Probably yes, but it's the most discretionary item in the v1 catalog. Easy to drop or defer.
-- **Naming: `httpOutputsFrame` or `outputsFrame`?** The codec is HTTP-specific (the type signature uses `Response`/`Request`), so wire-prefixed names disambiguate when multiple wires' codecs are imported in one file. Recommend wire-prefixed throughout the catalog for consistency.
+- **`httpNdjson` ships in v1.** Confirmed. Two codecs per wire for HTTP, WS, MCP; gRPC ships one in v1.
+- **Wire-prefixed codec names throughout the catalog.** `httpOutputsFrame`, `wsJsonEnvelope`, etc. Disambiguates at import sites that pull from multiple wires.
 
 ## Appendix A — Surface examples
 
