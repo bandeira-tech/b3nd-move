@@ -27,7 +27,7 @@ import type {
   StatusResult,
 } from "@bandeira-tech/b3nd-core/types";
 import type { Action } from "../router/route.ts";
-import { defaultScheduler, type Scheduler } from "./scheduler.ts";
+import { defaultScheduler, type Scheduler } from "../codecs/scheduler.ts";
 
 /** `rig.status()`. */
 export const statusAction: Action<readonly [], Promise<StatusResult>> = (rig) =>

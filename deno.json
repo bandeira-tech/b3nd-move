@@ -14,6 +14,7 @@
     "./codecs/text": "./src/codecs/text.ts",
     "./codecs/raw": "./src/codecs/raw.ts",
     "./codecs/field": "./src/codecs/field.ts",
+    "./codecs/scheduler": "./src/codecs/scheduler.ts",
     "./http/service": "./src/http/service.ts",
     "./http/client": "./src/http/client.ts",
     "./http-get-content/service": "./src/http-get-content/service.ts",

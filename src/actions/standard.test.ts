@@ -19,7 +19,7 @@ import {
   receiveAction,
   statusAction,
 } from "./standard.ts";
-import { defaultScheduler, type Scheduler } from "./scheduler.ts";
+import { defaultScheduler, type Scheduler } from "../codecs/scheduler.ts";
 
 class StubBackend implements ProtocolInterfaceNode {
   seen: { fn: string; args: unknown[] }[] = [];

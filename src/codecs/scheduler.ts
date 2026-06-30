@@ -31,7 +31,7 @@
  *
  * @example Default — preserve current behavior
  * ```ts
- * import { defaultScheduler } from "@bandeira-tech/b3nd-move/actions/scheduler";
+ * import { defaultScheduler } from "@bandeira-tech/b3nd-move/codecs/scheduler";
  * // Equivalent to: Promise.all(slots.map((s) => s(signal)))
  * ```
  *
@@ -39,7 +39,7 @@
  * ```ts
  * import pLimit from "p-limit";
  * import { makeReadAction } from "@bandeira-tech/b3nd-move/actions/standard";
- * import type { Scheduler } from "@bandeira-tech/b3nd-move/actions/scheduler";
+ * import type { Scheduler } from "@bandeira-tech/b3nd-move/codecs/scheduler";
  *
  * const limit = pLimit(4);
  * const scheduler: Scheduler = (slots, signal) =>

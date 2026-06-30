@@ -76,7 +76,7 @@ via `payloadIsBinary`). The client decodes the frame and returns `Output[]` —
 > before the response body is written, and 1000 concurrent stream pumps allocate
 > 1000 buffers. Hosts that need to cap fan-out (concurrency, byte budget,
 > backpressure) build their own action via `makeReadAction(scheduler)` — see
-> [`../actions/scheduler.ts`](../actions/scheduler.ts) for the `Scheduler`
+> [`../codecs/scheduler.ts`](../codecs/scheduler.ts) for the `Scheduler`
 > contract. **Operational policy is host-owned** (cores stay puritan);
 > `b3nd-move` ships the seam and the most permissive default. Hosts that need
 > true streaming for large payloads should use the in-process Rig directly

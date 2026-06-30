@@ -31,7 +31,7 @@ import type {
   StatusResult,
 } from "@bandeira-tech/b3nd-core/types";
 import { makeReadAction } from "../actions/standard.ts";
-import type { Scheduler } from "../actions/scheduler.ts";
+import type { Scheduler } from "../codecs/scheduler.ts";
 import { validateUrls } from "../actions/validate.ts";
 import { BadRequest } from "../router/errors.ts";
 import { dispatchWs, route, wsData } from "./router.ts";

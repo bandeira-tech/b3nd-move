@@ -7,7 +7,7 @@ import type {
 } from "@bandeira-tech/b3nd-core/types";
 import { connection, Rig } from "@bandeira-tech/b3nd-core/rig";
 import { makeReadAction } from "../actions/standard.ts";
-import type { Scheduler } from "../actions/scheduler.ts";
+import type { Scheduler } from "../codecs/scheduler.ts";
 import { decodeOutputsFrame } from "../codecs/outputs-frame.ts";
 import { encodeUrlList } from "../codecs/url-list.ts";
 import { dispatchHttp, httpRequest, route } from "./router.ts";

@@ -25,7 +25,7 @@ import type {
   StatusResult,
 } from "@bandeira-tech/b3nd-core/types";
 import { makeReadAction } from "../actions/standard.ts";
-import type { Scheduler } from "../actions/scheduler.ts";
+import type { Scheduler } from "../codecs/scheduler.ts";
 import { MinimalServer } from "./server.ts";
 import { WebStandardStreamableHTTPServerTransport } from "./web-streamable-http-transport.ts";
 import { mcpHttpApi } from "./http/service.ts";

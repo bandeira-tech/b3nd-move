@@ -28,7 +28,7 @@ import type {
   StatusResult,
 } from "@bandeira-tech/b3nd-core/types";
 import { makeReadAction } from "../../actions/standard.ts";
-import type { Scheduler } from "../../actions/scheduler.ts";
+import type { Scheduler } from "../../codecs/scheduler.ts";
 import { ReadRequestSchema, ReadResponseSchema } from "../proto/gen/b3nd_pb.ts";
 import { outputToProto } from "../proto/convert.ts";
 import { BadRequest } from "../../router/errors.ts";
