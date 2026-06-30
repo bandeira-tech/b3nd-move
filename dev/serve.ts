@@ -29,6 +29,7 @@ import { httpOutputsFrame } from "../src/codecs/http/mod.ts";
 import { wsApi } from "../src/ws/service.ts";
 import { wsJsonEnvelope } from "../src/codecs/ws/mod.ts";
 import { grpcHttpApi } from "../src/grpc/http/service.ts";
+import { grpcProto } from "../src/codecs/grpc/mod.ts";
 import { buildMcpServer, type McpServerOptions } from "../src/mcp/service.ts";
 import { mcpHttpApi } from "../src/mcp/http/service.ts";
 import { mcpWsApi } from "../src/mcp/ws/service.ts";
@@ -161,7 +162,7 @@ function grpcHttpTransport(
 ): TransportServer {
   const port = c.port ?? GRPC_DEFAULTS.port;
   const hostname = c.hostname ?? GRPC_DEFAULTS.hostname;
-  const handler = grpcHttpApi(rig);
+  const handler = grpcHttpApi(rig, { codec: grpcProto() });
   let server: Deno.HttpServer | null = null;
   return {
     transport: "grpc-http",

@@ -37,6 +37,13 @@ import { observeRoute } from "./observe.ts";
 import { readRoute } from "./read.ts";
 import { receiveRoute } from "./receive.ts";
 import { statusRoute } from "./status.ts";
+import type { GrpcBatchCodec } from "./codec.ts";
+
+/** Options for `grpcHttpApi`. */
+export interface GrpcHttpApiOptions {
+  /** Codec for read/receive proto message construction. Required. */
+  codec: GrpcBatchCodec;
+}
 
 /**
  * Create a gRPC-HTTP request handler.
@@ -44,7 +51,16 @@ import { statusRoute } from "./status.ts";
  * Returns a standard `(Request) => Promise<Response>` — plug into
  * `Deno.serve`, `withCors()`, or any fetch-compatible HTTP runtime.
  */
-export function grpcHttpApi(rig: Rig): (req: Request) => Promise<Response> {
-  const routes = [statusRoute, receiveRoute, readRoute, observeRoute];
+export function grpcHttpApi(
+  rig: Rig,
+  options: GrpcHttpApiOptions,
+): (req: Request) => Promise<Response> {
+  const { codec } = options;
+  const routes = [
+    statusRoute,
+    receiveRoute(codec),
+    readRoute(codec),
+    observeRoute,
+  ];
   return (req) => dispatchGrpc(rig, routes, req);
 }

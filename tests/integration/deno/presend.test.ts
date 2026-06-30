@@ -17,9 +17,11 @@ import { startWsServer } from "../../factories/ws.ts";
 import { stubRig } from "../../rigs/stub.ts";
 import { httpOutputsFrame } from "../../../src/codecs/http/mod.ts";
 import { wsJsonEnvelope } from "../../../src/codecs/ws/mod.ts";
+import { grpcProto } from "../../../src/codecs/grpc/mod.ts";
 
 const codec = httpOutputsFrame();
 const wsCodec = wsJsonEnvelope();
+const grpcCodec = grpcProto();
 
 Deno.test("HttpClient preSend — stamps headers and query params on every call", async () => {
   const seen: {
@@ -135,7 +137,7 @@ Deno.test("HttpClient preSend — functions compose via plain calls", async () =
 });
 
 Deno.test("GrpcHttpClient preSend — stamps headers on rpc", async () => {
-  const server = await startGrpcServer(stubRig());
+  const server = await startGrpcServer(stubRig(), { codec: grpcCodec });
   let seenAuth: string | null = null;
   // Wrap by routing through the actual client; we sniff via a separate
   // listener proxy. Simpler: re-use the real server but stamp on
@@ -158,6 +160,7 @@ Deno.test("GrpcHttpClient preSend — stamps headers on rpc", async () => {
     const port = (sniffer.addr as Deno.NetAddr).port;
     const client = new GrpcHttpClient({
       url: `http://127.0.0.1:${port}`,
+      codec: grpcCodec,
       preSend: (r) => r.headers.set("Authorization", "Bearer g-1"),
     });
     await client.receive([["mutable://g/h", { v: 1 }]]);

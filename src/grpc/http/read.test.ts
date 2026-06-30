@@ -35,6 +35,9 @@ import { BadRequest } from "../../router/errors.ts";
 import { dispatchGrpc, grpcMethod, route } from "./router.ts";
 import { okResponse, readRequest } from "./wire.ts";
 import { grpcHttpApi } from "./service.ts";
+import { grpcProto } from "../../codecs/grpc/mod.ts";
+
+const codec = grpcProto();
 
 function post(
   handler: (req: Request) => Promise<Response>,
@@ -119,7 +122,7 @@ Deno.test(
     const bytes = new Uint8Array([10, 20, 30, 40, 50]);
     const node = new StreamingNode(bytes);
     const rig = buildRig(node);
-    const handler = grpcHttpApi(rig);
+    const handler = grpcHttpApi(rig, { codec });
 
     const resp = await post(handler, "Read", { urls: ["s://x"] });
     assertEquals(resp.status, 200);
@@ -151,7 +154,7 @@ Deno.test(
     // and on into materializeStreams (M4 wiring).
     const node = new NeverClosingNode();
     const rig = buildRig(node);
-    const handler = grpcHttpApi(rig);
+    const handler = grpcHttpApi(rig, { codec });
 
     const ac = new AbortController();
     const respP = handler(

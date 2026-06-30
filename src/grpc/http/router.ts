@@ -47,12 +47,11 @@ export const SERVICE_PREFIX = "/b3nd.v1.B3ndService/";
 export type Encoding = "json" | "binary";
 
 /**
- * Internal alias for a gRPC-HTTP-specialised `Route`. Not exported —
- * the public name is the generic `Route`. This just keeps the
- * dispatcher and `route()` signatures from spelling out the five type
- * params at every site.
+ * gRPC-HTTP-specialised `Route`. Exported so route factory functions
+ * (e.g. `readRoute(codec)`, `receiveRoute(codec)`) can annotate their
+ * return types without spelling out all five type params.
  */
-type GrpcRoute<
+export type GrpcRoute<
   Args extends readonly unknown[] = readonly unknown[],
   Result = unknown,
 > = Route<Args, Result, GrpcMatcher, GrpcContext, Response>;

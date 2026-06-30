@@ -11,15 +11,17 @@ import { runMoveSuite } from "../../suites/move-suite.ts";
 import { startGrpcServer } from "../../factories/grpc.ts";
 import { stubRig } from "../../rigs/stub.ts";
 import { GrpcHttpClient } from "../../../src/grpc/http/client.ts";
+import { grpcProto } from "../../../src/codecs/grpc/mod.ts";
 
-const server = await startGrpcServer(stubRig());
+const codec = grpcProto();
+const server = await startGrpcServer(stubRig(), { codec });
 
 runMoveSuite("grpc-json", {
-  client: () => new GrpcHttpClient({ url: server.url, binary: false }),
+  client: () => new GrpcHttpClient({ url: server.url, codec, binary: false }),
 });
 
 runMoveSuite("grpc-binary", {
-  client: () => new GrpcHttpClient({ url: server.url, binary: true }),
+  client: () => new GrpcHttpClient({ url: server.url, codec, binary: true }),
 });
 
 Deno.test({

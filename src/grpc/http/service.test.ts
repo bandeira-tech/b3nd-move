@@ -1,6 +1,9 @@
 import { assertEquals } from "@std/assert";
 import { grpcHttpApi } from "./service.ts";
 import { stubRig } from "../../../tests/rigs/stub.ts";
+import { grpcProto } from "../../codecs/grpc/mod.ts";
+
+const codec = grpcProto();
 
 function post(
   handler: (req: Request) => Promise<Response>,
@@ -25,7 +28,7 @@ function payloadJson(value: unknown): string {
 }
 
 Deno.test("Receive — relays accept ack from rig", async () => {
-  const handler = grpcHttpApi(stubRig());
+  const handler = grpcHttpApi(stubRig(), { codec });
   const resp = await post(handler, "Receive", {
     messages: [
       {
@@ -42,7 +45,7 @@ Deno.test("Receive — relays accept ack from rig", async () => {
 });
 
 Deno.test("Read — relays rig output payload encoded as JSON bytes", async () => {
-  const handler = grpcHttpApi(stubRig());
+  const handler = grpcHttpApi(stubRig(), { codec });
   const resp = await post(handler, "Read", {
     urls: ["mutable://test/hello"],
   });
@@ -59,7 +62,7 @@ Deno.test("Read — relays rig output payload encoded as JSON bytes", async () =
 });
 
 Deno.test("Receive — connect+json Content-Type", async () => {
-  const handler = grpcHttpApi(stubRig());
+  const handler = grpcHttpApi(stubRig(), { codec });
   const resp = await post(handler, "Receive", {
     messages: [
       {
@@ -75,32 +78,32 @@ Deno.test("Receive — connect+json Content-Type", async () => {
 });
 
 Deno.test("Status — returns healthy", async () => {
-  const handler = grpcHttpApi(stubRig());
+  const handler = grpcHttpApi(stubRig(), { codec });
   const resp = await post(handler, "Status", {});
   assertEquals(resp.status, 200);
   assertEquals((await resp.json()).status, "healthy");
 });
 
 Deno.test("Receive — empty messages returns 400", async () => {
-  const handler = grpcHttpApi(stubRig());
+  const handler = grpcHttpApi(stubRig(), { codec });
   const resp = await post(handler, "Receive", { messages: [] });
   assertEquals(resp.status, 400);
 });
 
 Deno.test("Read — missing urls returns 400", async () => {
-  const handler = grpcHttpApi(stubRig());
+  const handler = grpcHttpApi(stubRig(), { codec });
   const resp = await post(handler, "Read", { urls: [] });
   assertEquals(resp.status, 400);
 });
 
 Deno.test("Unknown method returns 404", async () => {
-  const handler = grpcHttpApi(stubRig());
+  const handler = grpcHttpApi(stubRig(), { codec });
   const resp = await post(handler, "Unknown", {});
   assertEquals(resp.status, 404);
 });
 
 Deno.test("Non-POST returns 404", async () => {
-  const handler = grpcHttpApi(stubRig());
+  const handler = grpcHttpApi(stubRig(), { codec });
   const resp = await handler(
     new Request("http://localhost/b3nd.v1.B3ndService/Status", {
       method: "GET",
