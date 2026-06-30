@@ -30,9 +30,6 @@ import type {
   ReceiveResult,
   StatusResult,
 } from "@bandeira-tech/b3nd-core/types";
-import { validateUrls } from "../actions/validate.ts";
-import { BadRequest } from "../router/errors.ts";
-import { dispatchWs, route, wsData } from "./router.ts";
 import { wsApi } from "./service.ts";
 import { wsJsonEnvelope } from "../codecs/ws/mod.ts";
 
