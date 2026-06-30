@@ -1,6 +1,6 @@
 /**
  * @module
- * MCP service over HTTP — `mcpHttpApi(rig)` as a fetch handler that
+ * MCP service over HTTP — `mcpHttpApi(rig, { codec })` as a fetch handler that
  * speaks the MCP Streamable HTTP transport against a `Rig`.
  *
  * Stateless by design. Every POST creates a fresh transport + fresh
@@ -36,10 +36,11 @@
  * ```ts
  * import { Rig, connection } from "@bandeira-tech/b3nd-core";
  * import { mcpHttpApi } from "@bandeira-tech/b3nd-move/mcp/http/service";
+ * import { mcpTextJsonStringify } from "@bandeira-tech/b3nd-move/codecs/mcp";
  *
  * const c = connection(client, ["**"]);
  * const rig = new Rig({ routes: { receive: [c], read: [c], observe: [c] } });
- * Deno.serve({ port: 3000 }, mcpHttpApi(rig));
+ * Deno.serve({ port: 3000 }, mcpHttpApi(rig, { codec: mcpTextJsonStringify() }));
  * ```
  *
  * @example Stacked on the same port as httpApi + wsApi
