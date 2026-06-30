@@ -31,6 +31,11 @@ and this project adheres to
 - **Wire-aware codec interfaces** per transport: `HttpBatchCodec`
   (`src/http/codec.ts`), `WsBatchCodec` (`src/ws/codec.ts`), `GrpcBatchCodec`
   (`src/grpc/http/codec.ts`), `McpBatchCodec` (`src/mcp/codec.ts`).
+- **Operator-declared `cors?: boolean`** on `httpApi`, `grpcHttpApi`, and
+  `mcpHttpApi`. Off by default; `cors: true` emits permissive `*` CORS headers
+  and answers `OPTIONS` preflight for cross-origin browser callers — declared at
+  the operator's setup site, the same place the codec is declared. Anything
+  narrower stays in the operator's own middleware.
 
 ### Changed (BREAKING)
 

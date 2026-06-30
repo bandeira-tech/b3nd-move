@@ -32,6 +32,7 @@
  */
 
 import type { Rig } from "@bandeira-tech/b3nd-core";
+import { withCors } from "../../cors.ts";
 import { dispatchGrpc } from "./router.ts";
 import { observeRoute } from "./observe.ts";
 import { readRoute } from "./read.ts";
@@ -43,13 +44,20 @@ import type { GrpcBatchCodec } from "./codec.ts";
 export interface GrpcHttpApiOptions {
   /** Codec for read/receive proto message construction. Required. */
   codec: GrpcBatchCodec;
+  /**
+   * Emit permissive `*` CORS headers and answer `OPTIONS` preflight.
+   * Off by default — the operator opts in at their setup site for
+   * cross-origin browser callers (e.g. grpc-web). See `../../cors.ts`.
+   */
+  cors?: boolean;
 }
 
 /**
  * Create a gRPC-HTTP request handler.
  *
  * Returns a standard `(Request) => Promise<Response>` — plug into
- * `Deno.serve`, `withCors()`, or any fetch-compatible HTTP runtime.
+ * `Deno.serve` or any fetch-compatible HTTP runtime. Pass `cors: true`
+ * for cross-origin browser callers.
  */
 export function grpcHttpApi(
   rig: Rig,
@@ -62,5 +70,6 @@ export function grpcHttpApi(
     readRoute(codec),
     observeRoute,
   ];
-  return (req) => dispatchGrpc(rig, routes, req);
+  const handler = (req: Request) => dispatchGrpc(rig, routes, req);
+  return options.cors ? withCors(handler) : handler;
 }

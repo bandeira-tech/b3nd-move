@@ -1,10 +1,12 @@
 /**
  * Tiny CORS wrapper for the browser-driven integration tests.
  *
- * Lives in `tests/` because the public package no longer ships a `withCors` —
- * cross-cutting middleware belongs in the SDK that consumes b3nd-move, not in
- * the move layer itself. Tests still need it because the harness HTML and the
- * API run on different origins.
+ * The service factories carry their own operator-declared `cors: boolean`
+ * knob (see `src/cors.ts`), so the standard `httpApi` / `grpcHttpApi`
+ * harnesses just flip that. This wrapper survives only for the bespoke
+ * content harnesses (`http-get-content`, `http-post-content`) that wrap
+ * hand-rolled handlers instead of a service factory and still need
+ * cross-origin responses for the browser.
  */
 
 type Handler = (req: Request) => Promise<Response>;

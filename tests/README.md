@@ -72,8 +72,8 @@ subsequent runs reuse it.
 
 1. The integration test boots the **real** transport server via
    `start<X>Server(stubRig(), { cors: true })` — real `httpApi`/`wsApi`/
-   `grpcHttpApi`, real `withCors` where browsers need it, on an ephemeral
-   loopback port.
+   `grpcHttpApi` with their own operator-declared `cors` knob flipped on, on an
+   ephemeral loopback port.
 2. `tests/browser/runner.ts` bundles the matching
    `tests/browser/harnesses/<x>.ts` with esbuild + `@luca/esbuild-deno-loader`,
    templates the server URL into `harness.html`, and serves the bundle on a
@@ -88,8 +88,9 @@ subsequent runs reuse it.
    stream out of `deno test` as if they ran locally.
 
 The harness page and the API server live on different loopback origins on
-purpose — that's what the browser sees in real deployments, and what
-`withCors` + `OPTIONS` preflight has to handle to be useful.
+purpose — that's what the browser sees in real deployments, and what the
+service's `cors` knob (permissive headers + `OPTIONS` preflight) has to handle
+to be useful.
 
 ## Stub rig contract
 

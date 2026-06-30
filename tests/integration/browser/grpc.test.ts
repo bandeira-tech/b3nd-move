@@ -9,8 +9,10 @@
 import { runBrowserSuite } from "../../browser/runner.ts";
 import { startGrpcServer } from "../../factories/grpc.ts";
 import { stubRig } from "../../rigs/stub.ts";
+import { grpcProto } from "../../../src/codecs/grpc/mod.ts";
 
 await runBrowserSuite({
   harnessEntry: new URL("../../browser/harnesses/grpc.ts", import.meta.url),
-  startServer: () => startGrpcServer(stubRig(), { cors: true }),
+  startServer: () =>
+    startGrpcServer(stubRig(), { cors: true, codec: grpcProto() }),
 });

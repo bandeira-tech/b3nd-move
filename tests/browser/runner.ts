@@ -21,8 +21,8 @@
  * Because the API server and the harness server are different origins,
  * the API server MUST send CORS-permissive responses on the relevant
  * paths. The HTTP and gRPC factories under `tests/factories/` provide
- * a `cors: true` flag that wraps the real handler in `withCors` —
- * always pass it for browser-driven runs.
+ * a `cors: true` flag that flips the service's own operator-declared
+ * `cors` knob — always pass it for browser-driven runs.
  */
 
 /// <reference lib="deno.ns" />

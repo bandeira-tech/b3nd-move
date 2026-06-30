@@ -62,7 +62,18 @@
 
 import { WebStandardStreamableHTTPServerTransport } from "../web-streamable-http-transport.ts";
 import type { Rig } from "@bandeira-tech/b3nd-core";
+import { withCors } from "../../cors.ts";
 import { buildMcpServer, type McpServerOptions } from "../service.ts";
+
+/** `mcpHttpApi` options: the MCP server options plus an HTTP-only CORS knob. */
+export interface McpHttpApiOptions extends McpServerOptions {
+  /**
+   * Emit permissive `*` CORS headers and answer `OPTIONS` preflight.
+   * Off by default — the operator opts in at their setup site for
+   * cross-origin browser callers. See `../../cors.ts`.
+   */
+  cors?: boolean;
+}
 
 /**
  * Create an MCP request handler backed by a Rig, speaking the
@@ -72,13 +83,14 @@ import { buildMcpServer, type McpServerOptions } from "../service.ts";
  * Deno Deploy, Bun, …).
  *
  * `opts` is forwarded to `buildMcpServer` — controls the server name
- * and version reported in `initialize`.
+ * and version reported in `initialize`. Pass `cors: true` for
+ * cross-origin browser callers.
  */
 export function mcpHttpApi(
   rig: Rig,
-  opts: McpServerOptions,
+  opts: McpHttpApiOptions,
 ): (req: Request) => Promise<Response> {
-  return async (req: Request): Promise<Response> => {
+  const handler = async (req: Request): Promise<Response> => {
     // Fresh transport + server per request. `sessionIdGenerator:
     // undefined` puts the transport into stateless mode: no session
     // ID returned, no session validation on subsequent requests
@@ -90,4 +102,5 @@ export function mcpHttpApi(
     await server.connect(transport);
     return transport.handleRequest(req);
   };
+  return opts.cors ? withCors(handler) : handler;
 }
