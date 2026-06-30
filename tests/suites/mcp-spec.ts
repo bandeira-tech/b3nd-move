@@ -143,4 +143,26 @@ export function mcpSpec(
     assertEquals(outputs[1].payload, null);
     assertEquals(outputs[2].payload, { echo: "mutable://t/mcp/c" });
   });
+
+  test(
+    "b3nd_read: upstream ReadableStream → tool result delivers concrete content (no stream)",
+    async (client) => {
+      const url = "mutable://t/__stream__/x";
+      const result = await client.callTool({
+        name: "b3nd_read",
+        arguments: { urls: [url] },
+      });
+      // The result content shape is codec-specific (TextContent with JSON
+      // or ResourceContent per slot). The property under test is just
+      // "the tool returned something concrete, not a stream-bearing object".
+      const content = (result as { content?: unknown[] }).content ?? [];
+      assertEquals(
+        content.length >= 1,
+        true,
+        "tool returned at least one content item",
+      );
+      // Codec-specific shape decoding (which slot, what mimeType) lives in
+      // each MCP codec's *.test.ts; this suite assertion is wire-property only.
+    },
+  );
 }

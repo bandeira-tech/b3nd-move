@@ -7,10 +7,11 @@
  * buildMcpServer(rig, { codec: mcpTextJsonStringify() });
  * ```
  *
- * Only one codec ships for MCP in v1: `mcpTextJsonStringify`, which
- * packages today's baked behavior (one TextContent with
- * `JSON.stringify(..., null, 2)`) and materializes stream payloads before
- * serialization.
+ * Two codecs ship for MCP: `mcpTextJsonStringify`, which packages the
+ * default behavior (one TextContent with `JSON.stringify(..., null, 2)`)
+ * and materializes stream payloads before serialization; and
+ * `mcpResourcePerSlot`, which wraps each slot as a ResourceContent item
+ * with byte-faithful base64 encoding for binary payloads.
  */
 
 export { mcpTextJsonStringify } from "./text-json-stringify.ts";
