@@ -97,8 +97,14 @@ Deno.test("wsJsonEnvelopeBase64.encodeRead: materializes multiple slots", async 
   const ctx = { id: "r3", signal: makeLiveSignal() };
   const result = await codec.encodeRead(outputs, ctx) as Output[];
   assertEquals(result.length, 2);
-  assertEquals(typeof (result[0][1] as Record<string, unknown>)["$bytes"], "string");
-  assertEquals(typeof (result[1][1] as Record<string, unknown>)["$bytes"], "string");
+  assertEquals(
+    typeof (result[0][1] as Record<string, unknown>)["$bytes"],
+    "string",
+  );
+  assertEquals(
+    typeof (result[1][1] as Record<string, unknown>)["$bytes"],
+    "string",
+  );
 });
 
 // ── Case 3: encodeRead: JSON-object passes through unchanged ─────────────────
@@ -268,7 +274,10 @@ Deno.test("wsJsonEnvelopeBase64: JSON-object payload survives JSON wire unchange
 
 Deno.test("wsJsonEnvelopeBase64: encodeReceive returns results unchanged", () => {
   const codec = wsJsonEnvelopeBase64();
-  const results: ReceiveResult[] = [{ accepted: true }, { accepted: false, error: "nope" }];
+  const results: ReceiveResult[] = [{ accepted: true }, {
+    accepted: false,
+    error: "nope",
+  }];
   const ctx = { id: "recv1", signal: makeLiveSignal() };
   const result = codec.encodeReceive(results, ctx);
   assertEquals(result === results, true);

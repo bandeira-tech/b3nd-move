@@ -115,4 +115,3 @@ function parseNdjson(text: string): Output[] {
   }
   return out;
 }
-
