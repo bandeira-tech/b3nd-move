@@ -14,12 +14,18 @@ import { runMoveSuite } from "../../suites/move-suite.ts";
 import { startWsServer } from "../../factories/ws.ts";
 import { stubRig } from "../../rigs/stub.ts";
 import { WebSocketClient } from "../../../src/ws/client.ts";
+import { wsJsonEnvelope } from "../../../src/codecs/ws/mod.ts";
 
-const server = await startWsServer(stubRig());
+const codec = wsJsonEnvelope();
+const server = await startWsServer(stubRig(), { codec });
 
 runMoveSuite("ws", {
   client: () =>
-    new WebSocketClient({ url: server.url, reconnect: { enabled: false } }),
+    new WebSocketClient({
+      url: server.url,
+      codec,
+      reconnect: { enabled: false },
+    }),
 });
 
 Deno.test({

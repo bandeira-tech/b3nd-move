@@ -15,6 +15,8 @@
  *     - otherwise                   → { accepted: true,  ref: uri }
  *
  *   read(urls):
+ *     - url contains "/__stream__/" → [url, ReadableStream<Uint8Array> yielding
+ *                                          TextEncoder().encode(url), then close]
  *     - url contains "/__miss__/"   → [url, null]
  *     - url ends with "/"           → synthesized listing of 3 children:
  *                                       [url, [[`${url}0`, {echo}], …]]
@@ -57,6 +59,16 @@ class StubBackend implements ProtocolInterfaceNode {
   read<T = unknown>(urls: string[]): Promise<Output<T>[]> {
     return Promise.resolve(
       urls.map((url): Output<T> => {
+        if (url.includes("/__stream__/")) {
+          const bytes = new TextEncoder().encode(url);
+          const stream = new ReadableStream<Uint8Array>({
+            start(c) {
+              c.enqueue(bytes);
+              c.close();
+            },
+          });
+          return [url, stream as unknown as T];
+        }
         if (url.endsWith("/")) {
           const children: Output[] = [];
           for (let i = 0; i < 3; i++) {

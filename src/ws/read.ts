@@ -2,24 +2,36 @@
  * @module
  * `{ type: "read", payload: { urls: string[] } }` → `{ data: Output[] }`.
  *
- * Payload is the JSON-shaped `{ urls }` wrapper the WS client sends.
- * Validation surfaces as `BadRequest`; the dispatcher renders the
- * message into the envelope's `error` field.
+ * Payload shape and response encoding are delegated to the `WsBatchCodec`
+ * supplied by the operator. `readRoute(codec)` returns a `WsRoute` bound
+ * to that codec; the service wires it in via `wsApi(rig, { codec })`.
  */
 
+import type { Output } from "@bandeira-tech/b3nd-core/types";
 import { readAction } from "../actions/standard.ts";
-import { validateUrls } from "../actions/validate.ts";
 import { BadRequest } from "../router/errors.ts";
-import { route, wsData } from "./router.ts";
+import type { WsBatchCodec } from "./codec.ts";
+import { route, wsData, type WsRoute } from "./router.ts";
 
-export const readRoute = route({
-  on: wsData("read"),
-  decode: ({ payload }) => {
-    const urls = (payload as { urls?: unknown } | null)?.urls;
-    const v = validateUrls(urls);
-    if (!v.ok) throw new BadRequest(v.error);
-    return [v.value] as const;
-  },
-  action: readAction,
-  encode: (data, { id }) => ({ id, success: true, data }),
-});
+export function readRoute(codec: WsBatchCodec): WsRoute {
+  return route({
+    on: wsData("read"),
+    decode: ({ payload }) => {
+      let urls: string[];
+      try {
+        urls = codec.decodeRead(payload);
+      } catch (e) {
+        throw new BadRequest(e instanceof Error ? e.message : String(e));
+      }
+      return [urls] as const;
+    },
+    action: readAction,
+    encode: async (outputs, { id, abort }) => {
+      const data = await codec.encodeRead(outputs as Output[], {
+        id,
+        signal: abort.signal,
+      });
+      return { id, success: true, data };
+    },
+  });
+}

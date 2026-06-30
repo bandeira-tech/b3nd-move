@@ -122,7 +122,8 @@ one URI in path, raw body decoded by a host-supplied hook.
 
 - The route is fixed at `/api/v1/content/`. The facet is a fully-locked surface
   like the rest of `httpApi` — host-level routing (mount path, middleware, CORS,
-  auth) is the runtime's job, wrap the returned handler yourself.
+  auth) is the runtime's job, wrap the returned handler yourself. For CORS, the
+  package ships `withCors` (`@bandeira-tech/b3nd-move/cors`).
 - The facet is service-only by design. The generic `HttpClient` already covers
   programmatic receives; this facet exists for clients that can't speak it —
   `fetch` from a browser, `curl --data-binary`, raw HTTP from an embedded

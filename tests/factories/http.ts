@@ -3,15 +3,16 @@
  *
  * Boots `httpApi(rig)` on an ephemeral loopback port. Caller supplies
  * the rig (see `tests/rigs/`) and constructs whatever client they
- * want pointed at the returned `url`. `cors: true` wraps the handler
- * in `withCors("*")` for cross-origin browser callers.
+ * want pointed at the returned `url`. `cors: true` wraps the handler in
+ * the package's `withCors()` for cross-origin browser callers.
  */
 
 /// <reference lib="deno.ns" />
 
 import type { Rig } from "@bandeira-tech/b3nd-core/rig";
+import type { HttpBatchCodec } from "../../src/http/codec.ts";
 import { httpApi } from "../../src/http/service.ts";
-import { withCors } from "./cors.ts";
+import { withCors } from "../../src/cors.ts";
 
 export interface ServerHandle {
   /** Base URL the client should point at. */
@@ -21,15 +22,18 @@ export interface ServerHandle {
 }
 
 export interface HttpServerOptions {
-  /** Wrap the handler with `withCors("*")`. Default: false. */
+  /** Operator-declared codec for read responses + receive bodies. Required. */
+  codec: HttpBatchCodec;
+  /** Wrap the handler with `withCors()`. Default: false. */
   cors?: boolean;
 }
 
 export function startHttpServer(
   rig: Rig,
-  opts: HttpServerOptions = {},
+  opts: HttpServerOptions,
 ): Promise<ServerHandle> {
-  const handler = opts.cors ? withCors(httpApi(rig), "*") : httpApi(rig);
+  const api = httpApi(rig, { codec: opts.codec });
+  const handler = opts.cors ? withCors(api, { origin: "*" }) : api;
   const server = Deno.serve(
     { port: 0, hostname: "127.0.0.1", onListen: () => {} },
     handler,

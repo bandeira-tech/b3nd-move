@@ -15,17 +15,24 @@
 import { Client } from "npm:@modelcontextprotocol/sdk@^1.0.0/client/index.js";
 import { InMemoryTransport } from "npm:@modelcontextprotocol/sdk@^1.0.0/inMemory.js";
 import type { Rig } from "@bandeira-tech/b3nd-core/rig";
-import { buildMcpServer } from "../../src/mcp/service.ts";
+import {
+  buildMcpServer,
+  type McpServerOptions,
+} from "../../src/mcp/service.ts";
 
 export interface McpHandle {
   client: Client;
   cleanup: () => Promise<void>;
 }
 
-export async function startMcpInProcess(rig: Rig): Promise<McpHandle> {
+export async function startMcpInProcess(
+  rig: Rig,
+  opts: McpServerOptions,
+): Promise<McpHandle> {
   const server = buildMcpServer(rig, {
     name: "b3nd-mcp-test",
     version: "0.0.0",
+    ...opts,
   });
   const client = new Client({
     name: "b3nd-mcp-test-client",

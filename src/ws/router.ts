@@ -38,17 +38,15 @@ import type { Route } from "../router/route.ts";
 import type { WebSocketRequest, WebSocketResponse } from "./client.ts";
 
 /**
- * Internal alias for a WS-specialised `Route`. Not exported — the
- * public name is the generic `Route`. This just keeps the dispatcher
- * and `route()` signatures from spelling out the five type params at
- * every site.
+ * WS-specialised `Route`. Exported so route factories in `read.ts`,
+ * `receive.ts`, etc. can declare their return type explicitly.
  *
  * `Out` is a union so observe can return an `AsyncIterable` of envelope
  * frames (one per fired batch + a terminator) while unary actions
  * return a single envelope. Routes that don't reply (observe-cancel)
  * have `encode` return `undefined`; the dispatcher yields nothing.
  */
-type WsRoute<
+export type WsRoute<
   Args extends readonly unknown[] = readonly unknown[],
   Result = unknown,
 > = Route<

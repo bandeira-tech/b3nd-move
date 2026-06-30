@@ -159,6 +159,33 @@ export function runMoveSuite(suiteName: string, config: MoveSuiteConfig) {
     assertEquals((results[4] as Output)[1], { echo: urls[4] });
   });
 
+  t(
+    "read: upstream ReadableStream → wire delivers bytes (round-trip through codec)",
+    async () => {
+      const client = await Promise.resolve(config.client());
+      const url = "mutable://t/__stream__/x";
+      const results = await client.read([url]);
+      assertEquals(results.length, 1);
+      const [outUri, payload] = results[0] as Output;
+      assertEquals(outUri, url);
+      // The wire MUST deliver a concrete shape — not a ReadableStream.
+      assertEquals(
+        payload !== null && typeof payload === "object" &&
+          typeof (payload as { getReader?: unknown }).getReader === "function",
+        false,
+        "wire delivered a ReadableStream — encoder failed to materialize",
+      );
+      // Each transport's codec.decodeReadResponse already runs on the
+      // client side and reverses the wire's shape. For byte-faithful
+      // codecs (httpOutputsFrame, wsJsonEnvelopeBase64, grpcProto binary,
+      // mcpResourcePerSlot), the payload equals the upstream bytes.
+      // For lossy codecs (wsJsonEnvelope, grpcProto JSON,
+      // mcpTextJsonStringify), the payload is the documented coercion.
+      // The assertion above ("not a stream") is the universal property;
+      // codec-specific shape tests live in each codec's *.test.ts.
+    },
+  );
+
   // ── observe: batch subscriptions, batch frames ──────────────────
 
   if (supportsObserve) {

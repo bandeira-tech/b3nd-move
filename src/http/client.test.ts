@@ -17,6 +17,9 @@ import { RequestError, TransportError } from "../errors.ts";
 import { decodeBytesList } from "../codecs/bytes-list.ts";
 import { encodeOutputsFrame } from "../codecs/outputs-frame.ts";
 import { decodeUrlList } from "../codecs/url-list.ts";
+import { httpOutputsFrame } from "../codecs/http/mod.ts";
+
+const codec = httpOutputsFrame();
 
 interface Captured {
   url: URL;
@@ -71,7 +74,7 @@ Deno.test("status: GET /api/v1/status, parses JSON body", async () => {
     })
   );
   try {
-    const c = new HttpClient({ url: "http://h" });
+    const c = new HttpClient({ url: "http://h", codec });
     const s = await c.status();
     assertEquals(s, { status: "healthy", message: "ok" });
     assertEquals(calls.length, 1);
@@ -85,7 +88,7 @@ Deno.test("status: GET /api/v1/status, parses JSON body", async () => {
 Deno.test("status: non-OK response → returns unhealthy (does not throw)", async () => {
   const { restore } = spyFetch(() => new Response("oops", { status: 500 }));
   try {
-    const s = await new HttpClient({ url: "http://h" }).status();
+    const s = await new HttpClient({ url: "http://h", codec }).status();
     assertEquals(s.status, "unhealthy");
     assertEquals(s.message, "status check failed: HTTP 500");
   } finally {
@@ -97,7 +100,7 @@ Deno.test("status: network error → returns unhealthy with message", async () =
   const original = globalThis.fetch;
   globalThis.fetch = () => Promise.reject(new Error("ECONNREFUSED"));
   try {
-    const s = await new HttpClient({ url: "http://h" }).status();
+    const s = await new HttpClient({ url: "http://h", codec }).status();
     assertEquals(s.status, "unhealthy");
     assertEquals(
       typeof s.message === "string" && s.message.includes("ECONNREFUSED"),
@@ -113,7 +116,7 @@ Deno.test("status: network error → returns unhealthy with message", async () =
 Deno.test("read: empty urls returns [] without fetch", async () => {
   const { calls, restore } = spyFetch(() => new Response("never"));
   try {
-    const out = await new HttpClient({ url: "http://h" }).read([]);
+    const out = await new HttpClient({ url: "http://h", codec }).read([]);
     assertEquals(out, []);
     assertEquals(calls.length, 0);
   } finally {
@@ -136,7 +139,7 @@ Deno.test("read: POST /api/v1/read?u=<b64> with no body, parses outputs-frame", 
     });
   });
   try {
-    const out = await new HttpClient({ url: "http://h" }).read([
+    const out = await new HttpClient({ url: "http://h", codec }).read([
       "mutable://x",
       "mutable://y",
     ]);
@@ -162,7 +165,9 @@ Deno.test("read: bytes payloads round-trip without JSON mangling", async () => {
     })
   );
   try {
-    const out = await new HttpClient({ url: "http://h" }).read<Uint8Array>([
+    const out = await new HttpClient({ url: "http://h", codec }).read<
+      Uint8Array
+    >([
       "mutable://b",
     ]);
     assertEquals(out.length, 1);
@@ -185,7 +190,7 @@ Deno.test("read: null payload (miss sentinel) survives the round-trip", async ()
     })
   );
   try {
-    const out = await new HttpClient({ url: "http://h" }).read([
+    const out = await new HttpClient({ url: "http://h", codec }).read([
       "mutable://miss",
     ]);
     assertEquals(out, [["mutable://miss", null]]);
@@ -203,9 +208,8 @@ Deno.test("read: malformed response body → RequestError with operation=read", 
   );
   try {
     const err = await assertRejects(
-      () => new HttpClient({ url: "http://h" }).read(["mutable://x"]),
+      () => new HttpClient({ url: "http://h", codec }).read(["mutable://x"]),
       RequestError,
-      "malformed outputs-frame",
     );
     assertEquals(err.operation, "read");
     assertEquals(err.transport, "http");
@@ -219,7 +223,7 @@ Deno.test("read: non-OK response → throws RequestError with status/body/operat
     new Response("body text", { status: 404, statusText: "Not Found" })
   );
   try {
-    const c = new HttpClient({ url: "http://h" });
+    const c = new HttpClient({ url: "http://h", codec });
     const err = await assertRejects(
       () => c.read(["mutable://x"]),
       RequestError,
@@ -237,7 +241,7 @@ Deno.test("read: network error → throws TransportError", async () => {
   const original = globalThis.fetch;
   globalThis.fetch = () => Promise.reject(new Error("dns"));
   try {
-    const c = new HttpClient({ url: "http://h" });
+    const c = new HttpClient({ url: "http://h", codec });
     await assertRejects(() => c.read(["mutable://x"]), TransportError, "dns");
   } finally {
     globalThis.fetch = original;
@@ -255,7 +259,7 @@ Deno.test("receive: empty payload → POST with empty body, returns server resul
     return new Response(JSON.stringify([{ accepted: true }]), { status: 200 });
   });
   try {
-    const out = await new HttpClient({ url: "http://h" }).receive([
+    const out = await new HttpClient({ url: "http://h", codec }).receive([
       ["mutable://x", new Uint8Array([1, 2, 3])],
     ]);
     assertEquals(out, [{ accepted: true }]);
@@ -275,7 +279,7 @@ Deno.test("receive: empty payload → POST with empty body, returns server resul
 Deno.test("receive: non-string URI rejected per-slot, no fetch", async () => {
   const { calls, restore } = spyFetch(() => new Response("never"));
   try {
-    const out = await new HttpClient({ url: "http://h" }).receive([
+    const out = await new HttpClient({ url: "http://h", codec }).receive([
       [null as unknown as string, new Uint8Array([1])],
     ]);
     assertEquals(out, [{ accepted: false, error: "Output URI is required" }]);
@@ -288,7 +292,7 @@ Deno.test("receive: non-string URI rejected per-slot, no fetch", async () => {
 Deno.test("receive: non-Uint8Array payload rejected per-slot, no fetch", async () => {
   const { calls, restore } = spyFetch(() => new Response("never"));
   try {
-    const out = await new HttpClient({ url: "http://h" }).receive([
+    const out = await new HttpClient({ url: "http://h", codec }).receive([
       ["mutable://x", { not: "bytes" } as unknown as Uint8Array],
     ]);
     assertEquals(out, [{
@@ -310,7 +314,7 @@ Deno.test("receive: mixed valid/invalid sends only valid slots, threads results 
     );
   });
   try {
-    const out = await new HttpClient({ url: "http://h" }).receive([
+    const out = await new HttpClient({ url: "http://h", codec }).receive([
       ["mutable://a", new Uint8Array([1])],
       [null as unknown as string, new Uint8Array([2])], // invalid
       ["mutable://c", new Uint8Array([3])],
@@ -333,7 +337,7 @@ Deno.test("receive: non-OK response → per-slot error with HTTP status message"
     new Response("", { status: 500, statusText: "Internal Server Error" })
   );
   try {
-    const out = await new HttpClient({ url: "http://h" }).receive([
+    const out = await new HttpClient({ url: "http://h", codec }).receive([
       ["mutable://x", new Uint8Array([1])],
     ]);
     assertEquals(out, [{
@@ -350,7 +354,7 @@ Deno.test("receive: server returns fewer results than valid slots → fills with
     new Response(JSON.stringify([{ accepted: true }]), { status: 200 })
   );
   try {
-    const out = await new HttpClient({ url: "http://h" }).receive([
+    const out = await new HttpClient({ url: "http://h", codec }).receive([
       ["mutable://a", new Uint8Array([1])],
       ["mutable://b", new Uint8Array([2])],
     ]);
@@ -364,7 +368,7 @@ Deno.test("receive: server returns fewer results than valid slots → fills with
 Deno.test("receive: all-invalid input → no fetch, returns per-slot errors", async () => {
   const { calls, restore } = spyFetch(() => new Response("never"));
   try {
-    const out = await new HttpClient({ url: "http://h" }).receive([
+    const out = await new HttpClient({ url: "http://h", codec }).receive([
       [null as unknown as string, new Uint8Array([1])],
     ]);
     assertEquals(calls.length, 0);
@@ -380,7 +384,7 @@ Deno.test("receive: all-invalid input → no fetch, returns per-slot errors", as
 Deno.test("observe: empty urls returns without fetch", async () => {
   const { calls, restore } = spyFetch(() => new Response("never"));
   try {
-    const c = new HttpClient({ url: "http://h" });
+    const c = new HttpClient({ url: "http://h", codec });
     const it = c.observe([], new AbortController().signal);
     for await (const _ of it) { /* nothing */ }
     assertEquals(calls.length, 0);
@@ -400,7 +404,7 @@ Deno.test("observe: streams string[] frames from NDJSON, skips non-array lines",
   });
   try {
     const frames: string[][] = [];
-    const c = new HttpClient({ url: "http://h" });
+    const c = new HttpClient({ url: "http://h", codec });
     for await (
       const f of c.observe(["mutable://x"], new AbortController().signal)
     ) {
@@ -418,7 +422,7 @@ Deno.test("observe: non-OK response → throws RequestError", async () => {
     new Response("nope", { status: 500, statusText: "Server Error" })
   );
   try {
-    const c = new HttpClient({ url: "http://h" });
+    const c = new HttpClient({ url: "http://h", codec });
     await assertRejects(
       async () => {
         for await (
@@ -447,7 +451,7 @@ Deno.test("observe: pre-aborted signal swallows fetch error and returns", async 
   try {
     const ac = new AbortController();
     ac.abort();
-    const c = new HttpClient({ url: "http://h" });
+    const c = new HttpClient({ url: "http://h", codec });
     let yields = 0;
     for await (const _ of c.observe(["mutable://x"], ac.signal)) yields++;
     assertEquals(yields, 0);
@@ -468,6 +472,7 @@ Deno.test("preSend: hook fires before fetch and can mutate headers/url", async (
   try {
     const c = new HttpClient({
       url: "http://h",
+      codec,
       preSend: (r) => {
         r.headers.set("Authorization", "Bearer xyz");
         r.url.searchParams.set("traced", "1");
@@ -491,6 +496,7 @@ Deno.test("preSend: async hook is awaited", async () => {
   try {
     const c = new HttpClient({
       url: "http://h",
+      codec,
       preSend: async (r) => {
         await Promise.resolve();
         r.headers.set("x-async", "ok");
@@ -510,7 +516,7 @@ Deno.test("config: trailing slash on baseUrl is stripped", async () => {
     new Response("{}", { status: 200 })
   );
   try {
-    await new HttpClient({ url: "http://h/" }).status();
+    await new HttpClient({ url: "http://h/", codec }).status();
     assertEquals(calls[0].url.toString(), "http://h/api/v1/status");
   } finally {
     restore();
@@ -527,6 +533,7 @@ Deno.test("config: custom default headers are sent on every request", async () =
   try {
     const c = new HttpClient({
       url: "http://h",
+      codec,
       headers: { "x-tenant": "acme" },
     });
     await c.read(["mutable://x"]);

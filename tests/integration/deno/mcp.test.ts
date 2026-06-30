@@ -10,5 +10,9 @@
 import { mcpSpec } from "../../suites/mcp-spec.ts";
 import { startMcpInProcess } from "../../factories/mcp.ts";
 import { stubRig } from "../../rigs/stub.ts";
+import { mcpTextJsonStringify } from "../../../src/codecs/mcp/mod.ts";
 
-mcpSpec("mcp", () => startMcpInProcess(stubRig()));
+mcpSpec(
+  "mcp",
+  () => startMcpInProcess(stubRig(), { codec: mcpTextJsonStringify() }),
+);

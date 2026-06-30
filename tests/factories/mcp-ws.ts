@@ -15,6 +15,7 @@ import { Client } from "npm:@modelcontextprotocol/sdk@^1.0.0/client/index.js";
 import { WebSocketClientTransport } from "npm:@modelcontextprotocol/sdk@^1.0.0/client/websocket.js";
 import type { Rig } from "@bandeira-tech/b3nd-core/rig";
 import { mcpWsApi } from "../../src/mcp/ws/service.ts";
+import { mcpTextJsonStringify } from "../../src/codecs/mcp/mod.ts";
 
 export interface McpWsHandle {
   client: Client;
@@ -22,7 +23,11 @@ export interface McpWsHandle {
 }
 
 export async function startMcpOverWs(rig: Rig): Promise<McpWsHandle> {
-  const attach = mcpWsApi(rig, { name: "b3nd-mcp-test", version: "0.0.0" });
+  const attach = mcpWsApi(rig, {
+    codec: mcpTextJsonStringify(),
+    name: "b3nd-mcp-test",
+    version: "0.0.0",
+  });
   const sockets = new Set<WebSocket>();
   const handler = (req: Request): Response => {
     if (req.headers.get("upgrade") !== "websocket") {

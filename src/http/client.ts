@@ -37,8 +37,8 @@ import type {
 } from "@bandeira-tech/b3nd-core/types";
 import { RequestError, TimeoutError, TransportError } from "../errors.ts";
 import { encodeBytesList } from "../codecs/bytes-list.ts";
-import { decodeOutputsFrame } from "../codecs/outputs-frame.ts";
 import { encodeUrlList } from "../codecs/url-list.ts";
+import type { HttpBatchCodec } from "./codec.ts";
 
 /** The request about to go on the wire. Mutate any field. */
 export interface HttpPreSendRequest {
@@ -60,6 +60,8 @@ export type HttpPreSend = (
 export interface HttpClientConfig {
   /** Base URL of the HTTP API. */
   url: string;
+  /** Codec matching the operator's `httpApi({ codec })`. Required. */
+  codec: HttpBatchCodec;
   /** Optional custom headers. */
   headers?: Record<string, string>;
   /** Request timeout in milliseconds (default: 30000). */
@@ -73,6 +75,7 @@ export interface HttpClientConfig {
    * ```ts
    * new HttpClient({
    *   url,
+   *   codec,
    *   preSend: (r) => r.headers.set("Authorization", `Bearer ${getToken()}`),
    * });
    * ```
@@ -82,6 +85,7 @@ export interface HttpClientConfig {
 
 export class HttpClient implements ProtocolInterfaceNode {
   private baseUrl: string;
+  private codec: HttpBatchCodec;
   private headers: Record<string, string>;
   private timeout: number;
   private preSend: HttpPreSend | undefined;
@@ -92,6 +96,7 @@ export class HttpClient implements ProtocolInterfaceNode {
   constructor(config: HttpClientConfig) {
     this.baseUrl = config.url.replace(/\/$/, ""); // Remove trailing slash
     this.url = this.baseUrl;
+    this.codec = config.codec;
     this.headers = config.headers || {};
     this.timeout = config.timeout || 30000;
     this.preSend = config.preSend;
@@ -267,15 +272,13 @@ export class HttpClient implements ProtocolInterfaceNode {
         },
       );
     }
-    const buf = new Uint8Array(await response.arrayBuffer());
+    // Hand the Response off to the codec — it owns the wire shape.
     try {
-      return decodeOutputsFrame(buf) as Output<T>[];
+      return (await this.codec.decodeReadResponse(response)) as Output<T>[];
     } catch (e) {
       throw new RequestError(
         "http",
-        `read failed: malformed outputs-frame response: ${
-          e instanceof Error ? e.message : String(e)
-        }`,
+        `read failed: ${e instanceof Error ? e.message : String(e)}`,
         { status: response.status, operation: "read" },
       );
     }

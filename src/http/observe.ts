@@ -10,7 +10,7 @@
  * the rig observer.
  */
 
-import { ndjsonResponse } from "../actions/ndjson.ts";
+import { ndjsonResponse } from "../codecs/ndjson.ts";
 import { observeAction } from "../actions/standard.ts";
 import { decodeUrlList } from "../codecs/url-list.ts";
 import { BadRequest } from "../router/errors.ts";

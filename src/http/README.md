@@ -58,22 +58,22 @@ via `payloadIsBinary`). The client decodes the frame and returns `Output[]` —
 
 > **Streaming payloads.** Upstream clients (`b3nd-save`'s `SaveClient` over
 > fs/s3/ipfs, or any custom `ProtocolInterfaceNode` whose backing medium
-> streams) may return `ReadableStream<Uint8Array>` per slot. `readAction` in
-> [`../actions/standard.ts`](../actions/standard.ts) materializes those streams
-> to `Uint8Array` before the result reaches any transport encoder — every wire
-> b3nd-move ships (this one, WS, gRPC, MCP) needs a concrete payload per slot,
-> so the materialize lives at the shared action layer. HTTP and gRPC deliver
-> those bytes end-to-end (binary wire formats); WS and MCP normalize the _shape_
-> (stream → `Uint8Array`) but their JSON envelopes do not preserve `Uint8Array`
-> byte-encoding — a `Uint8Array` payload becomes `{"0":n,"1":n,…}` on those
-> wires. Bytes round-trip on WS / MCP is a follow-up. The HTTP route never sees
-> a stream; it encodes the bytes verbatim into `flag = 1` slots.
+> streams) may return `ReadableStream<Uint8Array>` per slot. Materializing codec
+> handles this: `httpOutputsFrame` (and `httpNdjson`) drain each stream to a
+> `Uint8Array` before encoding — every wire needs a concrete payload per slot.
+> HTTP delivers those bytes end-to-end verbatim into `flag = 1` slots.
 >
-> Materialization is per-slot and parallel (`Promise.all`); a 4-slot read of
-> streaming sources completes in roughly the slowest single fetch, not their
-> sum. The cost is the obvious one — a 2 GB stream becomes a 2 GB allocation in
-> the route handler before the response body is written. Hosts that need true
-> streaming for large payloads should use the in-process Rig directly
+> Materialization is per-slot, scheduled through a host-injectable seam — the
+> default scheduler is `Promise.all`, so a 4-slot read of streaming sources
+> completes in roughly the slowest single fetch, not their sum. The cost is the
+> obvious one — a 2 GB stream becomes a 2 GB allocation in the route handler
+> before the response body is written, and 1000 concurrent stream pumps allocate
+> 1000 buffers. Hosts that need to cap fan-out inject their own scheduler via
+> `httpOutputsFrame({ scheduler })` — see
+> [`../codecs/scheduler.ts`](../codecs/scheduler.ts) for the `Scheduler`
+> contract. **Operational policy is host-owned** (cores stay puritan);
+> `b3nd-move` ships the seam and the most permissive default. Hosts that need
+> true streaming for large payloads should use the in-process Rig directly
 > (`rig.read()` returns the upstream union shape unchanged) or wait for a future
 > `flag = 2` chunked variant; bytes-frame wires allocate by construction.
 >
@@ -89,24 +89,64 @@ yields batches.
 
 **The pair.**
 
-- `service.ts` (`httpApi(rig)`) is the pure fetch handler — pair with any
-  runtime (Deno, Hono, Express, `node:http`, Workers).
+- `service.ts` (`httpApi(rig, { codec })`) is the pure fetch handler — pair with
+  any runtime (Deno, Hono, Express, `node:http`, Workers).
 - `client.ts` (`HttpClient`) speaks the routes above; implements
   `ProtocolInterfaceNode`.
+
+## Codec pick
+
+`httpApi(rig, { codec })` and `new HttpClient({ url, codec })` require an
+operator-declared `HttpBatchCodec`. The framework ships no default — the
+operator chooses the encoding strategy at the app layer. Today's baked behavior
+is `httpOutputsFrame`:
+
+```typescript
+import { httpApi } from "@bandeira-tech/b3nd-move/http/service";
+import { HttpClient } from "@bandeira-tech/b3nd-move/http/client";
+import { httpOutputsFrame } from "@bandeira-tech/b3nd-move/codecs/http";
+
+const codec = httpOutputsFrame();
+const handler = httpApi(rig, { codec });
+const client = new HttpClient({ url: "http://localhost:3000", codec });
+```
+
+Two codecs ship in the catalog (`@bandeira-tech/b3nd-move/codecs/http`):
+
+| Codec              | Read response shape                       | Use when                                    |
+| ------------------ | ----------------------------------------- | ------------------------------------------- |
+| `httpOutputsFrame` | length-framed binary (`flag=1` for bytes) | default — byte-faithful, efficient          |
+| `httpNdjson`       | NDJSON (one JSON line per slot)           | streaming-friendly responses, debug tooling |
+
+For fan-out control (concurrency, byte budget, backpressure) both codecs accept
+a `scheduler` option — see [`../codecs/scheduler.ts`](../codecs/scheduler.ts)
+for the `Scheduler` contract. Pass `httpOutputsFrame({ scheduler })` to inject
+your own concurrency policy; the default materializes all slots with
+`Promise.all`.
+
+To write a custom codec — including ones that negotiate via HTTP `Accept`
+headers — implement `HttpBatchCodec` from `src/http/codec.ts`. See the design
+spec at `docs/superpowers/specs/2026-06-30-operator-declared-codecs-design.md`.
+
+**`http-get-content` is unchanged.** The custom `payloadResponseMap` surface in
+`src/http-get-content/` streams payloads through the response body as before and
+is not affected by this change.
 
 ## Usage
 
 ```typescript
 // server side — pair with whatever your runtime offers
 import { httpApi } from "@bandeira-tech/b3nd-move/http/service";
+import { httpOutputsFrame } from "@bandeira-tech/b3nd-move/codecs/http";
 
-Deno.serve({ port: 3000 }, httpApi(rig));
-// or: export default { fetch: httpApi(rig) };
+const codec = httpOutputsFrame();
+Deno.serve({ port: 3000 }, httpApi(rig, { codec }));
+// or: export default { fetch: httpApi(rig, { codec }) };
 
 // client side (anywhere fetch works)
 import { HttpClient } from "@bandeira-tech/b3nd-move/http/client";
 
-const client = new HttpClient({ url: "http://localhost:3000" });
+const client = new HttpClient({ url: "http://localhost:3000", codec });
 await client.receive([["mutable://app/x", { name: "thing" }]]);
 const [out] = await client.read(["mutable://app/x"]);
 ```
@@ -118,5 +158,10 @@ and a `Deno.serve` lifecycle in one go, use `deno task serve --http` (see
 ## Notes
 
 - `HttpApiOptions.statusMeta` is merged into status responses.
-- CORS, auth, and any other middleware happen at the runtime layer — wrap
-  `httpApi(rig)` yourself before handing it to `Deno.serve` / Hono / etc.
+- CORS, auth, and any other middleware are upstream of the API — wrap the
+  handler before handing it to `Deno.serve` / Hono / etc. The package ships
+  `withCors(handler, { origin, methods?, headers?, maxAge? })`
+  (`@bandeira-tech/b3nd-move/cors`):
+  `withCors(httpApi(rig, { codec }),
+  { origin: "https://app.example.com" })`.
+  Credentialed flows or anything beyond these knobs is your own wrapper.

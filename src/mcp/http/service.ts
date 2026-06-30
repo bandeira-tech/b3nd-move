@@ -1,6 +1,6 @@
 /**
  * @module
- * MCP service over HTTP — `mcpHttpApi(rig)` as a fetch handler that
+ * MCP service over HTTP — `mcpHttpApi(rig, { codec })` as a fetch handler that
  * speaks the MCP Streamable HTTP transport against a `Rig`.
  *
  * Stateless by design. Every POST creates a fresh transport + fresh
@@ -36,17 +36,22 @@
  * ```ts
  * import { Rig, connection } from "@bandeira-tech/b3nd-core";
  * import { mcpHttpApi } from "@bandeira-tech/b3nd-move/mcp/http/service";
+ * import { mcpTextJsonStringify } from "@bandeira-tech/b3nd-move/codecs/mcp";
  *
  * const c = connection(client, ["**"]);
  * const rig = new Rig({ routes: { receive: [c], read: [c], observe: [c] } });
- * Deno.serve({ port: 3000 }, mcpHttpApi(rig));
+ * Deno.serve({ port: 3000 }, mcpHttpApi(rig, { codec: mcpTextJsonStringify() }));
  * ```
  *
  * @example Stacked on the same port as httpApi + wsApi
  * ```ts
- * const http = httpApi(rig);
- * const ws   = wsApi(rig);
- * const mcp  = mcpHttpApi(rig);
+ * import { httpOutputsFrame } from "@bandeira-tech/b3nd-move/codecs/http";
+ * import { wsJsonEnvelope } from "@bandeira-tech/b3nd-move/codecs/ws";
+ * import { mcpTextJsonStringify } from "@bandeira-tech/b3nd-move/codecs/mcp";
+ *
+ * const http = httpApi(rig, { codec: httpOutputsFrame() });
+ * const ws   = wsApi(rig, { codec: wsJsonEnvelope() });
+ * const mcp  = mcpHttpApi(rig, { codec: mcpTextJsonStringify() });
  * Deno.serve({ port: 3000 }, (req) => {
  *   if (req.headers.get("upgrade") === "websocket") return ws(req);
  *   if (new URL(req.url).pathname.startsWith("/api/v1/mcp")) return mcp(req);
@@ -67,11 +72,14 @@ import { buildMcpServer, type McpServerOptions } from "../service.ts";
  * Deno Deploy, Bun, …).
  *
  * `opts` is forwarded to `buildMcpServer` — controls the server name
- * and version reported in `initialize`.
+ * and version reported in `initialize`. CORS is upstream of the API:
+ * for cross-origin browser callers, compose `withCors`
+ * (`@bandeira-tech/b3nd-move/cors`) around the handler —
+ * `withCors(mcpHttpApi(rig, opts), { origin: "*" })`.
  */
 export function mcpHttpApi(
   rig: Rig,
-  opts?: McpServerOptions,
+  opts: McpServerOptions,
 ): (req: Request) => Promise<Response> {
   return async (req: Request): Promise<Response> => {
     // Fresh transport + server per request. `sessionIdGenerator:

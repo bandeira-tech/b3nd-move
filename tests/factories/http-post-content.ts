@@ -2,7 +2,7 @@
  * Factory for the POST-content browser integration tests.
  *
  * Boots `httpPostContentApi(rig)` on an ephemeral loopback port behind
- * `withCors("*")`. The rig accepts everything that reaches it except
+ * `withCors()`. The rig accepts everything that reaches it except
  * URIs containing `/__reject__/`, which the program stage rejects.
  *
  * `seen` accumulates what the rig forwarded to the backend so the
@@ -22,7 +22,7 @@ import type {
 } from "@bandeira-tech/b3nd-core/types";
 import { httpPostContentApi } from "../../src/http-post-content/service.ts";
 import { payloadDecoder as dec } from "../../src/http-post-content/payload-decoder.ts";
-import { withCors } from "./cors.ts";
+import { withCors } from "../../src/cors.ts";
 import type { ServerHandle } from "./http.ts";
 
 class ContentPostStubBackend implements ProtocolInterfaceNode {
@@ -84,7 +84,7 @@ export function startHttpPostContentServer(): Promise<ServerHandle> {
       });
     }
     return await api(req);
-  }, "*");
+  }, { origin: "*" });
 
   const server = Deno.serve(
     { port: 0, hostname: "127.0.0.1", onListen: () => {} },

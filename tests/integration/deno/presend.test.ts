@@ -15,6 +15,13 @@ import { WebSocketClient } from "../../../src/ws/client.ts";
 import { startGrpcServer } from "../../factories/grpc.ts";
 import { startWsServer } from "../../factories/ws.ts";
 import { stubRig } from "../../rigs/stub.ts";
+import { httpOutputsFrame } from "../../../src/codecs/http/mod.ts";
+import { wsJsonEnvelope } from "../../../src/codecs/ws/mod.ts";
+import { grpcProto } from "../../../src/codecs/grpc/mod.ts";
+
+const codec = httpOutputsFrame();
+const wsCodec = wsJsonEnvelope();
+const grpcCodec = grpcProto();
 
 Deno.test("HttpClient preSend — stamps headers and query params on every call", async () => {
   const seen: {
@@ -42,6 +49,7 @@ Deno.test("HttpClient preSend — stamps headers and query params on every call"
     const port = (server.addr as Deno.NetAddr).port;
     const client = new HttpClient({
       url: `http://127.0.0.1:${port}`,
+      codec,
       preSend: (r) => {
         r.headers.set("Authorization", "Bearer tok-1");
         r.headers.set("X-Trace", "t-1");
@@ -78,6 +86,7 @@ Deno.test("HttpClient preSend — async hook is awaited", async () => {
     const port = (server.addr as Deno.NetAddr).port;
     const client = new HttpClient({
       url: `http://127.0.0.1:${port}`,
+      codec,
       preSend: async (r) => {
         await Promise.resolve();
         r.headers.set("Authorization", "Bearer async-tok");
@@ -112,6 +121,7 @@ Deno.test("HttpClient preSend — functions compose via plain calls", async () =
     const trace = (r: Req) => r.headers.set("X-Trace", "tr");
     const client = new HttpClient({
       url: `http://127.0.0.1:${port}`,
+      codec,
       preSend: (r) => {
         auth(r);
         trace(r);
@@ -127,7 +137,7 @@ Deno.test("HttpClient preSend — functions compose via plain calls", async () =
 });
 
 Deno.test("GrpcHttpClient preSend — stamps headers on rpc", async () => {
-  const server = await startGrpcServer(stubRig());
+  const server = await startGrpcServer(stubRig(), { codec: grpcCodec });
   let seenAuth: string | null = null;
   // Wrap by routing through the actual client; we sniff via a separate
   // listener proxy. Simpler: re-use the real server but stamp on
@@ -150,6 +160,7 @@ Deno.test("GrpcHttpClient preSend — stamps headers on rpc", async () => {
     const port = (sniffer.addr as Deno.NetAddr).port;
     const client = new GrpcHttpClient({
       url: `http://127.0.0.1:${port}`,
+      codec: grpcCodec,
       preSend: (r) => r.headers.set("Authorization", "Bearer g-1"),
     });
     await client.receive([["mutable://g/h", { v: 1 }]]);
@@ -161,11 +172,12 @@ Deno.test("GrpcHttpClient preSend — stamps headers on rpc", async () => {
 });
 
 Deno.test("WebSocketClient preSend — mutates outbound envelope per frame", async () => {
-  const server = await startWsServer(stubRig());
+  const server = await startWsServer(stubRig(), { codec: wsCodec });
   try {
     let count = 0;
     const client = new WebSocketClient({
       url: server.url,
+      codec: wsCodec,
       reconnect: { enabled: false },
       preSend: (env) => {
         env.stamp = `frame-${count++}`;
@@ -183,7 +195,7 @@ Deno.test("WebSocketClient preSend — mutates outbound envelope per frame", asy
 });
 
 Deno.test("WebSocketClient — url accepts a function for handshake-time token", async () => {
-  const server = await startWsServer(stubRig());
+  const server = await startWsServer(stubRig(), { codec: wsCodec });
   try {
     let calls = 0;
     const client = new WebSocketClient({
@@ -193,6 +205,7 @@ Deno.test("WebSocketClient — url accepts a function for handshake-time token",
         // resolved on each connect — that's what we assert.
         return `${server.url}?token=t-${calls}`;
       },
+      codec: wsCodec,
       reconnect: { enabled: false },
     });
     await client.status();

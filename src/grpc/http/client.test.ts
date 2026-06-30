@@ -25,6 +25,9 @@ import {
 } from "./../proto/gen/b3nd_pb.ts";
 import { GrpcHttpClient } from "./client.ts";
 import { EncodingError, RequestError, TransportError } from "../../errors.ts";
+import { grpcProto } from "../../codecs/grpc/mod.ts";
+
+const codec = grpcProto();
 
 const PREFIX = "/b3nd.v1.B3ndService/";
 
@@ -75,7 +78,7 @@ Deno.test("status (json): POSTs to SERVICE_PREFIX+Status with application/json",
     })
   );
   try {
-    const s = await new GrpcHttpClient({ url: "http://h" }).status();
+    const s = await new GrpcHttpClient({ url: "http://h", codec }).status();
     assertEquals(s.status, "healthy");
     assertEquals(calls.length, 1);
     assertEquals(calls[0].url.pathname, `${PREFIX}Status`);
@@ -97,7 +100,7 @@ Deno.test("status (binary): Content-Type application/proto, request+response bin
     })
   );
   try {
-    const s = await new GrpcHttpClient({ url: "http://h", binary: true })
+    const s = await new GrpcHttpClient({ url: "http://h", codec, binary: true })
       .status();
     assertEquals(s.status, "healthy");
     assertEquals(calls[0].headers.get("Content-Type"), "application/proto");
@@ -111,7 +114,7 @@ Deno.test("status (binary): Content-Type application/proto, request+response bin
 Deno.test("read: empty urls returns [] without fetch", async () => {
   const { calls, restore } = spyFetch(() => new Response("never"));
   try {
-    const out = await new GrpcHttpClient({ url: "http://h" }).read([]);
+    const out = await new GrpcHttpClient({ url: "http://h", codec }).read([]);
     assertEquals(out, []);
     assertEquals(calls.length, 0);
   } finally {
@@ -136,7 +139,7 @@ Deno.test("read (json): POSTs Read RPC, parses ReadResponse, returns Output[]", 
     new Response(JSON.stringify(respJson), { status: 200 })
   );
   try {
-    const out = await new GrpcHttpClient({ url: "http://h" }).read([
+    const out = await new GrpcHttpClient({ url: "http://h", codec }).read([
       "mutable://x",
     ]);
     assertEquals(calls[0].url.pathname, `${PREFIX}Read`);
@@ -154,7 +157,7 @@ Deno.test("read: non-OK response → RequestError with status/body/operation", a
     })
   );
   try {
-    const c = new GrpcHttpClient({ url: "http://h" });
+    const c = new GrpcHttpClient({ url: "http://h", codec });
     const err = await assertRejects(
       () => c.read(["mutable://x"]),
       RequestError,
@@ -172,7 +175,9 @@ Deno.test("read: non-OK response → RequestError with status/body/operation", a
 Deno.test("receive: empty msgs → returns [] without fetch", async () => {
   const { calls, restore } = spyFetch(() => new Response("never"));
   try {
-    const out = await new GrpcHttpClient({ url: "http://h" }).receive([]);
+    const out = await new GrpcHttpClient({ url: "http://h", codec }).receive(
+      [],
+    );
     assertEquals(out, []);
     assertEquals(calls.length, 0);
   } finally {
@@ -195,7 +200,7 @@ Deno.test("receive (json): sends ReceiveRequest JSON, returns ReceiveResult[]", 
     return new Response(JSON.stringify(respJson), { status: 200 });
   });
   try {
-    const out = await new GrpcHttpClient({ url: "http://h" }).receive([
+    const out = await new GrpcHttpClient({ url: "http://h", codec }).receive([
       ["mutable://x", { v: 1 }],
     ]);
     assertEquals(out, [{ accepted: true }]);
@@ -209,7 +214,7 @@ Deno.test("receive: network error → TransportError", async () => {
   const original = globalThis.fetch;
   globalThis.fetch = () => Promise.reject(new Error("dns"));
   try {
-    const c = new GrpcHttpClient({ url: "http://h" });
+    const c = new GrpcHttpClient({ url: "http://h", codec });
     await assertRejects(
       () => c.receive([["mutable://x", { v: 1 }]]),
       TransportError,
@@ -225,7 +230,7 @@ Deno.test("receive: network error → TransportError", async () => {
 Deno.test("observe: empty urls returns without fetch", async () => {
   const { calls, restore } = spyFetch(() => new Response("never"));
   try {
-    const c = new GrpcHttpClient({ url: "http://h" });
+    const c = new GrpcHttpClient({ url: "http://h", codec });
     for await (const _ of c.observe([], new AbortController().signal)) {
       /* drain */
     }
@@ -251,7 +256,7 @@ Deno.test("observe: streams uris from ObserveFrame JSON lines", async () => {
   try {
     const frames: string[][] = [];
     for await (
-      const f of new GrpcHttpClient({ url: "http://h" }).observe(
+      const f of new GrpcHttpClient({ url: "http://h", codec }).observe(
         ["mutable://x"],
         new AbortController().signal,
       )
@@ -271,7 +276,7 @@ Deno.test("observe: server `{ error }` envelope → throws RequestError", async 
     new Response(`${JSON.stringify({ error: "boom" })}\n`, { status: 200 })
   );
   try {
-    const c = new GrpcHttpClient({ url: "http://h" });
+    const c = new GrpcHttpClient({ url: "http://h", codec });
     await assertRejects(
       async () => {
         for await (
@@ -293,7 +298,7 @@ Deno.test("observe: malformed JSON line → throws EncodingError", async () => {
     new Response(`not-json\n`, { status: 200 })
   );
   try {
-    const c = new GrpcHttpClient({ url: "http://h" });
+    const c = new GrpcHttpClient({ url: "http://h", codec });
     await assertRejects(
       async () => {
         for await (
@@ -324,7 +329,7 @@ Deno.test("observe: caller-aborted signal exits cleanly (no throw)", async () =>
     ac.abort();
     let yields = 0;
     for await (
-      const _ of new GrpcHttpClient({ url: "http://h" }).observe([
+      const _ of new GrpcHttpClient({ url: "http://h", codec }).observe([
         "mutable://x",
       ], ac.signal)
     ) {
@@ -349,6 +354,7 @@ Deno.test("preSend: hook can mutate headers and url on unary RPCs", async () => 
   try {
     const c = new GrpcHttpClient({
       url: "http://h",
+      codec,
       preSend: (r) => {
         r.headers.set("Authorization", "Bearer x");
         r.url.searchParams.set("traced", "1");
@@ -373,7 +379,7 @@ Deno.test("config: trailing slash on baseUrl is stripped", async () => {
     new Response(JSON.stringify(respJson), { status: 200 })
   );
   try {
-    await new GrpcHttpClient({ url: "http://h/" }).status();
+    await new GrpcHttpClient({ url: "http://h/", codec }).status();
     assertEquals(calls[0].url.toString(), `http://h${PREFIX}Status`);
   } finally {
     restore();

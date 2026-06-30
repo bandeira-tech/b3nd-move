@@ -1,7 +1,7 @@
 /**
  * @module
- * MCP service over WebSocket — `mcpWsApi(rig)` returns a function that
- * attaches a fresh `buildMcpServer(rig)` (wired via
+ * MCP service over WebSocket — `mcpWsApi(rig, opts)` returns a function that
+ * attaches a fresh `buildMcpServer(rig, opts)` (wired via
  * `WebSocketServerTransport`) to an already-open `WebSocket`. The host
  * owns the upgrade (`Deno.upgradeWebSocket`, CF's `WebSocketPair`,
  * Node's `ws`) and any cross-socket lifecycle; the library only knows
@@ -25,7 +25,9 @@
  *
  * @example Deno
  * ```ts
- * const attach = mcpWsApi(rig);
+ * import { mcpTextJsonStringify } from "@bandeira-tech/b3nd-move/codecs/mcp";
+ *
+ * const attach = mcpWsApi(rig, { codec: mcpTextJsonStringify() });
  * Deno.serve({ port: 8080 }, (req) => {
  *   if (req.headers.get("upgrade") !== "websocket") {
  *     return new Response("Not Found", { status: 404 });
@@ -40,8 +42,10 @@
  *
  * @example Cloudflare Durable Object
  * ```ts
+ * import { mcpTextJsonStringify } from "@bandeira-tech/b3nd-move/codecs/mcp";
+ *
  * export class B3ndMcpSession {
- *   #attach = mcpWsApi(this.rig);
+ *   #attach = mcpWsApi(this.rig, { codec: mcpTextJsonStringify() });
  *   fetch(req: Request) {
  *     const [client, server] = Object.values(
  *       new WebSocketPair(),
@@ -74,7 +78,7 @@ export type McpWsApi = (socket: WebSocket) => void;
  * `buildMcpServer` — controls the server name and version reported in
  * `initialize`.
  */
-export function mcpWsApi(rig: Rig, opts?: McpServerOptions): McpWsApi {
+export function mcpWsApi(rig: Rig, opts: McpServerOptions): McpWsApi {
   return (socket: WebSocket): void => {
     const transport = new WebSocketServerTransport(socket);
     const server = buildMcpServer(rig, opts);

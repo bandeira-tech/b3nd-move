@@ -19,7 +19,7 @@ import {
   ObserveFrameSchema,
   ObserveRequestSchema,
 } from "../proto/gen/b3nd_pb.ts";
-import { ndjsonResponse } from "../../actions/ndjson.ts";
+import { ndjsonResponse } from "../../codecs/ndjson.ts";
 import { BadRequest } from "../../router/errors.ts";
 import { grpcMethod, route } from "./router.ts";
 import { readRequest } from "./wire.ts";

@@ -11,12 +11,14 @@ import { runMoveSuite } from "../../suites/move-suite.ts";
 import { startHttpServer } from "../../factories/http.ts";
 import { stubRig } from "../../rigs/stub.ts";
 import { HttpClient } from "../../../src/http/client.ts";
+import { httpOutputsFrame } from "../../../src/codecs/http/mod.ts";
 
-const server = await startHttpServer(stubRig());
+const codec = httpOutputsFrame();
+const server = await startHttpServer(stubRig(), { codec });
 
 const enc = new TextEncoder();
 runMoveSuite("http", {
-  client: () => new HttpClient({ url: server.url }),
+  client: () => new HttpClient({ url: server.url, codec }),
   // HTTP wire is opaque bytes past the URL — encode JS payloads once
   // at the producer's edge before they cross the wire. The stub rig
   // ignores payload content; this is purely for what the wire needs.

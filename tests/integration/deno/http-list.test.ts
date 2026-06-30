@@ -12,6 +12,9 @@ import { assertEquals } from "@std/assert";
 import type { Output } from "@bandeira-tech/b3nd-core/types";
 import { HttpClient } from "../../../src/http/client.ts";
 import { encodeOutputsFrame } from "../../../src/codecs/outputs-frame.ts";
+import { httpOutputsFrame } from "../../../src/codecs/http/mod.ts";
+
+const codec = httpOutputsFrame();
 
 function createClientWithServer(handler: (req: Request) => Response): {
   client: HttpClient;
@@ -19,7 +22,10 @@ function createClientWithServer(handler: (req: Request) => Response): {
 } {
   const server = Deno.serve({ port: 0, onListen: () => {} }, handler);
   const addr = server.addr as Deno.NetAddr;
-  const client = new HttpClient({ url: `http://localhost:${addr.port}` });
+  const client = new HttpClient({
+    url: `http://localhost:${addr.port}`,
+    codec,
+  });
   return { client, server };
 }
 
@@ -58,7 +64,7 @@ Deno.test("read: HTTP 404 throws", async () => {
 });
 
 Deno.test("read: network error throws", async () => {
-  const client = new HttpClient({ url: "http://localhost:1" });
+  const client = new HttpClient({ url: "http://localhost:1", codec });
   await expectThrow(() => client.read(["mutable://open/test/"]));
 });
 

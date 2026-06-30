@@ -37,14 +37,33 @@ import { observeRoute } from "./observe.ts";
 import { readRoute } from "./read.ts";
 import { receiveRoute } from "./receive.ts";
 import { statusRoute } from "./status.ts";
+import type { GrpcBatchCodec } from "./codec.ts";
+
+/** Options for `grpcHttpApi`. */
+export interface GrpcHttpApiOptions {
+  /** Codec for read/receive proto message construction. Required. */
+  codec: GrpcBatchCodec;
+}
 
 /**
  * Create a gRPC-HTTP request handler.
  *
  * Returns a standard `(Request) => Promise<Response>` — plug into
- * `Deno.serve`, `withCors()`, or any fetch-compatible HTTP runtime.
+ * `Deno.serve` or any fetch-compatible HTTP runtime. CORS is upstream
+ * of the API: for cross-origin browser callers, compose `withCors`
+ * (`@bandeira-tech/b3nd-move/cors`) around the handler —
+ * `withCors(grpcHttpApi(rig, { codec }), { origin: "*" })`.
  */
-export function grpcHttpApi(rig: Rig): (req: Request) => Promise<Response> {
-  const routes = [statusRoute, receiveRoute, readRoute, observeRoute];
+export function grpcHttpApi(
+  rig: Rig,
+  options: GrpcHttpApiOptions,
+): (req: Request) => Promise<Response> {
+  const { codec } = options;
+  const routes = [
+    statusRoute,
+    receiveRoute(codec),
+    readRoute(codec),
+    observeRoute,
+  ];
   return (req) => dispatchGrpc(rig, routes, req);
 }

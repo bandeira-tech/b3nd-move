@@ -19,7 +19,8 @@
  *
  * @example
  * ```typescript
- * const client = new GrpcHttpClient({ url: "http://localhost:50051" });
+ * import { grpcProto } from "@bandeira-tech/b3nd-move/codecs/grpc";
+ * const client = new GrpcHttpClient({ url: "http://localhost:50051", codec: grpcProto() });
  * await client.receive([["mutable://app/item", { name: "thing" }]]);
  * const [out] = await client.read(["mutable://app/item"]);
  * const [uri, payload] = out;
@@ -46,12 +47,8 @@ import {
   TimeoutError,
   TransportError,
 } from "../../errors.ts";
-import {
-  outputFromProto,
-  outputToProto,
-  receiveResultFromProto,
-  statusResponseToResult,
-} from "../proto/convert.ts";
+import { statusResponseToResult } from "../proto/convert.ts";
+import type { GrpcBatchCodec } from "./codec.ts";
 import {
   ObserveFrameSchema,
   ObserveRequestSchema,
@@ -81,6 +78,8 @@ export type GrpcHttpPreSend = (
 export interface GrpcHttpClientConfig {
   /** Base URL of the gRPC-HTTP server (e.g. "http://localhost:50051"). */
   url: string;
+  /** Codec for read/receive proto message construction. Required. */
+  codec: GrpcBatchCodec;
   /** Use binary protobuf encoding instead of JSON. Default: false. */
   binary?: boolean;
   /** Request timeout in milliseconds. Default: 30000. */
@@ -97,6 +96,7 @@ const SERVICE_PREFIX = "/b3nd.v1.B3ndService/";
 
 export class GrpcHttpClient implements ProtocolInterfaceNode {
   private baseUrl: string;
+  private codec: GrpcBatchCodec;
   private binary: boolean;
   private timeout: number;
   private preSend: GrpcHttpPreSend | undefined;
@@ -105,6 +105,7 @@ export class GrpcHttpClient implements ProtocolInterfaceNode {
   constructor(config: GrpcHttpClientConfig) {
     this.baseUrl = config.url.replace(/\/$/, "");
     this.url = this.baseUrl;
+    this.codec = config.codec;
     this.binary = config.binary ?? false;
     this.timeout = config.timeout ?? 30000;
     this.preSend = config.preSend;
@@ -159,9 +160,7 @@ export class GrpcHttpClient implements ProtocolInterfaceNode {
 
   async receive(msgs: Output[]): Promise<ReceiveResult[]> {
     if (msgs.length === 0) return [];
-    const req = create(ReceiveRequestSchema, {
-      messages: msgs.map((m) => outputToProto(m)),
-    });
+    const req = this.codec.encodeReceiveRequest(msgs);
     const body = this.binary
       ? toBinary(ReceiveRequestSchema, req)
       : JSON.stringify(toJson(ReceiveRequestSchema, req));
@@ -172,12 +171,12 @@ export class GrpcHttpClient implements ProtocolInterfaceNode {
         new Uint8Array(await resp.arrayBuffer()),
       )
       : fromJson(ReceiveResponseSchema, await resp.json() as JsonValue);
-    return (result.results ?? []).map(receiveResultFromProto);
+    return this.codec.decodeReceiveResponse(result);
   }
 
   async read<T = unknown>(urls: string[]): Promise<Output<T>[]> {
     if (urls.length === 0) return [];
-    const req = create(ReadRequestSchema, { urls });
+    const req = this.codec.encodeReadRequest(urls);
     const body = this.binary
       ? toBinary(ReadRequestSchema, req)
       : JSON.stringify(toJson(ReadRequestSchema, req));
@@ -185,7 +184,7 @@ export class GrpcHttpClient implements ProtocolInterfaceNode {
     const result = this.binary
       ? fromBinary(ReadResponseSchema, new Uint8Array(await resp.arrayBuffer()))
       : fromJson(ReadResponseSchema, await resp.json() as JsonValue);
-    return (result.results ?? []).map((r) => outputFromProto<T>(r));
+    return this.codec.decodeReadResponse(result) as Output<T>[];
   }
 
   async *observe(
