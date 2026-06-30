@@ -31,12 +31,14 @@ and nothing else.
 ```typescript
 import { httpApi } from "@bandeira-tech/b3nd-move/http/service";
 import { grpcHttpApi } from "@bandeira-tech/b3nd-move/grpc/http/service";
+import { httpOutputsFrame } from "@bandeira-tech/b3nd-move/codecs/http";
+import { grpcProto } from "@bandeira-tech/b3nd-move/codecs/grpc";
 
 // Deno
-Deno.serve({ port: 3000 }, httpApi(rig));
+Deno.serve({ port: 3000 }, httpApi(rig, { codec: httpOutputsFrame() }));
 
 // Cloudflare Workers / Bun
-export default { fetch: grpcHttpApi(rig) };
+export default { fetch: grpcHttpApi(rig, { codec: grpcProto() }) };
 
 // Node — pair with @hono/node-server, express, node:http, …
 ```

@@ -152,7 +152,7 @@ Deno.test(
     assertEquals(received, false);
     // The upstream stream's cancel() WAS called — the per-frame
     // AbortController was registered in inFlight, aborted on socket
-    // close, and flowed through materializeStreamsWith into pipeTo({ signal }).
+    // close, and flowed through materializeStreams into pipeTo({ signal }).
     assertEquals(
       node.cancelled,
       true,

@@ -5,14 +5,14 @@ MCP tools so LLM clients can read and write through the same surface.
 
 ## Surface
 
-| File                               | Exports                              | Runtime |
-| ---------------------------------- | ------------------------------------ | ------- |
-| `service.ts`                       | `buildMcpServer`, `McpServerOptions` | any     |
-| `server.ts`                        | `MinimalServer`, `ErrorCode`         | any     |
-| `wire.ts`                          | JSON-RPC types + predicates          | any     |
-| `web-streamable-http-transport.ts` | Streamable HTTP server transport     | any     |
-| `http/service.ts`                  | `mcpHttpApi(rig)` — fetch handler    | any     |
-| `ws/service.ts`                    | `mcpWsApi(rig)` — websocket handler  | any     |
+| File                               | Exports                                        | Runtime |
+| ---------------------------------- | ---------------------------------------------- | ------- |
+| `service.ts`                       | `buildMcpServer`, `McpServerOptions`           | any     |
+| `server.ts`                        | `MinimalServer`, `ErrorCode`                   | any     |
+| `wire.ts`                          | JSON-RPC types + predicates                    | any     |
+| `web-streamable-http-transport.ts` | Streamable HTTP server transport               | any     |
+| `http/service.ts`                  | `mcpHttpApi(rig, { codec })` — fetch handler   | any     |
+| `ws/service.ts`                    | `mcpWsApi(rig, { codec })` — websocket handler | any     |
 
 There's no `client.ts` here — MCP clients are written by the LLM host (Claude
 Desktop, Cursor, etc.). The contract-test for the MCP surface lives in
@@ -60,9 +60,10 @@ HTTP transport (the common production path):
 ```typescript
 import { connection, Rig } from "@bandeira-tech/b3nd-core";
 import { mcpHttpApi } from "@bandeira-tech/b3nd-move/mcp/http/service";
+import { mcpTextJsonStringify } from "@bandeira-tech/b3nd-move/codecs/mcp";
 
 const rig = new Rig({ routes: { receive: [c], read: [c], observe: [c] } });
-Deno.serve({ port: 3000 }, mcpHttpApi(rig));
+Deno.serve({ port: 3000 }, mcpHttpApi(rig, { codec: mcpTextJsonStringify() }));
 ```
 
 ## Notes

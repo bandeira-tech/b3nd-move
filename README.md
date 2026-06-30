@@ -18,9 +18,18 @@ import { connection, Rig } from "@bandeira-tech/b3nd-core";
 import { HttpClient } from "@bandeira-tech/b3nd-move/http/client";
 import { WebSocketClient } from "@bandeira-tech/b3nd-move/ws/client";
 import { grpcHttpApi } from "@bandeira-tech/b3nd-move/grpc/http/service";
+import { httpOutputsFrame } from "@bandeira-tech/b3nd-move/codecs/http";
+import { wsJsonEnvelope } from "@bandeira-tech/b3nd-move/codecs/ws";
+import { grpcProto } from "@bandeira-tech/b3nd-move/codecs/grpc";
 
-const reads = new HttpClient({ url: "https://content.example.com" });
-const writes = new WebSocketClient({ url: "wss://ingest.example.com" });
+const reads = new HttpClient({
+  url: "https://content.example.com",
+  codec: httpOutputsFrame(),
+});
+const writes = new WebSocketClient({
+  url: "wss://ingest.example.com",
+  codec: wsJsonEnvelope(),
+});
 
 const rig = new Rig({
   routes: {
@@ -29,7 +38,7 @@ const rig = new Rig({
   },
 });
 
-Deno.serve({ port: 50051 }, grpcHttpApi(rig));
+Deno.serve({ port: 50051 }, grpcHttpApi(rig, { codec: grpcProto() }));
 ```
 
 A gRPC client hits one endpoint; reads fan out to the HTTP upstream, receives

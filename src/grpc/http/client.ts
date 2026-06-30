@@ -19,7 +19,8 @@
  *
  * @example
  * ```typescript
- * const client = new GrpcHttpClient({ url: "http://localhost:50051" });
+ * import { grpcProto } from "@bandeira-tech/b3nd-move/codecs/grpc";
+ * const client = new GrpcHttpClient({ url: "http://localhost:50051", codec: grpcProto() });
  * await client.receive([["mutable://app/item", { name: "thing" }]]);
  * const [out] = await client.read(["mutable://app/item"]);
  * const [uri, payload] = out;
