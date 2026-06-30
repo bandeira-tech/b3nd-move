@@ -107,10 +107,10 @@ Pure rename + import path updates. No semantic change; this prepares the new hom
 **Interfaces:**
 - Produces: `import { defaultScheduler, type Scheduler } from "../codecs/scheduler.ts"` is the new path for callers inside `src/`. Public JSR path becomes `@bandeira-tech/b3nd-move/codecs/scheduler`.
 
-- [ ] **Step 1: Verify no other in-repo consumer of the old path**
+- [ ] **Step 1: Find every in-repo consumer of the old path**
 
 Run: `grep -rn 'actions/scheduler' src/ tests/ deno.json`
-Expected: only `src/actions/standard.ts` imports it.
+Expected matches (as of plan-writing): `src/actions/standard.ts`, plus four soon-to-be-deleted test files (`src/http/read.test.ts`, `src/ws/read.test.ts`, `src/grpc/http/read.test.ts`, `src/mcp/read.test.ts`). All five get their import paths updated in Step 3 so the build stays green between this task and Task 17 (which deletes the four test files).
 
 - [ ] **Step 2: Move the file with `git mv`**
 
@@ -118,23 +118,29 @@ Expected: only `src/actions/standard.ts` imports it.
 git mv src/actions/scheduler.ts src/codecs/scheduler.ts
 ```
 
-- [ ] **Step 3: Update the import in `src/actions/standard.ts`**
+- [ ] **Step 3: Update imports in every consumer found in Step 1**
 
-In `src/actions/standard.ts`, replace:
+In `src/actions/standard.ts`, replace `from "./scheduler.ts"` with `from "../codecs/scheduler.ts"`.
 
-```ts
-import { defaultScheduler, type Scheduler } from "./scheduler.ts";
-```
-
-with:
+In each of the four `src/<transport>/read.test.ts` files (http, ws, grpc/http, mcp), replace:
 
 ```ts
-import { defaultScheduler, type Scheduler } from "../codecs/scheduler.ts";
+import type { Scheduler } from "../actions/scheduler.ts";   // or "../../actions/scheduler.ts" for grpc/http
 ```
 
-- [ ] **Step 4: Update `deno.json` exports (if scheduler is exported)**
+with the corresponding `../codecs/scheduler.ts` / `../../codecs/scheduler.ts` path.
 
-Check `deno.json` for an export entry containing `actions/scheduler`. If present, change the path from `./src/actions/scheduler.ts` to `./src/codecs/scheduler.ts`. Rename the export key from `./actions/scheduler` to `./codecs/scheduler` so the public import surface matches the spec.
+These four tests are deleted in Task 17; updating their imports keeps the build green between Task 1 and Task 17.
+
+- [ ] **Step 4: Add `./codecs/scheduler` export to `deno.json`**
+
+The old path `./actions/scheduler` does NOT exist in `deno.json` exports today (only `./actions/standard` is exported). Add a new entry to the `exports` map:
+
+```json
+"./codecs/scheduler": "./src/codecs/scheduler.ts",
+```
+
+Place it next to the other `./codecs/...` entries for ordering consistency. Do not remove anything.
 
 - [ ] **Step 5: Verify everything still compiles and tests pass**
 
@@ -170,7 +176,7 @@ Same shape as Task 1.
 - [ ] **Step 1: Find all consumers**
 
 Run: `grep -rn 'actions/ndjson' src/ tests/ deno.json`
-Note each file; they'll need import path updates in Step 3.
+Expected matches (as of plan-writing): `src/http/observe.ts`, `src/grpc/http/observe.ts`, plus `src/actions/ndjson.test.ts` itself. Also: the path appears in the `deno task check` script's file list (`deno.json`, line ~44) — that needs updating too in Step 4.
 
 - [ ] **Step 2: Move both files**
 
@@ -183,9 +189,9 @@ git mv src/actions/ndjson.test.ts src/codecs/ndjson.test.ts
 
 For each file found in Step 1, replace any `import ... from ".../actions/ndjson.ts"` with the corresponding `.../codecs/ndjson.ts` path. The exact relative depth depends on the importing file's location (e.g., a file in `src/http/` uses `../codecs/ndjson.ts`; a file in `src/grpc/http/` uses `../../codecs/ndjson.ts`).
 
-- [ ] **Step 4: Update `deno.json` exports if present**
+- [ ] **Step 4: Update `deno.json` (no export entry today, but the check task lists the path)**
 
-Same shape as Task 1, Step 4.
+`./actions/ndjson` is NOT exported today, so there's nothing to rename in the `exports` map. BUT: the `tasks.check` command on line ~44 lists `src/actions/ndjson.ts` as one of the files to type-check. Replace that path with `src/codecs/ndjson.ts` in the same string. Do not add an export entry — the helper remains internal.
 
 - [ ] **Step 5: Verify**
 
@@ -258,10 +264,12 @@ export interface HttpEncodeCtx {
 
 /** Symmetric codec for the HTTP batch routes (read response + receive body). */
 export interface HttpBatchCodec {
-  /** Shape `Output[]` (from `rig.read`) into the read response. */
+  /** Server side: shape `Output[]` (from `rig.read`) into the read response. */
   encode(outputs: Output[], ctx: HttpEncodeCtx): Response | Promise<Response>;
-  /** Parse the receive request body into `Output[]` (for `rig.receive`). */
+  /** Server side: parse the receive request body into `Output[]` (for `rig.receive`). */
   decode(req: Request): Output[] | Promise<Output[]>;
+  /** Client side: parse a successful read response into `Output[]`. Dual of `encode`. */
+  decodeReadResponse(res: Response): Output[] | Promise<Output[]>;
 }
 ```
 
@@ -744,20 +752,7 @@ async read<T = unknown>(urls: string[]): Promise<Output<T>[]> {
 }
 ```
 
-**This forces an addition to the HttpBatchCodec interface** — a `decodeReadResponse(res: Response): Output[] | Promise<Output[]>` method on the client side.
-
-**REVISE Task 3's interface** before merging this task:
-
-```ts
-export interface HttpBatchCodec {
-  encode(outputs: Output[], ctx: HttpEncodeCtx): Response | Promise<Response>;
-  decode(req: Request): Output[] | Promise<Output[]>;
-  /** Client-side: parse the read response into Output[]. Dual of `encode`. */
-  decodeReadResponse(res: Response): Output[] | Promise<Output[]>;
-}
-```
-
-And update Task 4's `httpOutputsFrame` to implement `decodeReadResponse` using `decodeOutputsFrame`. (If this revision is required, amend Tasks 3 and 4 inline before completing Task 5 — do not proceed to integration if the interface is partial.)
+The `codec.decodeReadResponse(response)` method was already defined on `HttpBatchCodec` in Task 3 and is implemented by `httpOutputsFrame` in Task 4 — use it directly here.
 
 - [ ] **Step 5: Update `tests/factories/http.ts` to accept a codec**
 
