@@ -26,6 +26,7 @@ import type {
 } from "@bandeira-tech/b3nd-core/types";
 import { makeReadAction } from "../actions/standard.ts";
 import type { Scheduler } from "../codecs/scheduler.ts";
+import { mcpTextJsonStringify } from "../codecs/mcp/mod.ts";
 import { MinimalServer } from "./server.ts";
 import { WebStandardStreamableHTTPServerTransport } from "./web-streamable-http-transport.ts";
 import { mcpHttpApi } from "./http/service.ts";
@@ -112,7 +113,7 @@ Deno.test(
   async () => {
     const node = new StreamingNode(new TextEncoder().encode("streamed"));
     const rig = buildRig(node);
-    const handler = mcpHttpApi(rig);
+    const handler = mcpHttpApi(rig, { codec: mcpTextJsonStringify() });
 
     const resp = await mcpRequest(handler, {
       jsonrpc: "2.0",
@@ -146,7 +147,7 @@ Deno.test(
     const bytes = new Uint8Array([10, 20, 30]);
     const node = new StreamingNode(bytes);
     const rig = buildRig(node);
-    const handler = mcpHttpApi(rig);
+    const handler = mcpHttpApi(rig, { codec: mcpTextJsonStringify() });
 
     const resp = await mcpRequest(handler, {
       jsonrpc: "2.0",

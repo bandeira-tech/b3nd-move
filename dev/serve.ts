@@ -33,6 +33,7 @@ import { grpcProto } from "../src/codecs/grpc/mod.ts";
 import { buildMcpServer, type McpServerOptions } from "../src/mcp/service.ts";
 import { mcpHttpApi } from "../src/mcp/http/service.ts";
 import { mcpWsApi } from "../src/mcp/ws/service.ts";
+import { mcpTextJsonStringify } from "../src/codecs/mcp/mod.ts";
 
 export interface TransportServer {
   readonly transport: string;
@@ -96,7 +97,10 @@ function httpTransport(
 ): TransportServer {
   const port = c.port ?? HTTP_DEFAULTS.port;
   const hostname = c.hostname ?? HTTP_DEFAULTS.hostname;
-  const handler = httpApi(rig, { codec: httpOutputsFrame(), statusMeta: c.statusMeta });
+  const handler = httpApi(rig, {
+    codec: httpOutputsFrame(),
+    statusMeta: c.statusMeta,
+  });
   let server: Deno.HttpServer | null = null;
   return {
     transport: "http",
@@ -184,7 +188,7 @@ function mcpTransport(
   rig: Rig,
   c: Extract<ServerConfig, { transport: "mcp" }>,
 ): TransportServer {
-  const opts: McpServerOptions = {};
+  const opts: McpServerOptions = { codec: mcpTextJsonStringify() };
   if (c.name) opts.name = c.name;
   if (c.version) opts.version = c.version;
   let transport: StdioServerTransport | null = null;
@@ -209,7 +213,7 @@ function mcpHttpTransport(
 ): TransportServer {
   const port = c.port ?? MCP_HTTP_DEFAULTS.port;
   const hostname = c.hostname ?? MCP_HTTP_DEFAULTS.hostname;
-  const opts: McpServerOptions = {};
+  const opts: McpServerOptions = { codec: mcpTextJsonStringify() };
   if (c.name) opts.name = c.name;
   if (c.version) opts.version = c.version;
   const handler = mcpHttpApi(rig, opts);
@@ -236,7 +240,7 @@ function mcpWsTransport(
 ): TransportServer {
   const port = c.port ?? MCP_WS_DEFAULTS.port;
   const hostname = c.hostname ?? MCP_WS_DEFAULTS.hostname;
-  const opts: McpServerOptions = {};
+  const opts: McpServerOptions = { codec: mcpTextJsonStringify() };
   if (c.name) opts.name = c.name;
   if (c.version) opts.version = c.version;
   const attach = mcpWsApi(rig, opts);

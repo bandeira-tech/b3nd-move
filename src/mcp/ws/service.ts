@@ -1,7 +1,7 @@
 /**
  * @module
- * MCP service over WebSocket — `mcpWsApi(rig)` returns a function that
- * attaches a fresh `buildMcpServer(rig)` (wired via
+ * MCP service over WebSocket — `mcpWsApi(rig, opts)` returns a function that
+ * attaches a fresh `buildMcpServer(rig, opts)` (wired via
  * `WebSocketServerTransport`) to an already-open `WebSocket`. The host
  * owns the upgrade (`Deno.upgradeWebSocket`, CF's `WebSocketPair`,
  * Node's `ws`) and any cross-socket lifecycle; the library only knows
@@ -74,7 +74,7 @@ export type McpWsApi = (socket: WebSocket) => void;
  * `buildMcpServer` — controls the server name and version reported in
  * `initialize`.
  */
-export function mcpWsApi(rig: Rig, opts?: McpServerOptions): McpWsApi {
+export function mcpWsApi(rig: Rig, opts: McpServerOptions): McpWsApi {
   return (socket: WebSocket): void => {
     const transport = new WebSocketServerTransport(socket);
     const server = buildMcpServer(rig, opts);

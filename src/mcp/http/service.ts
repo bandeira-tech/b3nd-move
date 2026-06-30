@@ -71,7 +71,7 @@ import { buildMcpServer, type McpServerOptions } from "../service.ts";
  */
 export function mcpHttpApi(
   rig: Rig,
-  opts?: McpServerOptions,
+  opts: McpServerOptions,
 ): (req: Request) => Promise<Response> {
   return async (req: Request): Promise<Response> => {
     // Fresh transport + server per request. `sessionIdGenerator:

@@ -19,6 +19,7 @@ import { Client } from "npm:@modelcontextprotocol/sdk@^1.0.0/client/index.js";
 import { StreamableHTTPClientTransport } from "npm:@modelcontextprotocol/sdk@^1.0.0/client/streamableHttp.js";
 import type { Rig } from "@bandeira-tech/b3nd-core/rig";
 import { mcpHttpApi } from "../../src/mcp/http/service.ts";
+import { mcpTextJsonStringify } from "../../src/codecs/mcp/mod.ts";
 
 export interface McpHttpHandle {
   client: Client;
@@ -28,7 +29,11 @@ export interface McpHttpHandle {
 export async function startMcpOverHttp(rig: Rig): Promise<McpHttpHandle> {
   const server = Deno.serve(
     { port: 0, onListen: () => {} },
-    mcpHttpApi(rig, { name: "b3nd-mcp-test", version: "0.0.0" }),
+    mcpHttpApi(rig, {
+      codec: mcpTextJsonStringify(),
+      name: "b3nd-mcp-test",
+      version: "0.0.0",
+    }),
   );
   const { hostname, port } = server.addr as Deno.NetAddr;
   const url = new URL(`http://${hostname}:${port}/`);

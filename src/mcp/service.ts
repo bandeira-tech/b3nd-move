@@ -18,9 +18,11 @@ import {
   receiveAction,
   statusAction,
 } from "../actions/standard.ts";
+import type { McpBatchCodec } from "./codec.ts";
 import { MinimalServer } from "./server.ts";
 
 export interface McpServerOptions {
+  codec: McpBatchCodec;
   name?: string;
   version?: string;
 }
@@ -70,8 +72,9 @@ const TOOLS = [
 
 export function buildMcpServer(
   rig: Rig,
-  opts: McpServerOptions = {},
+  opts: McpServerOptions,
 ): MinimalServer {
+  const { codec } = opts;
   const server = new MinimalServer(
     { name: opts.name ?? "b3nd-mcp", version: opts.version ?? "0.1.0" },
     { tools: {}, resources: {} },
@@ -89,37 +92,21 @@ export function buildMcpServer(
     try {
       switch (name) {
         case "b3nd_receive": {
-          const { messages } = args as { messages: [string, unknown][] };
+          const messages = codec.decodeReceiveArgs(args);
           const results = await receiveAction(rig, [messages], ctx.signal);
           return {
-            content: [{
-              type: "text",
-              text: JSON.stringify(
-                results.map((r, i) => ({
-                  uri: messages[i][0],
-                  accepted: r.accepted,
-                  error: r.error,
-                })),
-                null,
-                2,
-              ),
-            }],
+            content: await codec.encodeReceive(results, messages, {
+              signal: ctx.signal,
+            }),
             isError: results.some((r) => !r.accepted),
           };
         }
 
         case "b3nd_read": {
-          const { urls } = args as { urls: string[] };
+          const urls = codec.decodeReadArgs(args);
           const outputs = await readAction(rig, [urls], ctx.signal);
           return {
-            content: [{
-              type: "text",
-              text: JSON.stringify(
-                outputs.map(([uri, payload]) => ({ uri, payload })),
-                null,
-                2,
-              ),
-            }],
+            content: await codec.encodeRead(outputs, { signal: ctx.signal }),
           };
         }
 
@@ -173,13 +160,10 @@ export function buildMcpServer(
     const b3ndUri = resourceUri.replace(/^b3nd:\/\//, "");
     try {
       const [output] = await readAction(rig, [[b3ndUri]], ctx.signal);
-      const [, payload] = output;
       return {
-        contents: [{
-          uri: resourceUri,
-          mimeType: "application/json",
-          text: JSON.stringify(payload, null, 2),
-        }],
+        contents: await codec.encodeReadResource(output, resourceUri, {
+          signal: ctx.signal,
+        }),
       };
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
