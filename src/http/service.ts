@@ -37,15 +37,17 @@
  * ```ts
  * import { Rig, connection } from "@bandeira-tech/b3nd-core";
  * import { httpApi } from "@bandeira-tech/b3nd-move/http/service";
+ * import { httpOutputsFrame } from "@bandeira-tech/b3nd-move/codecs/http/mod";
  *
  * const c = connection(client, ["**"]);
  * const rig = new Rig({ routes: { receive: [c], read: [c], observe: [c] } });
- * Deno.serve({ port: 3000 }, httpApi(rig));
+ * const codec = httpOutputsFrame();
+ * Deno.serve({ port: 3000 }, httpApi(rig, { codec }));
  * ```
  *
  * @example Hono (CORS, middleware, etc.)
  * ```ts
- * const api = httpApi(rig, { statusMeta: { version: "1.0" } });
+ * const api = httpApi(rig, { codec, statusMeta: { version: "1.0" } });
  * const app = new Hono();
  * app.use("*", cors({ origin: "*" }));
  * app.all("/api/*", (c) => api(c.req.raw));
@@ -53,6 +55,7 @@
  */
 
 import type { Rig } from "@bandeira-tech/b3nd-core/rig";
+import type { HttpBatchCodec } from "./codec.ts";
 import { dispatchHttp } from "./router.ts";
 import { observeRoute } from "./observe.ts";
 import { readRoute } from "./read.ts";
@@ -62,11 +65,15 @@ import { statusRoute, type StatusRouteOptions } from "./status.ts";
 // ── Types ──
 
 /**
- * `HttpApiOptions` is a superset of the per-route options of every
- * route that takes one (currently just `status`). New per-route
- * options get added here as routes grow.
+ * `HttpApiOptions` requires an operator-declared codec (see `codec.ts`)
+ * and accepts per-route options for every route that takes one
+ * (currently just `status`). New per-route options get added here as
+ * routes grow.
  */
-export interface HttpApiOptions extends StatusRouteOptions {}
+export interface HttpApiOptions extends Partial<StatusRouteOptions> {
+  /** Operator-declared codec for read responses + receive bodies. Required. */
+  codec: HttpBatchCodec;
+}
 
 // ── API factory ──
 
@@ -75,15 +82,18 @@ export interface HttpApiOptions extends StatusRouteOptions {}
  *
  * Returns a standard `(Request) => Promise<Response>` — plug it
  * into Deno.serve, Hono, or any other HTTP framework.
+ *
+ * `options.codec` is required: pass `httpOutputsFrame()` for today's
+ * baked outputs-frame behaviour or supply a custom `HttpBatchCodec`.
  */
 export function httpApi(
   rig: Rig,
-  options?: HttpApiOptions,
+  options: HttpApiOptions,
 ): (req: Request) => Promise<Response> {
   const routes = [
     statusRoute(options),
-    receiveRoute,
-    readRoute,
+    receiveRoute(options.codec),
+    readRoute(options.codec),
     observeRoute,
   ];
   return (req) => dispatchHttp(rig, routes, req);

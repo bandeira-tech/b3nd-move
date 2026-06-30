@@ -15,6 +15,9 @@ import { WebSocketClient } from "../../../src/ws/client.ts";
 import { startGrpcServer } from "../../factories/grpc.ts";
 import { startWsServer } from "../../factories/ws.ts";
 import { stubRig } from "../../rigs/stub.ts";
+import { httpOutputsFrame } from "../../../src/codecs/http/mod.ts";
+
+const codec = httpOutputsFrame();
 
 Deno.test("HttpClient preSend — stamps headers and query params on every call", async () => {
   const seen: {
@@ -42,6 +45,7 @@ Deno.test("HttpClient preSend — stamps headers and query params on every call"
     const port = (server.addr as Deno.NetAddr).port;
     const client = new HttpClient({
       url: `http://127.0.0.1:${port}`,
+      codec,
       preSend: (r) => {
         r.headers.set("Authorization", "Bearer tok-1");
         r.headers.set("X-Trace", "t-1");
@@ -78,6 +82,7 @@ Deno.test("HttpClient preSend — async hook is awaited", async () => {
     const port = (server.addr as Deno.NetAddr).port;
     const client = new HttpClient({
       url: `http://127.0.0.1:${port}`,
+      codec,
       preSend: async (r) => {
         await Promise.resolve();
         r.headers.set("Authorization", "Bearer async-tok");
@@ -112,6 +117,7 @@ Deno.test("HttpClient preSend — functions compose via plain calls", async () =
     const trace = (r: Req) => r.headers.set("X-Trace", "tr");
     const client = new HttpClient({
       url: `http://127.0.0.1:${port}`,
+      codec,
       preSend: (r) => {
         auth(r);
         trace(r);

@@ -15,6 +15,9 @@ import { BadRequest } from "../router/errors.ts";
 import { encodeOutputsFrame } from "../codecs/outputs-frame.ts";
 import { decodeUrlList } from "../codecs/url-list.ts";
 import { httpApi } from "./service.ts";
+import { httpOutputsFrame } from "../codecs/http/mod.ts";
+
+const codec = httpOutputsFrame();
 
 const enc = (s: string) => new TextEncoder().encode(s);
 const dec = (b: Uint8Array) => new TextDecoder().decode(b);
@@ -62,7 +65,7 @@ Deno.test("HTTP read: materializes ReadableStream payloads transparently", async
       observe: [connection(node, ["x://**"])],
     },
   });
-  const handler = httpApi(rig);
+  const handler = httpApi(rig, { codec });
   const u = encodeUrlList(["x://stream"]);
   const res = await handler(
     new Request(`http://x/api/v1/read?u=${u}`, { method: "POST" }),
@@ -87,7 +90,7 @@ Deno.test("HTTP read: mixed Uint8Array + ReadableStream + null + JSON-able all r
       observe: [connection(node, ["x://**"])],
     },
   });
-  const handler = httpApi(rig);
+  const handler = httpApi(rig, { codec });
   const u = encodeUrlList(["x://bytes", "x://stream", "x://miss", "x://json"]);
   const res = await handler(
     new Request(`http://x/api/v1/read?u=${u}`, { method: "POST" }),
@@ -136,7 +139,7 @@ Deno.test("HTTP read: concurrent streams are materialized in parallel and preser
       observe: [connection(node, ["s://**"])],
     },
   });
-  const handler = httpApi(rig);
+  const handler = httpApi(rig, { codec });
   const urls = ["s://a", "s://b", "s://c", "s://d"];
   const u = encodeUrlList(urls);
   const t0 = performance.now();

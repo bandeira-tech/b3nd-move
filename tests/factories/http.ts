@@ -10,6 +10,7 @@
 /// <reference lib="deno.ns" />
 
 import type { Rig } from "@bandeira-tech/b3nd-core/rig";
+import type { HttpBatchCodec } from "../../src/http/codec.ts";
 import { httpApi } from "../../src/http/service.ts";
 import { withCors } from "./cors.ts";
 
@@ -21,15 +22,18 @@ export interface ServerHandle {
 }
 
 export interface HttpServerOptions {
+  /** Operator-declared codec for read responses + receive bodies. Required. */
+  codec: HttpBatchCodec;
   /** Wrap the handler with `withCors("*")`. Default: false. */
   cors?: boolean;
 }
 
 export function startHttpServer(
   rig: Rig,
-  opts: HttpServerOptions = {},
+  opts: HttpServerOptions,
 ): Promise<ServerHandle> {
-  const handler = opts.cors ? withCors(httpApi(rig), "*") : httpApi(rig);
+  const baseHandler = httpApi(rig, { codec: opts.codec });
+  const handler = opts.cors ? withCors(baseHandler, "*") : baseHandler;
   const server = Deno.serve(
     { port: 0, hostname: "127.0.0.1", onListen: () => {} },
     handler,

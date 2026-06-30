@@ -25,6 +25,7 @@
 import { StdioServerTransport } from "npm:@modelcontextprotocol/sdk@^1.0.0/server/stdio.js";
 import type { Rig } from "@bandeira-tech/b3nd-core";
 import { httpApi } from "../src/http/service.ts";
+import { httpOutputsFrame } from "../src/codecs/http/mod.ts";
 import { wsApi } from "../src/ws/service.ts";
 import { grpcHttpApi } from "../src/grpc/http/service.ts";
 import { buildMcpServer, type McpServerOptions } from "../src/mcp/service.ts";
@@ -93,7 +94,7 @@ function httpTransport(
 ): TransportServer {
   const port = c.port ?? HTTP_DEFAULTS.port;
   const hostname = c.hostname ?? HTTP_DEFAULTS.hostname;
-  const handler = httpApi(rig, { statusMeta: c.statusMeta });
+  const handler = httpApi(rig, { codec: httpOutputsFrame(), statusMeta: c.statusMeta });
   let server: Deno.HttpServer | null = null;
   return {
     transport: "http",

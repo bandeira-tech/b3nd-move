@@ -11,11 +11,16 @@
 import type { Rig } from "@bandeira-tech/b3nd-core/rig";
 import { grpcHttpApi } from "../../src/grpc/http/service.ts";
 import { withCors } from "./cors.ts";
-import type { HttpServerOptions, ServerHandle } from "./http.ts";
+import type { ServerHandle } from "./http.ts";
+
+export interface GrpcServerOptions {
+  /** Wrap the handler with `withCors("*")`. Default: false. */
+  cors?: boolean;
+}
 
 export function startGrpcServer(
   rig: Rig,
-  opts: HttpServerOptions = {},
+  opts: GrpcServerOptions = {},
 ): Promise<ServerHandle> {
   const handler = opts.cors
     ? withCors(grpcHttpApi(rig), "*")
