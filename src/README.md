@@ -21,10 +21,15 @@ package. Pair `service.ts` with whatever your host runtime offers, or use
 `dev/serve.ts` (and `deno task serve`) for local-dev convenience. Production
 runners and SDKs build their own equivalents.
 
-**Cross-cutting concerns are out of scope too.** CORS, auth wrappers, multi-
-server orchestration — wrap the `service` handlers yourself, or reach for a
-higher-level SDK. The move layer exists to do encoding / transport / decoding
-and nothing else.
+**Cross-cutting concerns sit upstream of the service, never inside it.** The
+move layer does encoding / transport / decoding and nothing else; a `service`
+handler never knows about CORS, auth, or orchestration. Those wrap the handler
+from outside. CORS is common enough that the package ships a parametrizable
+wrapper — `withCors(handler, { origin, methods?, headers?, maxAge? })` from
+`@bandeira-tech/b3nd-move/cors` — so operators compose it at their setup site:
+`withCors(httpApi(rig, { codec }), { origin: "https://app.example.com" })`. Auth
+wrappers and multi-server orchestration you wrap yourself or reach for a
+higher-level SDK.
 
 ## Usage
 

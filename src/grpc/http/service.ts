@@ -49,8 +49,10 @@ export interface GrpcHttpApiOptions {
  * Create a gRPC-HTTP request handler.
  *
  * Returns a standard `(Request) => Promise<Response>` — plug into
- * `Deno.serve` or any fetch-compatible HTTP runtime. For cross-origin
- * browser callers, compose `withCors()` from `../../cors.ts` around it.
+ * `Deno.serve` or any fetch-compatible HTTP runtime. CORS is upstream
+ * of the API: for cross-origin browser callers, compose `withCors`
+ * (`@bandeira-tech/b3nd-move/cors`) around the handler —
+ * `withCors(grpcHttpApi(rig, { codec }), { origin: "*" })`.
  */
 export function grpcHttpApi(
   rig: Rig,

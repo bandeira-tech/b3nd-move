@@ -72,8 +72,10 @@ import { buildMcpServer, type McpServerOptions } from "../service.ts";
  * Deno Deploy, Bun, …).
  *
  * `opts` is forwarded to `buildMcpServer` — controls the server name
- * and version reported in `initialize`. For cross-origin browser
- * callers, compose `withCors()` from `../../cors.ts` around the handler.
+ * and version reported in `initialize`. CORS is upstream of the API:
+ * for cross-origin browser callers, compose `withCors`
+ * (`@bandeira-tech/b3nd-move/cors`) around the handler —
+ * `withCors(mcpHttpApi(rig, opts), { origin: "*" })`.
  */
 export function mcpHttpApi(
   rig: Rig,
