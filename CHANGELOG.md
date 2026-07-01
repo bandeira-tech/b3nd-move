@@ -6,6 +6,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+
+- **Services accept any PIN.** `httpApi`, `wsApi`, `grpcHttpApi`,
+  `buildMcpServer`, `mcpHttpApi`, `mcpWsApi`, the content facets, and the shared
+  `Action`/dispatch types now take `ProtocolInterfaceNode` instead of the
+  concrete `Rig` class. Transports only ever call the PIN surface (`status` /
+  `receive` / `read` / `observe`), and `Rig` has private fields, so the class
+  type rejected structurally-valid nodes (dynamically loaded rigs, wrappers,
+  test doubles) and forced `as any` casts in consumers like b3nd-cli.
+  Non-breaking: every `Rig` satisfies the PIN.
+
 ## [0.20.0] — Unreleased
 
 ### Added
@@ -31,12 +44,15 @@ and this project adheres to
 - **Wire-aware codec interfaces** per transport: `HttpBatchCodec`
   (`src/http/codec.ts`), `WsBatchCodec` (`src/ws/codec.ts`), `GrpcBatchCodec`
   (`src/grpc/http/codec.ts`), `McpBatchCodec` (`src/mcp/codec.ts`).
-- **`@bandeira-tech/b3nd-move/cors`** — `withCors(handler, { origin, methods?,
-  headers?, maxAge? })` wraps any fetch handler with CORS headers + `OPTIONS`
-  preflight. CORS is upstream of the API, so it composes around the service
-  rather than living inside it: `withCors(httpApi(rig, { codec }), { origin:
-  "https://app.example.com" })`. Credentialed flows or anything beyond these
-  knobs stay in the operator's own wrapper.
+- **`@bandeira-tech/b3nd-move/cors`** —
+  `withCors(handler, { origin, methods?,
+  headers?, maxAge? })` wraps any fetch
+  handler with CORS headers + `OPTIONS` preflight. CORS is upstream of the API,
+  so it composes around the service rather than living inside it:
+  `withCors(httpApi(rig, { codec }), { origin:
+  "https://app.example.com" })`.
+  Credentialed flows or anything beyond these knobs stay in the operator's own
+  wrapper.
 
 ### Changed (BREAKING)
 

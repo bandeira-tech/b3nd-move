@@ -28,7 +28,7 @@
  * ```
  */
 
-import type { Rig } from "@bandeira-tech/b3nd-core/rig";
+import type { ProtocolInterfaceNode } from "@bandeira-tech/b3nd-core/types";
 import { dispatchHttp } from "../http/router.ts";
 import { httpGetContentRoute, type PayloadResponseMap } from "./route.ts";
 
@@ -64,7 +64,7 @@ export interface HttpGetContentApiOptions {
  * response you want for `null` payloads.
  */
 export function httpGetContentApi(
-  rig: Rig,
+  rig: ProtocolInterfaceNode,
   options: HttpGetContentApiOptions,
 ): (req: Request) => Promise<Response> {
   const routes = [httpGetContentRoute(options)];

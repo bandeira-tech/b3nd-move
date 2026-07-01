@@ -72,7 +72,7 @@
  * ```
  */
 
-import type { Rig } from "@bandeira-tech/b3nd-core/rig";
+import type { ProtocolInterfaceNode } from "@bandeira-tech/b3nd-core/types";
 import type { WebSocketRequest, WebSocketResponse } from "./client.ts";
 import { dispatchWs } from "./router.ts";
 import { observeRoute } from "./observe.ts";
@@ -100,7 +100,10 @@ export interface WsApiOptions {
  * Build a b3nd WS attacher bound to a Rig. The returned function takes
  * one socket and wires it up; call it once per upgraded connection.
  */
-export function wsApi(rig: Rig, options: WsApiOptions): WsApi {
+export function wsApi(
+  rig: ProtocolInterfaceNode,
+  options: WsApiOptions,
+): WsApi {
   const { codec } = options;
   return (socket: WebSocket): void => {
     const observes = new Map<string, AbortController>();

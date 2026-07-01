@@ -56,7 +56,7 @@
  * ```
  */
 
-import type { Rig } from "@bandeira-tech/b3nd-core/rig";
+import type { ProtocolInterfaceNode } from "@bandeira-tech/b3nd-core/types";
 import type { HttpBatchCodec } from "./codec.ts";
 import { dispatchHttp } from "./router.ts";
 import { observeRoute } from "./observe.ts";
@@ -89,7 +89,7 @@ export interface HttpApiOptions extends Partial<StatusRouteOptions> {
  * baked outputs-frame behaviour or supply a custom `HttpBatchCodec`.
  */
 export function httpApi(
-  rig: Rig,
+  rig: ProtocolInterfaceNode,
   options: HttpApiOptions,
 ): (req: Request) => Promise<Response> {
   const routes = [

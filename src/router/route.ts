@@ -34,7 +34,7 @@
  * transport.
  */
 
-import type { Rig } from "@bandeira-tech/b3nd-core/rig";
+import type { ProtocolInterfaceNode } from "@bandeira-tech/b3nd-core/types";
 
 /**
  * Action function: `(rig, args, signal) → result`. Standard ones bind
@@ -43,7 +43,7 @@ import type { Rig } from "@bandeira-tech/b3nd-core/rig";
  * dispatcher's per-request `AbortController.signal`.
  */
 export type Action<Args extends readonly unknown[], Result> = (
-  rig: Rig,
+  rig: ProtocolInterfaceNode,
   args: Args,
   signal: AbortSignal,
 ) => Result | Promise<Result>;

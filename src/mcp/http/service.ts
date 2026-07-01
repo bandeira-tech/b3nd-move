@@ -61,7 +61,7 @@
  */
 
 import { WebStandardStreamableHTTPServerTransport } from "../web-streamable-http-transport.ts";
-import type { Rig } from "@bandeira-tech/b3nd-core";
+import type { ProtocolInterfaceNode } from "@bandeira-tech/b3nd-core/types";
 import { buildMcpServer, type McpServerOptions } from "../service.ts";
 
 /**
@@ -78,7 +78,7 @@ import { buildMcpServer, type McpServerOptions } from "../service.ts";
  * `withCors(mcpHttpApi(rig, opts), { origin: "*" })`.
  */
 export function mcpHttpApi(
-  rig: Rig,
+  rig: ProtocolInterfaceNode,
   opts: McpServerOptions,
 ): (req: Request) => Promise<Response> {
   return async (req: Request): Promise<Response> => {

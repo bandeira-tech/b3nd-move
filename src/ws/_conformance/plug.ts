@@ -18,7 +18,7 @@
 
 /// <reference lib="deno.ns" />
 
-import type { Rig } from "@bandeira-tech/b3nd-core/rig";
+import type { ProtocolInterfaceNode } from "@bandeira-tech/b3nd-core/types";
 import type {
   MovePlug,
   ServerHandle,
@@ -31,7 +31,7 @@ const codec = wsJsonEnvelope();
 
 export const wsPlug: MovePlug = {
   name: "ws",
-  startServer: (rig: Rig): ServerHandle => {
+  startServer: (rig: ProtocolInterfaceNode): ServerHandle => {
     const attach = wsApi(rig, { codec });
     const sockets = new Set<WebSocket>();
     const handler = (req: Request): Response => {

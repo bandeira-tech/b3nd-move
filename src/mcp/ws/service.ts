@@ -62,7 +62,7 @@
  * ```
  */
 
-import type { Rig } from "@bandeira-tech/b3nd-core";
+import type { ProtocolInterfaceNode } from "@bandeira-tech/b3nd-core/types";
 import { buildMcpServer, type McpServerOptions } from "../service.ts";
 import { WebSocketServerTransport } from "./transport.ts";
 
@@ -78,7 +78,10 @@ export type McpWsApi = (socket: WebSocket) => void;
  * `buildMcpServer` — controls the server name and version reported in
  * `initialize`.
  */
-export function mcpWsApi(rig: Rig, opts: McpServerOptions): McpWsApi {
+export function mcpWsApi(
+  rig: ProtocolInterfaceNode,
+  opts: McpServerOptions,
+): McpWsApi {
   return (socket: WebSocket): void => {
     const transport = new WebSocketServerTransport(socket);
     const server = buildMcpServer(rig, opts);

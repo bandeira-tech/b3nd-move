@@ -31,7 +31,7 @@
  * shared dispatcher.
  */
 
-import type { Rig } from "@bandeira-tech/b3nd-core";
+import type { ProtocolInterfaceNode } from "@bandeira-tech/b3nd-core/types";
 import { dispatchGrpc } from "./router.ts";
 import { observeRoute } from "./observe.ts";
 import { readRoute } from "./read.ts";
@@ -55,7 +55,7 @@ export interface GrpcHttpApiOptions {
  * `withCors(grpcHttpApi(rig, { codec }), { origin: "*" })`.
  */
 export function grpcHttpApi(
-  rig: Rig,
+  rig: ProtocolInterfaceNode,
   options: GrpcHttpApiOptions,
 ): (req: Request) => Promise<Response> {
   const { codec } = options;

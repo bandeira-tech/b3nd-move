@@ -36,7 +36,7 @@
  * frames) render as `204 No Content`.
  */
 
-import type { Rig } from "@bandeira-tech/b3nd-core/rig";
+import type { ProtocolInterfaceNode } from "@bandeira-tech/b3nd-core/types";
 import { HttpError, NotFound } from "../../router/errors.ts";
 import type { Route } from "../../router/route.ts";
 
@@ -149,7 +149,7 @@ export function detectEncoding(req: Request): Encoding {
  * routes signal them — see `../../router/errors.ts`.
  */
 export async function dispatchGrpc(
-  rig: Rig,
+  rig: ProtocolInterfaceNode,
   routes: readonly GrpcRoute[],
   req: Request,
 ): Promise<Response> {

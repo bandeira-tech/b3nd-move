@@ -32,7 +32,7 @@
  * envelope. The service no longer needs to special-case anything.
  */
 
-import type { Rig } from "@bandeira-tech/b3nd-core/rig";
+import type { ProtocolInterfaceNode } from "@bandeira-tech/b3nd-core/types";
 import { HttpError } from "../router/errors.ts";
 import type { Route } from "../router/route.ts";
 import type { WebSocketRequest, WebSocketResponse } from "./client.ts";
@@ -128,7 +128,7 @@ export function wsData(type: WebSocketRequest["type"]): WsMatcher {
  * The caller pumps each yielded envelope onto the wire.
  */
 export async function* dispatchWs(
-  rig: Rig,
+  rig: ProtocolInterfaceNode,
   routes: readonly WsRoute[],
   frame: WebSocketRequest,
   abort: AbortController,

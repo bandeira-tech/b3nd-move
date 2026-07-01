@@ -14,7 +14,7 @@
 
 /// <reference lib="deno.ns" />
 
-import type { Rig } from "@bandeira-tech/b3nd-core/rig";
+import type { ProtocolInterfaceNode } from "@bandeira-tech/b3nd-core/types";
 import type {
   MovePlug,
   ServerHandle,
@@ -30,7 +30,7 @@ const enc = new TextEncoder();
 
 export const httpPlug: MovePlug = {
   name: "http",
-  startServer: (rig: Rig, opts?: StartOpts): ServerHandle => {
+  startServer: (rig: ProtocolInterfaceNode, opts?: StartOpts): ServerHandle => {
     const api = httpApi(rig, { codec });
     const handler = opts?.cors ? withCors(api, { origin: "*" }) : api;
     const server = Deno.serve(

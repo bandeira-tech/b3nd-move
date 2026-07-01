@@ -20,7 +20,6 @@
 
 /// <reference lib="deno.ns" />
 
-import type { Rig } from "@bandeira-tech/b3nd-core/rig";
 import type { ProtocolInterfaceNode } from "@bandeira-tech/b3nd-core/types";
 import { runMoveSuite } from "./move-suite.ts";
 import { stubRig } from "../rigs/stub.ts";
@@ -53,7 +52,7 @@ export interface MovePlug {
   name: string;
   /** Boot the transport server around the given rig. */
   startServer: (
-    rig: Rig,
+    rig: ProtocolInterfaceNode,
     opts?: StartOpts,
   ) => Promise<ServerHandle> | ServerHandle;
   /** Build a fresh client pointed at the booted server's URL. */

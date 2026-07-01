@@ -32,7 +32,7 @@
  * ```
  */
 
-import type { Rig } from "@bandeira-tech/b3nd-core/rig";
+import type { ProtocolInterfaceNode } from "@bandeira-tech/b3nd-core/types";
 import { dispatchHttp } from "../http/router.ts";
 import { httpPostContentRoute, type PayloadDecoder } from "./route.ts";
 
@@ -65,7 +65,7 @@ export interface HttpPostContentApiOptions {
  * handler at the runtime layer.
  */
 export function httpPostContentApi(
-  rig: Rig,
+  rig: ProtocolInterfaceNode,
   options: HttpPostContentApiOptions,
 ): (req: Request) => Promise<Response> {
   const routes = [httpPostContentRoute(options)];

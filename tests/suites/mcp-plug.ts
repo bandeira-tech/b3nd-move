@@ -14,7 +14,7 @@
 
 // deno-lint-ignore-file no-import-prefix
 
-import type { Rig } from "@bandeira-tech/b3nd-core/rig";
+import type { ProtocolInterfaceNode } from "@bandeira-tech/b3nd-core/types";
 import type { Client } from "npm:@modelcontextprotocol/sdk@^1.0.0/client/index.js";
 import { mcpSpec, type McpSpecOptions } from "./mcp-spec.ts";
 import { stubRig } from "../rigs/stub.ts";
@@ -24,7 +24,7 @@ export interface McpPlug {
   name: string;
   /** Connect an SDK client to an MCP server built around the given rig. */
   connect: (
-    rig: Rig,
+    rig: ProtocolInterfaceNode,
   ) => Promise<{ client: Client; cleanup: () => void | Promise<void> }>;
 }
 

@@ -31,7 +31,7 @@
  * response; `204` is how it represents "nothing to say".
  */
 
-import type { Rig } from "@bandeira-tech/b3nd-core/rig";
+import type { ProtocolInterfaceNode } from "@bandeira-tech/b3nd-core/types";
 import { HttpError } from "../router/errors.ts";
 import type { Route } from "../router/route.ts";
 
@@ -172,7 +172,7 @@ export function httpRequest(
  * `HttpError` is the way routes signal them — see `../router/errors.ts`.
  */
 export async function dispatchHttp(
-  rig: Rig,
+  rig: ProtocolInterfaceNode,
   routes: readonly HttpRoute[],
   req: Request,
 ): Promise<Response> {

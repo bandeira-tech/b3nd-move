@@ -23,7 +23,7 @@
  * dep; unblock Vercel Edge etc.).
  */
 
-import type { Rig } from "@bandeira-tech/b3nd-core";
+import type { ProtocolInterfaceNode } from "@bandeira-tech/b3nd-core/types";
 import {
   readAction,
   receiveAction,
@@ -82,7 +82,7 @@ const TOOLS = [
 ];
 
 export function buildMcpServer(
-  rig: Rig,
+  rig: ProtocolInterfaceNode,
   opts: McpServerOptions,
 ): MinimalServer {
   const { codec } = opts;
