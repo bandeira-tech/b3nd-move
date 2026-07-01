@@ -1,13 +1,15 @@
 /**
- * Factory for the POST-content browser integration tests.
+ * POST-content facet test server.
  *
- * Boots `httpPostContentApi(rig)` on an ephemeral loopback port behind
- * `withCors()`. The rig accepts everything that reaches it except
- * URIs containing `/__reject__/`, which the program stage rejects.
+ * Content transports are NOT PIN-symmetric, so they do not plug into the
+ * shared `runMoveSuite`. This is their own co-located server boot:
+ * `httpPostContentApi` over a bespoke rig that accepts everything except
+ * `/__reject__/` URIs (rejected at the program stage), wrapped in
+ * `withCors`. `seen` accumulates what the rig forwarded to the backend so
+ * the browser harness can verify decoder behavior via a `GET /__seen`
+ * peek endpoint this server adds.
  *
- * `seen` accumulates what the rig forwarded to the backend so the
- * browser harness can verify decoder behavior via a follow-up
- * `GET /__seen` peek endpoint added by this factory's handler.
+ * Publish-excluded test support (see `deno.json`).
  */
 
 /// <reference lib="deno.ns" />
@@ -20,10 +22,10 @@ import type {
   ReceiveResult,
   StatusResult,
 } from "@bandeira-tech/b3nd-core/types";
-import { httpPostContentApi } from "../../src/http-post-content/service.ts";
-import { payloadDecoder as dec } from "../../src/http-post-content/payload-decoder.ts";
-import { withCors } from "../../src/cors.ts";
-import type { ServerHandle } from "./http.ts";
+import type { ServerHandle } from "../../../tests/suites/move-plug.ts";
+import { httpPostContentApi } from "../service.ts";
+import { payloadDecoder as dec } from "../payload-decoder.ts";
+import { withCors } from "../../cors.ts";
 
 class ContentPostStubBackend implements ProtocolInterfaceNode {
   seen: Output[] = [];

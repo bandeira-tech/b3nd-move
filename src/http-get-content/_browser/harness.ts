@@ -1,22 +1,13 @@
 /**
- * Browser entry for the httpGetContentApi integration test.
+ * Browser entry for the httpGetContentApi conformance run.
  *
  * Issues real `fetch` calls from a headless browser against the
- * GET-content facet booted by `tests/factories/http-get-content.ts`.
- * Each `Deno.test` here is collected by the deno-stub shim and run
- * by the harness runner.
- *
- * The factory's `payloadResponseMap` is:
- *   byExtension({
- *     png: fromField("bytes", { contentType: "image/png" }),
- *     txt: fromField("text",  { contentType: "text/plain" }),
- *     "*": json(),
- *   })
- *
- * so the tests below assert the resulting wire shape end-to-end.
+ * GET-content facet booted by `_conformance/server.ts`, asserting the
+ * content-type mapping end-to-end. Content transports are not PIN-
+ * symmetric, so this is a bespoke suite rather than `runMoveSuite`.
  */
 
-import { serverUrl, setupHarness } from "../deno-stub.ts";
+import { serverUrl, setupHarness } from "../../../tests/browser/deno-stub.ts";
 
 const SUITE = "httpGetContentApi (browser)";
 

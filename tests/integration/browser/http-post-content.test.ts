@@ -1,10 +1,8 @@
 /**
  * httpPostContentApi Browser Integration Tests.
  *
- * Drives the shared browser runner against the POST-content facet booted
- * by `tests/factories/http-post-content.ts`. Each browser-side test
- * (registered in `harnesses/http-post-content.ts`) is re-registered as
- * its own `Deno.test`.
+ * Thin shim: boots the POST-content facet (via the co-located server) and
+ * points the shared browser runner at the co-located harness.
  *
  * Run with:  deno task test:integration:http-post-content
  */
@@ -12,11 +10,11 @@
 /// <reference lib="deno.ns" />
 
 import { runBrowserSuite } from "../../browser/runner.ts";
-import { startHttpPostContentServer } from "../../factories/http-post-content.ts";
+import { startHttpPostContentServer } from "../../../src/http-post-content/_conformance/server.ts";
 
 await runBrowserSuite({
   harnessEntry: new URL(
-    "../../browser/harnesses/http-post-content.ts",
+    "../../../src/http-post-content/_browser/harness.ts",
     import.meta.url,
   ),
   startServer: () => startHttpPostContentServer(),

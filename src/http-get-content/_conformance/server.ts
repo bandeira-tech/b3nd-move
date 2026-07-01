@@ -1,14 +1,19 @@
 /**
- * Factory for the GET-content browser integration tests.
+ * GET-content facet test server.
  *
- * Boots `httpGetContentApi(rig)` on an ephemeral loopback port behind
- * `withCors()`. The rig serves a small deterministic set of
- * payload shapes the browser harness asserts against:
+ * Content transports are NOT PIN-symmetric — bespoke rig, content-type
+ * mapping, browser-only assertions — so they do not plug into the shared
+ * `runMoveSuite`. This is their own co-located server boot: a small
+ * deterministic rig behind `httpGetContentApi`, wrapped in `withCors` for
+ * the cross-origin browser client. The browser harness asserts the wire
+ * shape end-to-end:
  *
- *   read(`mutable://t/png.png`)   → bytes field    + kind: "image"
- *   read(`mutable://t/note.txt`)  → text field     + kind: "text"
- *   read(`mutable://t/thing`)     → { echo, kind: "obj" }
+ *   read(`mutable://t/*.png`)  → bytes field + image/png
+ *   read(`mutable://t/*.txt`)  → text field  + text/plain
+ *   read(`mutable://t/thing`)  → { echo, kind: "obj" } as JSON
  *   read(`mutable://t/__miss__/`) → null payload
+ *
+ * Publish-excluded test support (see `deno.json`).
  */
 
 /// <reference lib="deno.ns" />
@@ -20,10 +25,10 @@ import type {
   ReceiveResult,
   StatusResult,
 } from "@bandeira-tech/b3nd-core/types";
-import { httpGetContentApi } from "../../src/http-get-content/service.ts";
-import { payloadResponseMap as map } from "../../src/http-get-content/payload-response-map.ts";
-import { withCors } from "../../src/cors.ts";
-import type { ServerHandle } from "./http.ts";
+import type { ServerHandle } from "../../../tests/suites/move-plug.ts";
+import { httpGetContentApi } from "../service.ts";
+import { payloadResponseMap as map } from "../payload-response-map.ts";
+import { withCors } from "../../cors.ts";
 
 class ContentStubBackend implements ProtocolInterfaceNode {
   receive(msgs: Output[]): Promise<ReceiveResult[]> {
@@ -59,8 +64,7 @@ function buildRig(): Rig {
 }
 
 export function startHttpGetContentServer(): Promise<ServerHandle> {
-  const rig = buildRig();
-  const api = httpGetContentApi(rig, {
+  const api = httpGetContentApi(buildRig(), {
     payloadResponseMap: map.byExtension({
       png: map.fromField("bytes", { contentType: "image/png" }),
       txt: map.fromField("text", { contentType: "text/plain" }),

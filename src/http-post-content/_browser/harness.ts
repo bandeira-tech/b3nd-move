@@ -1,22 +1,14 @@
 /**
- * Browser entry for the httpPostContentApi integration test.
+ * Browser entry for the httpPostContentApi conformance run.
  *
- * Issues real cross-origin `fetch` POSTs from a headless browser
- * against the POST-content facet booted by
- * `tests/factories/http-post-content.ts`. The factory's decoder is:
- *
- *   byContentType({
- *     "application/json": json(),
- *     "text/plain":       text(),
- *     "image/*":          intoField("bytes", { keepContentType: true }),
- *     default:            raw(),
- *   })
- *
- * After each POST, the browser pokes `GET /__seen` to verify the rig
- * received the expected payload shape end-to-end.
+ * Issues real cross-origin `fetch` POSTs from a headless browser against
+ * the POST-content facet booted by `_conformance/server.ts`. After each
+ * POST, the browser pokes `GET /__seen` to verify the rig received the
+ * expected payload shape end-to-end. Bespoke suite (content transports
+ * are not PIN-symmetric).
  */
 
-import { serverUrl, setupHarness } from "../deno-stub.ts";
+import { serverUrl, setupHarness } from "../../../tests/browser/deno-stub.ts";
 
 const SUITE = "httpPostContentApi (browser)";
 
