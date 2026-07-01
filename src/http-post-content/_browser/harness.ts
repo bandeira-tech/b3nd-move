@@ -9,19 +9,12 @@
  */
 
 import { serverUrl, setupHarness } from "../../../tests/browser/deno-stub.ts";
+import { assertEquals } from "@std/assert";
 
 const SUITE = "httpPostContentApi (browser)";
 
 function postUrl(uri: string): string {
   return `${serverUrl()}/api/v1/content/${encodeURIComponent(uri)}`;
-}
-
-function assertEquals<T>(actual: T, expected: T, msg?: string): void {
-  const a = JSON.stringify(actual);
-  const e = JSON.stringify(expected);
-  if (a !== e) {
-    throw new Error(`${msg ?? "values differ"}: got ${a}, want ${e}`);
-  }
 }
 
 async function seen(): Promise<unknown[]> {
