@@ -1,8 +1,8 @@
 import { assertEquals } from "@std/assert";
-import { grpcHttpApi } from "../../../src/grpc/http/service.ts";
-import { GrpcHttpClient } from "../../../src/grpc/http/client.ts";
-import { stubRig } from "../../rigs/stub.ts";
-import { grpcProto } from "../../../src/codecs/grpc/mod.ts";
+import { grpcHttpApi } from "./service.ts";
+import { GrpcHttpClient } from "./client.ts";
+import { stubRig } from "../../../tests/rigs/stub.ts";
+import { grpcProto } from "../../codecs/grpc/mod.ts";
 
 let nextPort = 19100 + Math.floor(Math.random() * 900);
 

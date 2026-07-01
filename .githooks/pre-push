@@ -5,9 +5,10 @@
 # Mirrors the CI jobs that finish in < 5s each:
 #   - Type Check                      (deno task check)
 #   - Lint and Format Check           (deno lint + deno fmt --check)
-#   - Unit Tests                      (deno task test)
-#   - Integration (Deno-in-process)   (deno task test:integration:deno)
+#   - Unit Tests + in-Deno conformance (deno task test)
 #
+# `deno task test` now includes every in-Deno transport conformance run
+# (they live under src/), so there is no separate integration-deno step.
 # Browser integration is skipped (slow matrix, only runs on push to GH).
 #
 # Bypass with `git push --no-verify` when you really mean to.
@@ -34,8 +35,5 @@ deno fmt --check src/ tests/
 
 step "deno task test"
 deno task test >/dev/null
-
-step "deno task test:integration:deno"
-deno task test:integration:deno >/dev/null
 
 printf "\n✓ pre-push checks passed\n"

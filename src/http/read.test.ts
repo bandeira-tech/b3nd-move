@@ -10,9 +10,9 @@
 
 import { assertEquals } from "@std/assert";
 import type { Output } from "@bandeira-tech/b3nd-core/types";
-import { HttpClient } from "../../../src/http/client.ts";
-import { encodeOutputsFrame } from "../../../src/codecs/outputs-frame.ts";
-import { httpOutputsFrame } from "../../../src/codecs/http/mod.ts";
+import { HttpClient } from "./client.ts";
+import { encodeOutputsFrame } from "../codecs/outputs-frame.ts";
+import { httpOutputsFrame } from "../codecs/http/mod.ts";
 
 const codec = httpOutputsFrame();
 

@@ -1,23 +1,24 @@
 /**
  * `preSend` — verify each client's hook reaches the wire.
  *
- * No framework, no canon: the hook is just a function. These tests
- * exercise the simplest "stamp an auth header / mutate the envelope"
+ * A cross-transport client concern: the hook is just a function. These
+ * tests exercise the simplest "stamp an auth header / mutate the envelope"
  * cases plus the WS `url: () => ...` form for handshake-time tokens.
+ * Co-located under `src/` because it proves shared client behavior, not
+ * any single transport's wire.
  */
 
 /// <reference lib="deno.ns" />
 
 import { assertEquals } from "@std/assert";
-import { HttpClient } from "../../../src/http/client.ts";
-import { GrpcHttpClient } from "../../../src/grpc/http/client.ts";
-import { WebSocketClient } from "../../../src/ws/client.ts";
-import { startGrpcServer } from "../../factories/grpc.ts";
-import { startWsServer } from "../../factories/ws.ts";
-import { stubRig } from "../../rigs/stub.ts";
-import { httpOutputsFrame } from "../../../src/codecs/http/mod.ts";
-import { wsJsonEnvelope } from "../../../src/codecs/ws/mod.ts";
-import { grpcProto } from "../../../src/codecs/grpc/mod.ts";
+import { HttpClient } from "./http/client.ts";
+import { GrpcHttpClient } from "./grpc/http/client.ts";
+import { WebSocketClient } from "./ws/client.ts";
+import { wsPlug } from "./ws/_conformance/plug.ts";
+import { stubRig } from "../tests/rigs/stub.ts";
+import { httpOutputsFrame } from "./codecs/http/mod.ts";
+import { wsJsonEnvelope } from "./codecs/ws/mod.ts";
+import { grpcProto } from "./codecs/grpc/mod.ts";
 
 const codec = httpOutputsFrame();
 const wsCodec = wsJsonEnvelope();
@@ -137,15 +138,7 @@ Deno.test("HttpClient preSend — functions compose via plain calls", async () =
 });
 
 Deno.test("GrpcHttpClient preSend — stamps headers on rpc", async () => {
-  const server = await startGrpcServer(stubRig(), { codec: grpcCodec });
   let seenAuth: string | null = null;
-  // Wrap by routing through the actual client; we sniff via a separate
-  // listener proxy. Simpler: re-use the real server but stamp on
-  // outbound and verify by round-trip success — there's no read-back
-  // here for headers without a custom listener. Instead, run a tiny
-  // sniffer.
-  await server.stop();
-
   const ac = new AbortController();
   const sniffer = Deno.serve(
     { port: 0, signal: ac.signal, onListen: () => {} },
@@ -172,7 +165,7 @@ Deno.test("GrpcHttpClient preSend — stamps headers on rpc", async () => {
 });
 
 Deno.test("WebSocketClient preSend — mutates outbound envelope per frame", async () => {
-  const server = await startWsServer(stubRig(), { codec: wsCodec });
+  const server = await wsPlug.startServer(stubRig());
   try {
     let count = 0;
     const client = new WebSocketClient({
@@ -195,7 +188,7 @@ Deno.test("WebSocketClient preSend — mutates outbound envelope per frame", asy
 });
 
 Deno.test("WebSocketClient — url accepts a function for handshake-time token", async () => {
-  const server = await startWsServer(stubRig(), { codec: wsCodec });
+  const server = await wsPlug.startServer(stubRig());
   try {
     let calls = 0;
     const client = new WebSocketClient({
