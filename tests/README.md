@@ -1,161 +1,139 @@
-# `tests/` — Integration tests + shared test infra
+# `tests/` — the transport conformance kit
 
-Everything outside production code lives here: the integration tests, the shared
-rig and transport factories, the named test-set suites, and the browser runner
-machinery. `src/` is now purely production code.
+`b3nd-move`'s shared expectations live here as a reusable **kit**; each
+transport's _conformance run_ lives next to its code under `src/<transport>/`.
+The kit is the contract, the co-located run proves a transport meets it. This
+mirrors `b3nd-save`, where one `shared-store-suite` is run by a co-located
+`store.test.ts` per backend.
 
-Two integration runtime pairings, covered side by side, against the same rig:
+Nothing in `tests/` is production code, and nothing here is published (the whole
+tree is `publish.exclude`d, along with each transport's `_conformance/` and
+`_browser/` support dirs).
 
-| Pairing     | Server                  | Client                            | Rig       | Suite                 |
-| ----------- | ----------------------- | --------------------------------- | --------- | --------------------- |
-| **Deno**    | real transport, in Deno | real client, in Deno              | `stubRig` | `moveSuite`/`mcpSpec` |
-| **Browser** | real transport, in Deno | real client, in headless Chromium | `stubRig` | `moveSuite`           |
-
-b3nd-move's job is encode → wire → decode. The tests assert that calls reach the
-rig with the expected shape and that the rig's response survives the round. They
-do **not** assert storage semantics — those are a backend concern, not this
-package's. So every test runs against `stubRig` (deterministic canned responses)
-and asserts that the wire delivers those responses unchanged.
-
-## Layout
+## The kit
 
 ```
 tests/
-├── factories/                # boot real transports — parameterised on rig
-│   ├── http.ts               # startHttpServer(rig, { cors? }) → { url, stop }
-│   ├── ws.ts                 # startWsServer(rig)             → { url, stop }
-│   ├── grpc.ts               # startGrpcServer(rig, { cors? })→ { url, stop }
-│   └── mcp.ts                # startMcpInProcess(rig)          → { client, cleanup }
+├── suites/
+│   ├── move-suite.ts   # runMoveSuite(name, config) — PIN wire expectations.
+│   │                   #   Browser-safe (no server boot); imported by both
+│   │                   #   the in-Deno runner and the bundled browser harnesses.
+│   ├── move-plug.ts    # MovePlug + runMovePlug(plug) — the in-Deno runner:
+│   │                   #   build stubRig → plug.startServer → runMoveSuite via
+│   │                   #   plug.makeClient → teardown. Deno-only.
+│   ├── mcp-spec.ts     # mcpSpec(name, factory) — MCP tool-surface expectations.
+│   └── mcp-plug.ts     # McpPlug + runMcpPlug(plug) — wires stubRig into mcpSpec.
 ├── rigs/
-│   └── stub.ts               # stubRig() — deterministic PIN, canned responses
-├── suites/                   # named test-set generators
-│   ├── mcp-spec.ts           # MCP tool surface contract
-│   └── move-suite.ts         # per-operation, batch on both sides
-├── browser/                  # browser harness machinery
-│   ├── runner.ts             # esbuild + @astral/astral driver
-│   ├── harness.html          # page template (server URL injected)
-│   ├── deno-stub.ts          # Deno.test collector for in-browser
-│   └── harnesses/            # one bundled entry per transport
-│       ├── http.ts
-│       ├── ws.ts
-│       ├── grpc.ts
-│       └── grpc-binary.ts
-└── integration/              # .test.ts files that compose everything
-    ├── deno/                 # real rig + real client, both in Deno
-    │   ├── http.test.ts
-    │   ├── ws.test.ts
-    │   ├── grpc.test.ts      # registers move-suite twice: json + binary
-    │   └── mcp.test.ts
-    └── browser/              # real server, stub rig, browser client
-        ├── http.test.ts
-        ├── ws.test.ts
-        ├── grpc.test.ts
-        └── grpc-binary.test.ts
+│   └── stub.ts         # stubRig() — one deterministic PIN, canned responses.
+└── browser/            # shared browser runner (esbuild + @astral/astral)
+    ├── runner.ts       #   runBrowserSuite({ harnessEntry, startServer })
+    ├── harness.html    #   page template (server URL injected)
+    └── deno-stub.ts    #   Deno.test collector for in-browser runs
 ```
+
+`b3nd-move`'s job is encode → wire → decode. The suites assert that calls reach
+the rig with the expected shape and that the rig's response survives the round.
+They do **not** assert storage semantics — every run uses `stubRig`
+(deterministic canned responses) and asserts the wire delivers those responses
+unchanged. See `rigs/stub.ts` for the stub contract (`/__reject__/`,
+`/__miss__/`, `/__stream__/`, trailing-slash listings).
+
+Every test exercises **batched inputs AND batched outputs** — that's where
+transport bugs hide (off-by-one slot mapping, lost ordering, dropped misses).
+
+## A transport plug
+
+A transport proves conformance by describing itself as a plug and handing it to
+the kit. The plug is the single source of truth for how the transport boots and
+how a client is built against it — reused by both the in-Deno run and the
+browser driver.
+
+```ts
+// src/<transport>/_conformance/plug.ts
+export const fooPlug: MovePlug = {
+  name: "foo",
+  startServer: (rig, opts) => {/* Deno.serve … return { url, stop } */},
+  makeClient: (url) => new FooClient({ url, codec }),
+  payload: (v) => /* adapt to wire, or omit for identity */,
+};
+```
+
+```ts
+// src/<transport>/conformance.test.ts  — runs under `deno task test`
+import { runMovePlug } from "../../tests/suites/move-plug.ts";
+import { fooPlug } from "./_conformance/plug.ts";
+await runMovePlug(fooPlug);
+```
+
+MCP transports use `McpPlug` + `runMcpPlug` against `mcpSpec` instead — MCP is
+tool calls + JSON text, not the PIN-over-method-call shape, so it has its own
+suite.
+
+## Two run modes, same expectations
+
+| Mode        | Server                  | Client                            | Where it runs                                    |
+| ----------- | ----------------------- | --------------------------------- | ------------------------------------------------ |
+| **Deno**    | real transport, in Deno | real client, in Deno              | `src/<transport>/conformance.test.ts`            |
+| **Browser** | real transport, in Deno | real client, in headless Chromium | `src/<transport>/_browser/harness.ts` + a driver |
+
+The in-Deno run is part of `deno task test` (loopback server, no external deps).
+The browser run is opt-in per transport via
+`deno task test:integration:<transport>`; a thin driver in
+`tests/integration/browser/` boots the plug's server (CORS on) and points the
+shared runner at the co-located harness.
+
+## Content transports — the carve-out
+
+`http-get-content` and `http-post-content` are **not** PIN-symmetric (bespoke
+rigs, content-type mapping, browser-only). They do not plug into `runMoveSuite`;
+each keeps its own `_conformance/server.ts` + `_browser/harness.ts` with
+transport-specific assertions.
 
 ## Running
 
 ```bash
-deno task test                          # unit/module tests in src/
-deno task test:integration:deno         # all in-Deno integration tests
+deno task test                          # module tests + all in-Deno conformance
 deno task test:integration:http         # browser: HttpClient
 deno task test:integration:ws           # browser: WebSocketClient
 deno task test:integration:grpc         # browser: GrpcHttpClient (JSON)
 deno task test:integration:grpc-binary  # browser: GrpcHttpClient (binary)
+deno task test:integration:http-get-content
+deno task test:integration:http-post-content
 ```
 
-`deno task test` does not pull Chromium. On first browser-integration run,
-`@astral/astral` downloads Chromium into its cache (a few hundred MB);
-subsequent runs reuse it.
+`deno task test` does not pull Chromium. On first browser run, `@astral/astral`
+downloads a pinned Chromium into its cache (a few hundred MB); subsequent runs
+reuse it.
 
 ## How a browser run works
 
-1. The integration test boots the **real** transport server via
-   `start<X>Server(stubRig(), { cors: true })` — real `httpApi`/`wsApi`/
-   `grpcHttpApi` wrapped in the package's `withCors()` where browsers need it,
-   on an ephemeral loopback port.
-2. `tests/browser/runner.ts` bundles the matching
-   `tests/browser/harnesses/<x>.ts` with esbuild + `@luca/esbuild-deno-loader`,
-   templates the server URL into `harness.html`, and serves the bundle on a
-   _second_ loopback port.
-3. Headless Chromium (`@astral/astral`) loads the harness URL. The harness
-   imports `tests/browser/deno-stub.ts` first — that swaps
-   `globalThis.Deno = { test: collect }` so the move-suite's `Deno.test(...)`
-   calls register into an in-page array instead of throwing.
-4. `setupHarness()` signals readiness via `__b3ndHarnessReady = true`. The
-   runner waits, calls `globalThis.runTests()`, gets back
+1. The driver boots the **real** transport server via
+   `plug.startServer(stubRig(), { cors: true })` on an ephemeral loopback port.
+2. `tests/browser/runner.ts` bundles the co-located
+   `src/<transport>/_browser/harness.ts` with esbuild +
+   `@luca/esbuild-deno-loader`, templates the server URL into `harness.html`,
+   and serves the bundle on a second loopback port.
+3. Headless Chromium loads the harness URL. The harness imports
+   `tests/browser/deno-stub.ts` first — that swaps
+   `globalThis.Deno = { test: collect }` so the suite's `Deno.test(...)` calls
+   register into an in-page array instead of throwing.
+4. `setupHarness()` signals readiness; the runner calls `runTests()`, gets back
    `{ name, ok, error }[]`, and re-registers each as a `Deno.test` so results
    stream out of `deno test` as if they ran locally.
 
-The harness page and the API server live on different loopback origins on
-purpose — that's what the browser sees in real deployments, and what the
-`withCors` (permissive headers + `OPTIONS` preflight) has to handle to be
-useful.
-
-## Stub rig contract
-
-`stubRig()` is a real `Rig` from `@bandeira-tech/b3nd-core` wired to one
-deterministic `ProtocolInterfaceNode` on all routes, with a program registered
-under `mutable://t` so rejection happens at the pipeline stage (the rig's
-backend dispatch is fire-and-forget; only the program/handler outcome surfaces
-in `rig.receive`'s return).
-
-The move-suite drives every transport with the same conventions:
-
-| Op              | Convention                                                                                                                         |
-| --------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| `receive(msgs)` | `[{accepted: true}, …]`; URIs containing `/__reject__/` → `{accepted: false, error: "rejected by stub"}` (rejected at the program) |
-| `read(urls)`    | `[[url, {echo: url}], …]`; URIs containing `/__miss__/` → `[url, null]`; URIs ending in `/` synthesize a 3-child listing           |
-| `observe(urls)` | 3 frames per subscribed pattern: `[` ${pattern}/${i}`]` (singleton uri batch), then end                                            |
-| `status()`      | `{status: "healthy", message: "stub", fns: ["receive","read","observe","status"]}`                                                 |
-
-Every test exercises **batched inputs AND batched outputs** so the encode/
-decode paths get exercised in their multi-item shape — that's where transport
-bugs usually live (off-by-one slot mapping, lost ordering, dropped misses).
-
-## Sharing infra with per-module unit tests
-
-Per-module tests (`src/ws/observe.test.ts`, `src/grpc/http/client.test.ts`,
-etc.) can import the shared rig and factories to avoid hand-rolling in-test
-setups:
-
-```ts
-import { startHttpServer } from "../../../tests/factories/http.ts";
-import { stubRig } from "../../../tests/rigs/stub.ts";
-
-const server = await startHttpServer(stubRig());
-```
-
-The factories and rig are publish-excluded along with the rest of `tests/`, so
-they exist only at workspace scope.
+The harness page and API server live on different loopback origins on purpose —
+that's what a browser sees in real deployments, and what `withCors` has to
+handle.
 
 ## Adding a new transport
 
-1. Add `tests/factories/<name>.ts` exporting `start<Name>Server(rig)` →
-   `{ url, stop }`.
-2. Add an in-Deno test at `tests/integration/deno/<name>.test.ts` that boots
-   `start<Name>Server(stubRig())` and runs `runMoveSuite`.
-3. Add a browser harness at `tests/browser/harnesses/<name>.ts`:
-   ```ts
-   import { serverUrl, setupHarness } from "../deno-stub.ts";
-   import { TheClient } from "../../../src/<name>/client.ts";
-   import { runMoveSuite } from "../../suites/move-suite.ts";
-
-   runMoveSuite("TheClient (browser)", {
-     client: () => new TheClient({ url: serverUrl() }),
-   });
-   setupHarness();
-   ```
-4. Add a browser integration test at `tests/integration/browser/<name>.test.ts`:
-   ```ts
-   import { runBrowserSuite } from "../../browser/runner.ts";
-   import { start<Name>Server } from "../../factories/<name>.ts";
-   import { stubRig } from "../../rigs/stub.ts";
-
-   await runBrowserSuite({
-     harnessEntry: new URL("../../browser/harnesses/<name>.ts", import.meta.url),
-     startServer: () => start<Name>Server(stubRig(), { cors: true }),
-   });
-   ```
+1. `src/<name>/_conformance/plug.ts` — export a `MovePlug` (`startServer`,
+   `makeClient`, `payload?`).
+2. `src/<name>/conformance.test.ts` — `await runMovePlug(<name>Plug)`. Runs
+   under `deno task test` automatically.
+3. `src/<name>/_browser/harness.ts` — self-contained `runMoveSuite(...)` against
+   the browser client; end with `setupHarness()`.
+4. `tests/integration/browser/<name>.test.ts` — thin driver:
+   `runBrowserSuite({ harnessEntry, startServer: () => <name>Plug.startServer(stubRig(), { cors: true }) })`.
 5. Add a `test:integration:<name>` task to `deno.json` and a matrix entry to
    `.github/workflows/ci.yml`.

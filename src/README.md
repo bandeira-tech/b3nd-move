@@ -15,6 +15,12 @@ src/<transport>/
 surface collapses to these two files. No barrels — import from the canonical
 file directly.
 
+Each transport also carries its own **conformance run** next to the code:
+`conformance.test.ts` plugs the transport into `b3nd-move`'s shared test suite
+(see [`tests/`](../tests/README.md)). The plug and browser harness it needs live
+in `_conformance/` and `_browser/` — publish-excluded test support, so the
+`Deno.serve` boot they contain stays out of the shipped package.
+
 **Runtime binding lives outside `src/`.** Spinning up `Deno.serve`, plumbing
 stdio, draining WebSocket connections — none of that is part of the published
 package. Pair `service.ts` with whatever your host runtime offers, or use

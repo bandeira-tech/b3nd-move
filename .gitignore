@@ -4,3 +4,4 @@ _vendor/
 deno.lock
 node_modules/
 npm/
+docs/superpowers/

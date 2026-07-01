@@ -32,7 +32,7 @@ import * as esbuild from "esbuild";
 import { denoPlugins } from "@luca/esbuild-deno-loader";
 import { fromFileUrl } from "@std/path";
 import type { BrowserTestResult } from "./deno-stub.ts";
-import type { ServerHandle } from "../factories/http.ts";
+import type { ServerHandle } from "../suites/move-plug.ts";
 
 const HARNESS_HTML_PATH = fromFileUrl(
   new URL("./harness.html", import.meta.url),

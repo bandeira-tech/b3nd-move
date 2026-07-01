@@ -6,6 +6,11 @@ on:
     branches: [main]
 
 jobs:
+  # `deno task test` runs every module test AND every in-Deno transport
+  # conformance run (src/<transport>/conformance.test.ts boots a real
+  # loopback server against stubRig). No external deps, so this is the
+  # single fast lane — the old separate integration-deno job folded in
+  # here when conformance moved under src/.
   unit-tests:
     name: Unit Tests
     runs-on: ubuntu-latest
@@ -24,15 +29,6 @@ jobs:
         with: { deno-version: v2.6.4 }
       - run: deno lint src/ tests/
       - run: deno fmt --check src/ tests/
-
-  integration-deno:
-    name: Integration (Deno-in-process)
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: denoland/setup-deno@v2
-        with: { deno-version: v2.6.4 }
-      - run: deno task test:integration:deno
 
   type-check:
     name: Type Check
