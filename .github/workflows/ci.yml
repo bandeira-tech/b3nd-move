@@ -17,7 +17,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: denoland/setup-deno@v2
-        with: { deno-version: v2.6.4 }
+        with: { deno-version: v2.x }
       - run: deno task test
 
   lint-and-format:
@@ -26,7 +26,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: denoland/setup-deno@v2
-        with: { deno-version: v2.6.4 }
+        with: { deno-version: v2.x }
       - run: deno lint src/ tests/
       - run: deno fmt --check src/ tests/
 
@@ -36,7 +36,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: denoland/setup-deno@v2
-        with: { deno-version: v2.6.4 }
+        with: { deno-version: v2.x }
       - run: deno task check
 
   # Browser integration: real client (bundled into headless Chromium via
@@ -60,7 +60,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: denoland/setup-deno@v2
-        with: { deno-version: v2.6.4 }
+        with: { deno-version: v2.x }
       # astral downloads a pinned Chromium build into ~/.cache/astral on
       # first run; cache it across runs so we don't pay the ~150MB hit
       # on every CI invocation.
