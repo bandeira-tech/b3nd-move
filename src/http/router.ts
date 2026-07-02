@@ -31,7 +31,7 @@
  * response; `204` is how it represents "nothing to say".
  */
 
-import type { Rig } from "@bandeira-tech/b3nd-core/rig";
+import type { ProtocolInterfaceNode } from "@bandeira-tech/b3nd-core/types";
 import { HttpError } from "../router/errors.ts";
 import type { Route } from "../router/route.ts";
 
@@ -168,11 +168,11 @@ export function httpRequest(
  *   first `{ params }` hit                      → run action → encode
  *
  * Errors are wire-adapter concerns (bad JSON, bad encoding, missing
- * resource at the route layer) and never reach the rig. Throwing an
+ * resource at the route layer) and never reach the pin. Throwing an
  * `HttpError` is the way routes signal them — see `../router/errors.ts`.
  */
 export async function dispatchHttp(
-  rig: Rig,
+  pin: ProtocolInterfaceNode,
   routes: readonly HttpRoute[],
   req: Request,
 ): Promise<Response> {
@@ -187,7 +187,7 @@ export async function dispatchHttp(
     }
 
     // Per-request lifecycle. For streaming actions (observe) this is
-    // the signal the rig observer sees; for unary it's effectively
+    // the signal the pin observer sees; for unary it's effectively
     // ignored but still wired so encoders can opt in.
     const abort = new AbortController();
     const onAbort = () => abort.abort();
@@ -198,7 +198,7 @@ export async function dispatchHttp(
       const args = await r.decode(ctx);
       // `await` resolves promises and is a no-op for observe's
       // AsyncIterable, leaving it for encode to stream.
-      const result = await r.action(rig, args, abort.signal);
+      const result = await r.action(pin, args, abort.signal);
       const out = await r.encode(result as Awaited<typeof result>, ctx);
       return out ?? new Response(null, { status: 204 });
     } catch (e) {

@@ -2,17 +2,17 @@
  * @module
  * HTTP API for the Rig.
  *
- * Standalone function that translates HTTP requests to rig method calls.
+ * Standalone function that translates HTTP requests to pin method calls.
  * No framework dependency, no middleware — just a `(Request) => Promise<Response>`.
  *
- * The rig stays pure (orchestration only). Transport is external.
+ * The pin stays pure (orchestration only). Transport is external.
  *
  * Each route is its own declaration in a sibling file:
  *
- *   GET  /api/v1/status            → ./status.ts   (rig.status())
- *   POST /api/v1/receive?u=<b64>   → ./receive.ts  (rig.receive(outputs))
- *   POST /api/v1/read?u=<b64>      → ./read.ts     (rig.read(urls))
- *   POST /api/v1/observe?u=<b64>   → ./observe.ts  (rig.observe(urls), NDJSON)
+ *   GET  /api/v1/status            → ./status.ts   (pin.status())
+ *   POST /api/v1/receive?u=<b64>   → ./receive.ts  (pin.receive(outputs))
+ *   POST /api/v1/read?u=<b64>      → ./read.ts     (pin.read(urls))
+ *   POST /api/v1/observe?u=<b64>   → ./observe.ts  (pin.observe(urls), NDJSON)
  *
  * Each batch route packs its string list into the `?u=<urlsafe-b64>`
  * query slot (see ../codecs/url-list.ts) so routing / auth /
@@ -40,9 +40,9 @@
  * import { httpOutputsFrame } from "@bandeira-tech/b3nd-move/codecs/http/mod";
  *
  * const c = connection(client, ["**"]);
- * const rig = new Rig({ routes: { receive: [c], read: [c], observe: [c] } });
+ * const pin = new Rig({ routes: { receive: [c], read: [c], observe: [c] } });
  * const codec = httpOutputsFrame();
- * Deno.serve({ port: 3000 }, httpApi(rig, { codec }));
+ * Deno.serve({ port: 3000 }, httpApi(pin, { codec }));
  * ```
  *
  * @example Cross-origin browser callers
@@ -51,12 +51,12 @@
  * // CORS is upstream of the API — compose it around the handler.
  * Deno.serve(
  *   { port: 3000 },
- *   withCors(httpApi(rig, { codec }), { origin: "https://app.example.com" }),
+ *   withCors(httpApi(pin, { codec }), { origin: "https://app.example.com" }),
  * );
  * ```
  */
 
-import type { Rig } from "@bandeira-tech/b3nd-core/rig";
+import type { ProtocolInterfaceNode } from "@bandeira-tech/b3nd-core/types";
 import type { HttpBatchCodec } from "./codec.ts";
 import { dispatchHttp } from "./router.ts";
 import { observeRoute } from "./observe.ts";
@@ -89,7 +89,7 @@ export interface HttpApiOptions extends Partial<StatusRouteOptions> {
  * baked outputs-frame behaviour or supply a custom `HttpBatchCodec`.
  */
 export function httpApi(
-  rig: Rig,
+  pin: ProtocolInterfaceNode,
   options: HttpApiOptions,
 ): (req: Request) => Promise<Response> {
   const routes = [
@@ -98,5 +98,5 @@ export function httpApi(
     readRoute(options.codec),
     observeRoute,
   ];
-  return (req) => dispatchHttp(rig, routes, req);
+  return (req) => dispatchHttp(pin, routes, req);
 }

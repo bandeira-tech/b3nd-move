@@ -2,7 +2,7 @@
  * `MovePlug` — the transport plug contract for `runMoveSuite`.
  *
  * A transport proves it moves the PIN surface faithfully by describing
- * itself as a plug: how to boot its server around a rig, how to build a
+ * itself as a plug: how to boot its server around a pin, how to build a
  * client against the resulting URL, and (where the wire needs it) how to
  * adapt a JS payload into the wire's shape. `runMovePlug` owns the whole
  * in-Deno lifecycle — build `stubRig`, start the server, drive every
@@ -20,7 +20,6 @@
 
 /// <reference lib="deno.ns" />
 
-import type { Rig } from "@bandeira-tech/b3nd-core/rig";
 import type { ProtocolInterfaceNode } from "@bandeira-tech/b3nd-core/types";
 import { runMoveSuite } from "./move-suite.ts";
 import { stubRig } from "../rigs/stub.ts";
@@ -51,9 +50,9 @@ export interface StartOpts {
 export interface MovePlug {
   /** Suite label; prefixes every test name. */
   name: string;
-  /** Boot the transport server around the given rig. */
+  /** Boot the transport server around the given pin. */
   startServer: (
-    rig: Rig,
+    pin: ProtocolInterfaceNode,
     opts?: StartOpts,
   ) => Promise<ServerHandle> | ServerHandle;
   /** Build a fresh client pointed at the booted server's URL. */

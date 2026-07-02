@@ -1,9 +1,9 @@
 /**
  * @module
- * Standard action functions — one thin wrapper per rig method.
+ * Standard action functions — one thin wrapper per pin method.
  *
  * Every transport routes a wire request to an `action` function inside
- * its `Route`. The four standard ones bound here cover the rig's full
+ * its `Route`. The four standard ones bound here cover the pin's full
  * surface: `status`, `receive`, `read`, `observe`. Custom routes
  * supply their own function — see `src/router/route.ts` for the
  * contract.
@@ -37,28 +37,28 @@ import type {
 } from "@bandeira-tech/b3nd-core/types";
 import type { Action } from "../router/route.ts";
 
-/** `rig.status()`. */
-export const statusAction: Action<readonly [], Promise<StatusResult>> = (rig) =>
-  Promise.resolve(rig.status());
+/** `pin.status()`. */
+export const statusAction: Action<readonly [], Promise<StatusResult>> = (pin) =>
+  Promise.resolve(pin.status());
 
-/** `rig.receive(outputs)`. */
+/** `pin.receive(outputs)`. */
 export const receiveAction: Action<
   readonly [outputs: Output[]],
   PromiseLike<ReceiveResult[]>
-> = (rig, [outputs]) => rig.receive(outputs);
+> = (pin, [outputs]) => pin.receive(outputs);
 
 /**
- * `rig.read(urls)` — passthrough. The shared action owns no wire
+ * `pin.read(urls)` — passthrough. The shared action owns no wire
  * knowledge; per-transport codecs materialize stream payloads when
  * the wire requires a concrete shape (see `src/codecs/<wire>/`).
  */
 export const readAction: Action<
   readonly [urls: string[]],
   Promise<Output[]>
-> = (rig, [urls]) => rig.read(urls);
+> = (pin, [urls]) => pin.read(urls);
 
-/** `rig.observe(urls, signal)`. The signal flows from the dispatcher. */
+/** `pin.observe(urls, signal)`. The signal flows from the dispatcher. */
 export const observeAction: Action<
   readonly [urls: string[]],
   AsyncIterable<readonly string[]>
-> = (rig, [urls], signal) => rig.observe(urls, signal);
+> = (pin, [urls], signal) => pin.observe(urls, signal);

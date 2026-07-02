@@ -2,15 +2,15 @@
  * @module
  * gRPC-HTTP API for the Rig.
  *
- * Standalone function that translates `B3ndService` RPCs to rig method
+ * Standalone function that translates `B3ndService` RPCs to pin method
  * calls. No framework dependency, no middleware — just a
  * `(Request) => Promise<Response>`.
  *
  * Routes:
- *   POST /b3nd.v1.B3ndService/Receive  → ./receive.ts  (rig.receive(messages))
- *   POST /b3nd.v1.B3ndService/Read     → ./read.ts     (rig.read(urls))
- *   POST /b3nd.v1.B3ndService/Observe  → ./observe.ts  (rig.observe(urls), NDJSON)
- *   POST /b3nd.v1.B3ndService/Status   → ./status.ts   (rig.status())
+ *   POST /b3nd.v1.B3ndService/Receive  → ./receive.ts  (pin.receive(messages))
+ *   POST /b3nd.v1.B3ndService/Read     → ./read.ts     (pin.read(urls))
+ *   POST /b3nd.v1.B3ndService/Observe  → ./observe.ts  (pin.observe(urls), NDJSON)
+ *   POST /b3nd.v1.B3ndService/Status   → ./status.ts   (pin.status())
  *
  * Encoding is negotiated by Content-Type:
  *   application/json, application/connect+json    → JSON  (default)
@@ -31,7 +31,7 @@
  * shared dispatcher.
  */
 
-import type { Rig } from "@bandeira-tech/b3nd-core";
+import type { ProtocolInterfaceNode } from "@bandeira-tech/b3nd-core/types";
 import { dispatchGrpc } from "./router.ts";
 import { observeRoute } from "./observe.ts";
 import { readRoute } from "./read.ts";
@@ -52,10 +52,10 @@ export interface GrpcHttpApiOptions {
  * `Deno.serve` or any fetch-compatible HTTP runtime. CORS is upstream
  * of the API: for cross-origin browser callers, compose `withCors`
  * (`@bandeira-tech/b3nd-move/cors`) around the handler —
- * `withCors(grpcHttpApi(rig, { codec }), { origin: "*" })`.
+ * `withCors(grpcHttpApi(pin, { codec }), { origin: "*" })`.
  */
 export function grpcHttpApi(
-  rig: Rig,
+  pin: ProtocolInterfaceNode,
   options: GrpcHttpApiOptions,
 ): (req: Request) => Promise<Response> {
   const { codec } = options;
@@ -65,5 +65,5 @@ export function grpcHttpApi(
     readRoute(codec),
     observeRoute,
   ];
-  return (req) => dispatchGrpc(rig, routes, req);
+  return (req) => dispatchGrpc(pin, routes, req);
 }

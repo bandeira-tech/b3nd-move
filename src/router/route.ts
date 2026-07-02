@@ -8,7 +8,7 @@
  *   on      a matcher of the transport's shape (HTTP method+path, WS
  *           envelope type, MCP tool name, …)
  *   decode  ctx → args tuple for the action (or throws on bad input)
- *   action  the function that does the work — `(rig, args, signal) → result`
+ *   action  the function that does the work — `(pin, args, signal) → result`
  *   encode  (action result, ctx) → wire response, or `undefined` for none
  *
  * The transport-shaped bits are the type parameters — `Match` is the
@@ -21,7 +21,7 @@
  * exported from `../actions/standard.ts`; custom routes supply their
  * own function — observe-cancel is the canonical example, an action
  * that operates on transport state (a per-socket abort registry)
- * rather than on the rig.
+ * rather than on the pin.
  *
  * `encode` may return `undefined` to mean "no wire response" — useful
  * for fire-and-forget control frames like observe-cancel. Each
@@ -34,16 +34,16 @@
  * transport.
  */
 
-import type { Rig } from "@bandeira-tech/b3nd-core/rig";
+import type { ProtocolInterfaceNode } from "@bandeira-tech/b3nd-core/types";
 
 /**
- * Action function: `(rig, args, signal) → result`. Standard ones bind
- * rig methods; custom ones (observe-cancel, fire-and-forget control
- * frames, …) can ignore `rig` / `signal` entirely. The signal is the
+ * Action function: `(pin, args, signal) → result`. Standard ones bind
+ * pin methods; custom ones (observe-cancel, fire-and-forget control
+ * frames, …) can ignore `pin` / `signal` entirely. The signal is the
  * dispatcher's per-request `AbortController.signal`.
  */
 export type Action<Args extends readonly unknown[], Result> = (
-  rig: Rig,
+  pin: ProtocolInterfaceNode,
   args: Args,
   signal: AbortSignal,
 ) => Result | Promise<Result>;

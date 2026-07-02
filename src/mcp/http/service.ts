@@ -1,6 +1,6 @@
 /**
  * @module
- * MCP service over HTTP — `mcpHttpApi(rig, { codec })` as a fetch handler that
+ * MCP service over HTTP — `mcpHttpApi(pin, { codec })` as a fetch handler that
  * speaks the MCP Streamable HTTP transport against a `Rig`.
  *
  * Stateless by design. Every POST creates a fresh transport + fresh
@@ -39,8 +39,8 @@
  * import { mcpTextJsonStringify } from "@bandeira-tech/b3nd-move/codecs/mcp";
  *
  * const c = connection(client, ["**"]);
- * const rig = new Rig({ routes: { receive: [c], read: [c], observe: [c] } });
- * Deno.serve({ port: 3000 }, mcpHttpApi(rig, { codec: mcpTextJsonStringify() }));
+ * const pin = new Rig({ routes: { receive: [c], read: [c], observe: [c] } });
+ * Deno.serve({ port: 3000 }, mcpHttpApi(pin, { codec: mcpTextJsonStringify() }));
  * ```
  *
  * @example Stacked on the same port as httpApi + wsApi
@@ -49,9 +49,9 @@
  * import { wsJsonEnvelope } from "@bandeira-tech/b3nd-move/codecs/ws";
  * import { mcpTextJsonStringify } from "@bandeira-tech/b3nd-move/codecs/mcp";
  *
- * const http = httpApi(rig, { codec: httpOutputsFrame() });
- * const ws   = wsApi(rig, { codec: wsJsonEnvelope() });
- * const mcp  = mcpHttpApi(rig, { codec: mcpTextJsonStringify() });
+ * const http = httpApi(pin, { codec: httpOutputsFrame() });
+ * const ws   = wsApi(pin, { codec: wsJsonEnvelope() });
+ * const mcp  = mcpHttpApi(pin, { codec: mcpTextJsonStringify() });
  * Deno.serve({ port: 3000 }, (req) => {
  *   if (req.headers.get("upgrade") === "websocket") return ws(req);
  *   if (new URL(req.url).pathname.startsWith("/api/v1/mcp")) return mcp(req);
@@ -61,7 +61,7 @@
  */
 
 import { WebStandardStreamableHTTPServerTransport } from "../web-streamable-http-transport.ts";
-import type { Rig } from "@bandeira-tech/b3nd-core";
+import type { ProtocolInterfaceNode } from "@bandeira-tech/b3nd-core/types";
 import { buildMcpServer, type McpServerOptions } from "../service.ts";
 
 /**
@@ -75,10 +75,10 @@ import { buildMcpServer, type McpServerOptions } from "../service.ts";
  * and version reported in `initialize`. CORS is upstream of the API:
  * for cross-origin browser callers, compose `withCors`
  * (`@bandeira-tech/b3nd-move/cors`) around the handler —
- * `withCors(mcpHttpApi(rig, opts), { origin: "*" })`.
+ * `withCors(mcpHttpApi(pin, opts), { origin: "*" })`.
  */
 export function mcpHttpApi(
-  rig: Rig,
+  pin: ProtocolInterfaceNode,
   opts: McpServerOptions,
 ): (req: Request) => Promise<Response> {
   return async (req: Request): Promise<Response> => {
@@ -89,7 +89,7 @@ export function mcpHttpApi(
     const transport = new WebStandardStreamableHTTPServerTransport({
       sessionIdGenerator: undefined,
     });
-    const server = buildMcpServer(rig, opts);
+    const server = buildMcpServer(pin, opts);
     await server.connect(transport);
     return transport.handleRequest(req);
   };

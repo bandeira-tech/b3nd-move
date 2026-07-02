@@ -3,7 +3,7 @@
  * Build the MCP request dispatcher for a `Rig` — three tools (receive,
  * read, status) plus the `b3nd://*` resource surface.
  *
- * `buildMcpServer(rig, opts)` requires an operator-declared `McpBatchCodec`
+ * `buildMcpServer(pin, opts)` requires an operator-declared `McpBatchCodec`
  * in `opts.codec`. The codec controls how tool-call results are serialized
  * into MCP `Content[]` items. Two codecs ship in the catalog:
  *
@@ -11,9 +11,9 @@
  * import { buildMcpServer } from "@bandeira-tech/b3nd-move/mcp/service";
  * import { mcpTextJsonStringify } from "@bandeira-tech/b3nd-move/codecs/mcp";
  *
- * const server = buildMcpServer(rig, { codec: mcpTextJsonStringify() });
+ * const server = buildMcpServer(pin, { codec: mcpTextJsonStringify() });
  * // or, for byte-faithful resource content:
- * // const server = buildMcpServer(rig, { codec: mcpResourcePerSlot() });
+ * // const server = buildMcpServer(pin, { codec: mcpResourcePerSlot() });
  * ```
  *
  * Returns a `MinimalServer` configured with the b3nd handlers. Method routing
@@ -23,7 +23,7 @@
  * dep; unblock Vercel Edge etc.).
  */
 
-import type { Rig } from "@bandeira-tech/b3nd-core";
+import type { ProtocolInterfaceNode } from "@bandeira-tech/b3nd-core/types";
 import {
   readAction,
   receiveAction,
@@ -82,7 +82,7 @@ const TOOLS = [
 ];
 
 export function buildMcpServer(
-  rig: Rig,
+  pin: ProtocolInterfaceNode,
   opts: McpServerOptions,
 ): MinimalServer {
   const { codec } = opts;
@@ -104,7 +104,7 @@ export function buildMcpServer(
       switch (name) {
         case "b3nd_receive": {
           const messages = codec.decodeReceiveArgs(args);
-          const results = await receiveAction(rig, [messages], ctx.signal);
+          const results = await receiveAction(pin, [messages], ctx.signal);
           return {
             content: await codec.encodeReceive(results, messages, {
               signal: ctx.signal,
@@ -115,14 +115,14 @@ export function buildMcpServer(
 
         case "b3nd_read": {
           const urls = codec.decodeReadArgs(args);
-          const outputs = await readAction(rig, [urls], ctx.signal);
+          const outputs = await readAction(pin, [urls], ctx.signal);
           return {
             content: await codec.encodeRead(outputs, { signal: ctx.signal }),
           };
         }
 
         case "b3nd_status": {
-          const result = await statusAction(rig, [], ctx.signal);
+          const result = await statusAction(pin, [], ctx.signal);
           return {
             content: [{
               type: "text",
@@ -151,7 +151,7 @@ export function buildMcpServer(
 
   server.setRequestHandler("resources/list", async (_, ctx) => {
     try {
-      const status = await statusAction(rig, [], ctx.signal);
+      const status = await statusAction(pin, [], ctx.signal);
       return {
         resources: (status.schema ?? []).map((program) => ({
           uri: `b3nd://${program}`,
@@ -170,7 +170,7 @@ export function buildMcpServer(
     const resourceUri = params.uri;
     const b3ndUri = resourceUri.replace(/^b3nd:\/\//, "");
     try {
-      const [output] = await readAction(rig, [[b3ndUri]], ctx.signal);
+      const [output] = await readAction(pin, [[b3ndUri]], ctx.signal);
       return {
         contents: await codec.encodeReadResource(output, resourceUri, {
           signal: ctx.signal,
