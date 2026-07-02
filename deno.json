@@ -61,7 +61,8 @@
     "test:integration:grpc-binary": "deno test --allow-all tests/integration/browser/grpc-binary.test.ts",
     "hooks:install": "git config core.hooksPath .githooks",
     "serve": "deno run -A dev/main.ts",
-    "build:npm": "deno run -A scripts/build-npm.ts"
+    "build:npm": "deno run -A scripts/build-npm.ts",
+    "check:deps": "deno run --allow-read=deno.json --allow-net=jsr.io scripts/check-dep-drift.ts"
   },
   "compilerOptions": {
     "strict": true,
