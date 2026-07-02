@@ -16,8 +16,9 @@ and this project adheres to
   concrete `Rig` class. Transports only ever call the PIN surface (`status` /
   `receive` / `read` / `observe`), and `Rig` has private fields, so the class
   type rejected structurally-valid nodes (dynamically loaded rigs, wrappers,
-  test doubles) and forced `as any` casts in consumers like b3nd-cli.
-  Non-breaking: every `Rig` satisfies the PIN.
+  test doubles) and forced `as any` casts in consumers like b3nd-cli. The
+  parameter is named `pin` accordingly. Non-breaking: every `Rig` satisfies the
+  PIN.
 
 ## [0.20.0] — Unreleased
 
