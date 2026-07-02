@@ -30,8 +30,8 @@ const enc = new TextEncoder();
 
 export const httpPlug: MovePlug = {
   name: "http",
-  startServer: (rig: ProtocolInterfaceNode, opts?: StartOpts): ServerHandle => {
-    const api = httpApi(rig, { codec });
+  startServer: (pin: ProtocolInterfaceNode, opts?: StartOpts): ServerHandle => {
+    const api = httpApi(pin, { codec });
     const handler = opts?.cors ? withCors(api, { origin: "*" }) : api;
     const server = Deno.serve(
       { port: 0, hostname: "127.0.0.1", onListen: () => {} },
@@ -41,7 +41,7 @@ export const httpPlug: MovePlug = {
     return { url: `http://127.0.0.1:${port}`, stop: () => server.shutdown() };
   },
   // HTTP wire is opaque bytes past the URL — encode JS payloads once at
-  // the producer's edge. The stub rig ignores payload content; this is
+  // the producer's edge. The stub pin ignores payload content; this is
   // purely for what the wire requires.
   makeClient: (url) => new HttpClient({ url, codec }),
   payload: (v) => enc.encode(JSON.stringify(v)),

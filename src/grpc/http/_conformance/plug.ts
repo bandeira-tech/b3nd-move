@@ -27,10 +27,10 @@ import { grpcProto } from "../../../codecs/grpc/mod.ts";
 const codec = grpcProto();
 
 function startGrpcServer(
-  rig: ProtocolInterfaceNode,
+  pin: ProtocolInterfaceNode,
   opts?: StartOpts,
 ): ServerHandle {
-  const api = grpcHttpApi(rig, { codec });
+  const api = grpcHttpApi(pin, { codec });
   const handler = opts?.cors ? withCors(api, { origin: "*" }) : api;
   const server = Deno.serve(
     { port: 0, hostname: "127.0.0.1", onListen: () => {} },

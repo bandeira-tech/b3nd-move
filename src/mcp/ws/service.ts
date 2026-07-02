@@ -1,7 +1,7 @@
 /**
  * @module
- * MCP service over WebSocket — `mcpWsApi(rig, opts)` returns a function that
- * attaches a fresh `buildMcpServer(rig, opts)` (wired via
+ * MCP service over WebSocket — `mcpWsApi(pin, opts)` returns a function that
+ * attaches a fresh `buildMcpServer(pin, opts)` (wired via
  * `WebSocketServerTransport`) to an already-open `WebSocket`. The host
  * owns the upgrade (`Deno.upgradeWebSocket`, CF's `WebSocketPair`,
  * Node's `ws`) and any cross-socket lifecycle; the library only knows
@@ -27,7 +27,7 @@
  * ```ts
  * import { mcpTextJsonStringify } from "@bandeira-tech/b3nd-move/codecs/mcp";
  *
- * const attach = mcpWsApi(rig, { codec: mcpTextJsonStringify() });
+ * const attach = mcpWsApi(pin, { codec: mcpTextJsonStringify() });
  * Deno.serve({ port: 8080 }, (req) => {
  *   if (req.headers.get("upgrade") !== "websocket") {
  *     return new Response("Not Found", { status: 404 });
@@ -45,7 +45,7 @@
  * import { mcpTextJsonStringify } from "@bandeira-tech/b3nd-move/codecs/mcp";
  *
  * export class B3ndMcpSession {
- *   #attach = mcpWsApi(this.rig, { codec: mcpTextJsonStringify() });
+ *   #attach = mcpWsApi(this.pin, { codec: mcpTextJsonStringify() });
  *   fetch(req: Request) {
  *     const [client, server] = Object.values(
  *       new WebSocketPair(),
@@ -79,12 +79,12 @@ export type McpWsApi = (socket: WebSocket) => void;
  * `initialize`.
  */
 export function mcpWsApi(
-  rig: ProtocolInterfaceNode,
+  pin: ProtocolInterfaceNode,
   opts: McpServerOptions,
 ): McpWsApi {
   return (socket: WebSocket): void => {
     const transport = new WebSocketServerTransport(socket);
-    const server = buildMcpServer(rig, opts);
+    const server = buildMcpServer(pin, opts);
     // `connect` calls `transport.start()` which wires the socket
     // listeners. The attacher returns synchronously; the Server lives
     // until the socket closes (transport.onclose unwinds it).

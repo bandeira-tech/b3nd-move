@@ -31,8 +31,8 @@ const codec = wsJsonEnvelope();
 
 export const wsPlug: MovePlug = {
   name: "ws",
-  startServer: (rig: ProtocolInterfaceNode): ServerHandle => {
-    const attach = wsApi(rig, { codec });
+  startServer: (pin: ProtocolInterfaceNode): ServerHandle => {
+    const attach = wsApi(pin, { codec });
     const sockets = new Set<WebSocket>();
     const handler = (req: Request): Response => {
       if (req.headers.get("upgrade") !== "websocket") {

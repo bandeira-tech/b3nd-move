@@ -2,7 +2,7 @@
  * @module
  * Read-side HTTP content facet.
  *
- * Specialized request frontend that fronts `rig.read` for a single URI
+ * Specialized request frontend that fronts `pin.read` for a single URI
  * with a host-controlled mapping from `(request, output)` → HTTP response
  * shape. Use this when you need the read surface to be cacheable,
  * embeddable, or otherwise reachable by clients that can't speak the
@@ -18,7 +18,7 @@
  * import { payloadResponseMap as map }
  *   from "@bandeira-tech/b3nd-move/http-get-content/payload-response-map";
  *
- * Deno.serve({ port: 3000 }, httpGetContentApi(rig, {
+ * Deno.serve({ port: 3000 }, httpGetContentApi(pin, {
  *   payloadResponseMap: map.byExtension({
  *     png:  map.fromField("bytes", { contentType: "image/png" }),
  *     json: map.json(),
@@ -48,11 +48,11 @@ export interface HttpGetContentApiOptions {
 // ── API factory ──
 
 /**
- * Create a GET-only HTTP handler that reads a single URI from the rig
+ * Create a GET-only HTTP handler that reads a single URI from the pin
  * and hands the result to `payloadResponseMap` for response shaping.
  *
- * - `GET /api/v1/content/<encoded-uri>` → `rig.read([decoded-uri])` → hook → 200
- * - rig.read throws                    → 500
+ * - `GET /api/v1/content/<encoded-uri>` → `pin.read([decoded-uri])` → hook → 200
+ * - pin.read throws                    → 500
  * - hook throws                        → 500 (unless the hook throws `HttpError`)
  * - bad % encoding in `<uri>`          → 400
  * - non-GET method on the path         → 405 (`Allow: GET`)
@@ -64,9 +64,9 @@ export interface HttpGetContentApiOptions {
  * response you want for `null` payloads.
  */
 export function httpGetContentApi(
-  rig: ProtocolInterfaceNode,
+  pin: ProtocolInterfaceNode,
   options: HttpGetContentApiOptions,
 ): (req: Request) => Promise<Response> {
   const routes = [httpGetContentRoute(options)];
-  return (req) => dispatchHttp(rig, routes, req);
+  return (req) => dispatchHttp(pin, routes, req);
 }

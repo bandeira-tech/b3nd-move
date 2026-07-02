@@ -2,9 +2,9 @@
  * @module
  * Write-side HTTP content facet.
  *
- * Specialized request frontend that fronts `rig.receive` for a single
+ * Specialized request frontend that fronts `pin.receive` for a single
  * URI. The request body becomes the message payload via a
- * host-supplied decoder hook, and the rig's `ReceiveResult` is the
+ * host-supplied decoder hook, and the pin's `ReceiveResult` is the
  * response.
  *
  * Mirror of `http-get-content`: same locked-route shape, one hook at
@@ -22,7 +22,7 @@
  * import { payloadDecoder as dec }
  *   from "@bandeira-tech/b3nd-move/http-post-content/payload-decoder";
  *
- * Deno.serve({ port: 3000 }, httpPostContentApi(rig, {
+ * Deno.serve({ port: 3000 }, httpPostContentApi(pin, {
  *   payloadDecoder: dec.byContentType({
  *     "application/json": dec.json(),
  *     "text/plain":       dec.text(),
@@ -49,25 +49,25 @@ export interface HttpPostContentApiOptions {
 
 /**
  * Create a POST-only HTTP handler that decodes the request body into a
- * payload and feeds `rig.receive([[uri, payload]])`.
+ * payload and feeds `pin.receive([[uri, payload]])`.
  *
  * - `POST /api/v1/content/<encoded-uri>` → 200 with `ReceiveResult` JSON
  * - decoder throws                      → 400
- * - rig.receive throws                  → 500
+ * - pin.receive throws                  → 500
  * - bad % encoding in `<uri>`           → 400
  * - non-POST method on the path         → 405 (`Allow: POST`)
  * - any other path                      → 404
  *
- * The response body is the single `ReceiveResult` from the rig. Status
- * is 200 even when `accepted: false` — accept/reject is the rig's
+ * The response body is the single `ReceiveResult` from the pin. Status
+ * is 200 even when `accepted: false` — accept/reject is the pin's
  * domain outcome, not a transport failure (mirrors `/api/v1/receive`
  * on `httpApi`). Hosts that want different status semantics wrap the
  * handler at the runtime layer.
  */
 export function httpPostContentApi(
-  rig: ProtocolInterfaceNode,
+  pin: ProtocolInterfaceNode,
   options: HttpPostContentApiOptions,
 ): (req: Request) => Promise<Response> {
   const routes = [httpPostContentRoute(options)];
-  return (req) => dispatchHttp(rig, routes, req);
+  return (req) => dispatchHttp(pin, routes, req);
 }

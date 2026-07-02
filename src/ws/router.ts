@@ -76,7 +76,7 @@ export interface WsContext {
    * Per-frame abort. The observe route registers this in the
    * socket-level `observes` map (via a closure passed to its factory)
    * so an `observe-cancel` frame with the same `id` can fire it; the
-   * abort flows into the rig for streaming actions and is a no-op for
+   * abort flows into the pin for streaming actions and is a no-op for
    * unary ones.
    */
   abort: AbortController;
@@ -128,7 +128,7 @@ export function wsData(type: WebSocketRequest["type"]): WsMatcher {
  * The caller pumps each yielded envelope onto the wire.
  */
 export async function* dispatchWs(
-  rig: ProtocolInterfaceNode,
+  pin: ProtocolInterfaceNode,
   routes: readonly WsRoute[],
   frame: WebSocketRequest,
   abort: AbortController,
@@ -142,7 +142,7 @@ export async function* dispatchWs(
     };
     try {
       const args = await r.decode(ctx);
-      const result = await r.action(rig, args, abort.signal);
+      const result = await r.action(pin, args, abort.signal);
       const out = await r.encode(result as Awaited<typeof result>, ctx);
       if (out === undefined) return;
       if (isAsyncIterable(out)) {

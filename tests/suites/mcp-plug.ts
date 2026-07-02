@@ -4,7 +4,7 @@
  * MCP does not fit the PIN-over-method-call shape (tool calls + JSON text
  * vs. typed method calls + binary payloads), so it has its own shared
  * suite (`mcp-spec.ts`). The plug is the MCP analog of `MovePlug`: it
- * describes how to connect an SDK `Client` to a `buildMcpServer(rig)` over
+ * describes how to connect an SDK `Client` to a `buildMcpServer(pin)` over
  * whatever transport is under test. `runMcpPlug` supplies `stubRig` and
  * drives the shared tool-surface spec:
  *
@@ -22,9 +22,9 @@ import { stubRig } from "../rigs/stub.ts";
 export interface McpPlug {
   /** Suite label; prefixes every test name. */
   name: string;
-  /** Connect an SDK client to an MCP server built around the given rig. */
+  /** Connect an SDK client to an MCP server built around the given pin. */
   connect: (
-    rig: ProtocolInterfaceNode,
+    pin: ProtocolInterfaceNode,
   ) => Promise<{ client: Client; cleanup: () => void | Promise<void> }>;
 }
 

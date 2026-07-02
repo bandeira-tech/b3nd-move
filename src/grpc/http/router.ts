@@ -145,11 +145,11 @@ export function detectEncoding(req: Request): Encoding {
  *   first matching route                   → run action → encode
  *
  * Errors are wire-adapter concerns (bad body, bad encoding, unknown
- * method) and never reach the rig. Throwing an `HttpError` is the way
+ * method) and never reach the pin. Throwing an `HttpError` is the way
  * routes signal them — see `../../router/errors.ts`.
  */
 export async function dispatchGrpc(
-  rig: ProtocolInterfaceNode,
+  pin: ProtocolInterfaceNode,
   routes: readonly GrpcRoute[],
   req: Request,
 ): Promise<Response> {
@@ -160,7 +160,7 @@ export async function dispatchGrpc(
   const encoding = detectEncoding(req);
 
   // Per-request lifecycle. For streaming actions (observe) this is
-  // the signal the rig observer sees; for unary it's effectively
+  // the signal the pin observer sees; for unary it's effectively
   // ignored but still wired so encoders can opt in.
   const abort = new AbortController();
   const onAbort = () => abort.abort();
@@ -172,7 +172,7 @@ export async function dispatchGrpc(
       const ctx: GrpcContext = { req, encoding, abort };
       try {
         const args = await r.decode(ctx);
-        const result = await r.action(rig, args, abort.signal);
+        const result = await r.action(pin, args, abort.signal);
         const out = await r.encode(result as Awaited<typeof result>, ctx);
         return out ?? new Response(null, { status: 204 });
       } catch (e) {
