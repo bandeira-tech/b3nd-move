@@ -19,7 +19,7 @@
  * Returns a `MinimalServer` configured with the b3nd handlers. Method routing
  * is by JSON-RPC method name (string) rather than Zod schema.
  *
- * See ../../MCP-STATELESS-THIN.md for the rationale (drop SDK runtime
+ * See ../../docs/MCP-STATELESS-THIN.md for the rationale (drop SDK runtime
  * dep; unblock Vercel Edge etc.).
  */
 

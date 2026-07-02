@@ -20,7 +20,7 @@ and this project adheres to
   parameter is named `pin` accordingly. Non-breaking: every `Rig` satisfies the
   PIN.
 
-## [0.20.0] — Unreleased
+## [0.20.0] — 2026-07-01
 
 ### Added
 

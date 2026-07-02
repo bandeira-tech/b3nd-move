@@ -1,13 +1,15 @@
-# Proposal — stateless thin MCP for b3nd-move
+# Stateless thin MCP — shipped in 0.18.0 (kept for rationale)
 
-Drop `@modelcontextprotocol/sdk` as a runtime dependency. Replace the SDK-backed
-`Server` + `WebStandardStreamableHTTPServerTransport` with a small hand-rolled
-JSON-RPC dispatcher + Streamable HTTP transport that targets the **2026-07-28
-protocol revision** (currently RC). The new revision is stateless at the
-protocol layer, which removes ~90% of what the SDK was buying us.
+This proposal was implemented in **b3nd-move 0.18.0**. The implementation
+followed the spirit of the design but diverged from the spec assumed here: the
+shipped code vendored the **2025-06-18** Streamable HTTP transport (not the
+2026-07-28 RC outlined below) and retained the `initialize`/`initialized`
+handshake rather than dropping it. The `Mcp-Method` / `Mcp-Name` header scheme
+described in §Wire format reference was not adopted.
 
-The branch this doc lives on is `mcp-stateless-thin` — a worktree under
-`.claude/worktrees/mcp-stateless-thin`. Pick up from here.
+The doc is kept as rationale — it explains why the MCP SDK was dropped as a
+runtime dependency and what the diagnostic findings were. It is not a current
+work item.
 
 ## TL;DR
 
