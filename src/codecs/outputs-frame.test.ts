@@ -126,8 +126,8 @@ Deno.test("encode: maxCount enforced", () => {
 });
 
 Deno.test("decode: rejects invalid flag byte", () => {
-  // flag=2 (illegal), uri-len=1, "x", payload-len=0
-  const buf = new Uint8Array([2, 0, 1, 0x78, 0, 0, 0, 0]);
+  // flag=3 (illegal; 0/1/2 are the legal flags), uri-len=1, "x", payload-len=0
+  const buf = new Uint8Array([3, 0, 1, 0x78, 0, 0, 0, 0]);
   assertThrows(() => decodeOutputsFrame(buf), TypeError, "Invalid slot flag");
 });
 
@@ -202,6 +202,42 @@ Deno.test("decode: rejects invalid JSON in fallback payload", () => {
     0x74,
   ]);
   assertThrows(() => decodeOutputsFrame(buf), TypeError, "Invalid JSON");
+});
+
+// ── read-miss (undefined) parity ────────────────────────────────────
+
+Deno.test("round-trip: undefined payload survives as a miss slot", () => {
+  // In-process a read miss is `[uri, undefined]`; the wire must agree.
+  const outs: Output[] = [["mutable://missing", undefined]];
+  const buf = encodeOutputsFrame(outs);
+  const got = decodeOutputsFrame(buf);
+  assertEquals(got.length, 1);
+  assertEquals(got[0][0], "mutable://missing");
+  assertEquals(got[0][1], undefined);
+});
+
+Deno.test("round-trip: a miss slot does not fail the whole batch", () => {
+  // A single absent URI must not sink its neighbours (read-miss-wire).
+  const outs: Output[] = [
+    ["mutable://present", { ok: 1 }],
+    ["mutable://missing", undefined],
+    ["mutable://bytes", new Uint8Array([9, 9])],
+  ];
+  const buf = encodeOutputsFrame(outs);
+  const got = decodeOutputsFrame(buf);
+  assertEquals(got[0], ["mutable://present", { ok: 1 }]);
+  assertEquals(got[1][1], undefined);
+  assertEquals(Array.from(got[2][1] as Uint8Array), [9, 9]);
+});
+
+Deno.test("round-trip: null stays null, distinct from a miss", () => {
+  const outs: Output[] = [["mutable://null", null], [
+    "mutable://miss",
+    undefined,
+  ]];
+  const got = decodeOutputsFrame(encodeOutputsFrame(outs));
+  assertEquals(got[0][1], null);
+  assertEquals(got[1][1], undefined);
 });
 
 Deno.test("decode: enforces maxCount", () => {
