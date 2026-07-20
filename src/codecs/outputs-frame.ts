@@ -7,10 +7,14 @@
  *   buf  = slot × N (read to end of buffer)
  *
  * `flag` is `1` when `payload` is a `Uint8Array` (raw bytes on the
- * wire) and `0` when it's any other value (the codec JSON-stringifies
- * it and UTF-8 encodes the result — exactly the gRPC `payloadIsBinary`
+ * wire), `2` when `payload` is `undefined` (a read *miss* — the URI
+ * was absent, carried as an empty slot so the value survives the wire
+ * as `undefined`, matching the in-process `[uri, undefined]` shape),
+ * and `0` for any other value (the codec JSON-stringifies it and
+ * UTF-8 encodes the result — exactly the gRPC `payloadIsBinary`
  * fallback in `../grpc/proto/convert.ts`, just inlined per slot).
  * Bytes payloads round-trip without any JSON layer touching them.
+ * `null` stays a flag-0 `"null"`, distinct from a flag-2 miss.
  *
  * URI length is a u16 (the same ceiling as `url-list.ts`); payload
  * length is a u32 (matching receive's `bytes-list` at `lenSize: 4`).
@@ -35,6 +39,7 @@ export interface OutputsFrameOptions {
 
 const enc = new TextEncoder();
 const dec = new TextDecoder("utf-8", { fatal: true });
+const EMPTY = new Uint8Array(0);
 
 /**
  * Encode an `Output[]` list to a single buffer. Throws `TypeError` on
@@ -68,8 +73,21 @@ export function encodeOutputsFrame(
     if (payload instanceof Uint8Array) {
       p = payload;
       flag = 1;
+    } else if (payload === undefined) {
+      // Read miss: absent URI. Carry an empty slot, not a mangled JSON
+      // one — `JSON.stringify(undefined)` is `undefined`, which would
+      // encode empty and then fail `JSON.parse("")` on the whole batch.
+      p = EMPTY;
+      flag = 2;
     } else {
-      p = enc.encode(JSON.stringify(payload));
+      const json = JSON.stringify(payload);
+      if (json === undefined) {
+        // A non-undefined payload whose serialization is `undefined`
+        // (a function, a symbol) — reject the slot loudly rather than
+        // emit a silent empty flag-0 slot that poisons decode.
+        throw new TypeError("Output payload is not JSON-serializable");
+      }
+      p = enc.encode(json);
       flag = 0;
     }
     if (p.length > maxPayloadBytes) {
@@ -120,7 +138,7 @@ export function decodeOutputsFrame(
     if (off + 1 > buf.length) throw new TypeError("Truncated slot flag");
     const flag = buf[off];
     off += 1;
-    if (flag !== 0 && flag !== 1) {
+    if (flag !== 0 && flag !== 1 && flag !== 2) {
       throw new TypeError(`Invalid slot flag: ${flag}`);
     }
     if (off + 2 > buf.length) throw new TypeError("Truncated URI length");
@@ -149,7 +167,13 @@ export function decodeOutputsFrame(
     const payloadBytes = buf.subarray(off, off + payloadLen);
     off += payloadLen;
     let payload: unknown;
-    if (flag === 1) {
+    if (flag === 2) {
+      // Read miss: absent URI, empty slot → `undefined`.
+      if (payloadLen !== 0) {
+        throw new TypeError("Miss slot (flag=2) must have an empty payload");
+      }
+      payload = undefined;
+    } else if (flag === 1) {
       payload = payloadBytes;
     } else {
       let text: string;
