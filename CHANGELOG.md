@@ -6,7 +6,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.21.0] — 2026-07-31
 
 ### Fixed
 
@@ -43,6 +43,8 @@ and this project adheres to
   test doubles) and forced `as any` casts in consumers like b3nd-cli. The
   parameter is named `pin` accordingly. Non-breaking: every `Rig` satisfies the
   PIN.
+- **`@bandeira-tech/b3nd-core` pin bumped to `^0.26.0`** (was `^0.25.0`), per
+  the release rule in the README.
 
 ## [0.20.0] — 2026-07-01
 
