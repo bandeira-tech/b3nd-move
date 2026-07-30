@@ -144,6 +144,23 @@ export function mcpSpec(
     assertEquals(outputs[2].payload, { echo: "mutable://t/mcp/c" });
   });
 
+  test("b3nd_read: an absent upstream payload arrives as the null sentinel", async (client) => {
+    // The stub answers `/__absent__/` with `undefined`. `JSON.stringify`
+    // drops an `undefined` object value, so the slot would decode as
+    // `undefined` and disagree with every other transport's miss.
+    const url = "mutable://t/mcp/__absent__/a";
+    const result = await client.callTool({
+      name: "b3nd_read",
+      arguments: { urls: [url] },
+    });
+    const outputs = JSON.parse(firstText(result)) as Array<
+      { uri: string; payload: unknown }
+    >;
+    assertEquals(outputs.length, 1);
+    assertEquals(outputs[0].uri, url);
+    assertEquals(outputs[0].payload, null);
+  });
+
   test(
     "b3nd_read: upstream ReadableStream → tool result delivers concrete content (no stream)",
     async (client) => {

@@ -17,6 +17,7 @@
  *
  *   read(urls):
  *     - url contains "/__miss__/"   → [url, null]
+ *     - url contains "/__absent__/" → [url, undefined]
  *     - otherwise                   → [url, { echo: url }]
  *
  *   observe(pattern):
@@ -158,6 +159,21 @@ export function runMoveSuite(suiteName: string, config: MoveSuiteConfig) {
     assertEquals((results[3] as Output)[1] == null, true);
     assertEquals((results[4] as Output)[1], { echo: urls[4] });
   });
+
+  t(
+    "read: an absent upstream payload arrives as the null sentinel",
+    async () => {
+      const client = await Promise.resolve(config.client());
+      // The stub answers `/__absent__/` with `undefined` — the shape a backing
+      // PIN naturally produces for a URI it doesn't hold. Every codec must
+      // normalize it to `null`, or the transports disagree about a miss.
+      const urls = ["mutable://t/absent/__absent__/a", "mutable://t/absent/b"];
+      const results = await client.read(urls);
+      assertEquals(results.length, 2);
+      assertEquals((results[0] as Output)[1], null);
+      assertEquals((results[1] as Output)[1], { echo: urls[1] });
+    },
+  );
 
   t(
     "read: upstream ReadableStream → wire delivers bytes (round-trip through codec)",

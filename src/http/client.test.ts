@@ -199,6 +199,33 @@ Deno.test("read: null payload (miss sentinel) survives the round-trip", async ()
   }
 });
 
+Deno.test("read: an absent payload reaches the caller as a miss, not a RequestError", async () => {
+  // Regression guard at the layer that actually broke: a node answering
+  // for a URI it doesn't hold supplies `undefined`, which used to encode
+  // as a zero-length JSON slot and surface to the caller as a transport
+  // error instead of a miss.
+  const { restore } = spyFetch(() =>
+    new Response(
+      encodeOutputsFrame([[
+        "mutable://absent",
+        undefined,
+      ]]) as unknown as BodyInit,
+      {
+        status: 200,
+        headers: { "Content-Type": "application/octet-stream" },
+      },
+    )
+  );
+  try {
+    const out = await new HttpClient({ url: "http://h", codec }).read([
+      "mutable://absent",
+    ]);
+    assertEquals(out, [["mutable://absent", null]]);
+  } finally {
+    restore();
+  }
+});
+
 Deno.test("read: malformed response body → RequestError with operation=read", async () => {
   const { restore } = spyFetch(() =>
     new Response(new Uint8Array([0xff, 0xff, 0xff]), {

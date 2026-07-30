@@ -41,10 +41,11 @@ const dec = new TextDecoder("utf-8", { fatal: true });
  * invalid URI (non-string / empty), `RangeError` on size overflow,
  * and propagates any `JSON.stringify` error for non-bytes payloads.
  *
- * An `undefined` payload encodes as the `null` miss sentinel:
- * `JSON.stringify(undefined)` is `undefined`, not a string, so encoding it
- * verbatim would emit a zero-length JSON slot that `decodeOutputsFrame`
- * cannot parse.
+ * A payload `JSON.stringify` cannot represent — `undefined`, a function,
+ * a symbol — encodes as the `null` miss sentinel. `JSON.stringify` returns
+ * `undefined` (not a string) for those, and `TextEncoder.encode(undefined)`
+ * falls back to its `""` default, so encoding verbatim would emit a
+ * zero-length JSON slot that `decodeOutputsFrame` cannot parse.
  */
 export function encodeOutputsFrame(
   outputs: readonly Output[],
@@ -74,7 +75,7 @@ export function encodeOutputsFrame(
       p = payload;
       flag = 1;
     } else {
-      p = enc.encode(JSON.stringify(payload ?? null));
+      p = enc.encode(JSON.stringify(payload) ?? "null");
       flag = 0;
     }
     if (p.length > maxPayloadBytes) {

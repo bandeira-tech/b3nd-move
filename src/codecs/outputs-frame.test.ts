@@ -60,12 +60,27 @@ Deno.test("decode: zero-length JSON-fallback slot reads as the null miss sentine
   const uri = "mutable://absent";
   const u = bytes(uri);
   const buf = new Uint8Array(1 + 2 + u.length + 4);
-  const view = new DataView(buf.buffer);
+  const view = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
   buf[0] = 0;
   view.setUint16(1, u.length, false);
   buf.set(u, 3);
   view.setUint32(3 + u.length, 0, false);
   assertEquals(decodeOutputsFrame(buf), [[uri, null]]);
+});
+
+Deno.test("round-trip: payloads JSON cannot represent encode as the null sentinel", () => {
+  // `JSON.stringify` returns `undefined` — not a string — for functions and
+  // symbols too, so normalizing only `undefined` would still leave the
+  // encoder emitting slots its own decoder rejects.
+  const outs: Output[] = [
+    ["mutable://fn", () => {}],
+    ["mutable://sym", Symbol("s")],
+  ];
+  const buf = encodeOutputsFrame(outs);
+  assertEquals(decodeOutputsFrame(buf), [
+    ["mutable://fn", null],
+    ["mutable://sym", null],
+  ]);
 });
 
 Deno.test("an empty raw-bytes payload stays bytes, not the miss sentinel", () => {

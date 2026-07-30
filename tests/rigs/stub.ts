@@ -18,6 +18,7 @@
  *     - url contains "/__stream__/" → [url, ReadableStream<Uint8Array> yielding
  *                                          TextEncoder().encode(url), then close]
  *     - url contains "/__miss__/"   → [url, null]
+ *     - url contains "/__absent__/" → [url, undefined]
  *     - url ends with "/"           → synthesized listing of 3 children:
  *                                       [url, [[`${url}0`, {echo}], …]]
  *     - otherwise                   → [url, { echo: url }]
@@ -30,11 +31,13 @@
  *     - { status: "healthy", message: "stub",
  *         fns: ["receive", "read", "observe", "status"] }
  *
- * `null` (not `undefined`) is used to signal a miss because it survives
- * the gRPC-HTTP JSON encoding round-trip — `JSON.stringify(undefined) ===
- * undefined` would write the four-character string "undefined" into the
- * payload bytes and fail to parse back. The move-suite asserts `payload
- * == null`, which is true for both.
+ * `null` (not `undefined`) is the miss sentinel because it survives every
+ * codec's JSON encoding verbatim. `JSON.stringify(undefined)` returns
+ * `undefined` rather than a string, so an `undefined` payload used to
+ * encode as *zero* payload bytes and fail to decode back. Every codec now
+ * normalizes an unrepresentable payload to `null` on the way out and reads
+ * an empty JSON slot as `null` on the way in; `/__absent__/` exercises that
+ * path, and `/__miss__/` pins the sentinel a backing PIN emits directly.
  */
 
 /// <reference lib="deno.ns" />
@@ -79,6 +82,9 @@ class StubBackend implements ProtocolInterfaceNode {
         }
         if (url.includes("/__miss__/")) {
           return [url, null as unknown as T];
+        }
+        if (url.includes("/__absent__/")) {
+          return [url, undefined as unknown as T];
         }
         return [url, { echo: url } as unknown as T];
       }),
