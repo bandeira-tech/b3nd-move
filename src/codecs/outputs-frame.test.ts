@@ -50,6 +50,31 @@ Deno.test("round-trip: null payload via JSON-fallback (miss sentinel)", () => {
   assertEquals(got, [["mutable://miss", null]]);
 });
 
+Deno.test("round-trip: undefined payload encodes as the null miss sentinel", () => {
+  const outs: Output[] = [["mutable://absent", undefined]];
+  const buf = encodeOutputsFrame(outs);
+  assertEquals(decodeOutputsFrame(buf), [["mutable://absent", null]]);
+});
+
+Deno.test("decode: zero-length JSON-fallback slot reads as the null miss sentinel", () => {
+  const uri = "mutable://absent";
+  const u = bytes(uri);
+  const buf = new Uint8Array(1 + 2 + u.length + 4);
+  const view = new DataView(buf.buffer);
+  buf[0] = 0;
+  view.setUint16(1, u.length, false);
+  buf.set(u, 3);
+  view.setUint32(3 + u.length, 0, false);
+  assertEquals(decodeOutputsFrame(buf), [[uri, null]]);
+});
+
+Deno.test("an empty raw-bytes payload stays bytes, not the miss sentinel", () => {
+  const buf = encodeOutputsFrame([["mutable://empty", new Uint8Array(0)]]);
+  const [[, payload]] = decodeOutputsFrame(buf);
+  assertEquals(payload instanceof Uint8Array, true);
+  assertEquals((payload as Uint8Array).length, 0);
+});
+
 Deno.test("round-trip: mixed bytes + JSON slots, order preserved", () => {
   const outs: Output[] = [
     ["mutable://1", new Uint8Array([10, 20])],

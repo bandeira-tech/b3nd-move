@@ -40,6 +40,11 @@ const dec = new TextDecoder("utf-8", { fatal: true });
  * Encode an `Output[]` list to a single buffer. Throws `TypeError` on
  * invalid URI (non-string / empty), `RangeError` on size overflow,
  * and propagates any `JSON.stringify` error for non-bytes payloads.
+ *
+ * An `undefined` payload encodes as the `null` miss sentinel:
+ * `JSON.stringify(undefined)` is `undefined`, not a string, so encoding it
+ * verbatim would emit a zero-length JSON slot that `decodeOutputsFrame`
+ * cannot parse.
  */
 export function encodeOutputsFrame(
   outputs: readonly Output[],
@@ -69,7 +74,7 @@ export function encodeOutputsFrame(
       p = payload;
       flag = 1;
     } else {
-      p = enc.encode(JSON.stringify(payload));
+      p = enc.encode(JSON.stringify(payload ?? null));
       flag = 0;
     }
     if (p.length > maxPayloadBytes) {
@@ -106,6 +111,11 @@ export function encodeOutputsFrame(
  * are returned as subarray views into `buf` — no copies. JSON-fallback
  * slots are `JSON.parse`d. Throws on truncation, bad UTF-8 / JSON, or
  * policy violation; the route layer surfaces those as transport errors.
+ *
+ * A zero-length JSON-fallback slot decodes to the `null` miss sentinel.
+ * No `JSON.stringify` output is ever empty, so the length is unambiguous;
+ * encoders predating the `undefined` normalization above emit that shape
+ * for an absent payload.
  */
 export function decodeOutputsFrame(
   buf: Uint8Array,
@@ -151,6 +161,8 @@ export function decodeOutputsFrame(
     let payload: unknown;
     if (flag === 1) {
       payload = payloadBytes;
+    } else if (payloadLen === 0) {
+      payload = null;
     } else {
       let text: string;
       try {
