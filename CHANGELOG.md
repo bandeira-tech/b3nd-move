@@ -6,7 +6,31 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.21.0] — 2026-07-31
+
+### Fixed
+
+- **An absent payload round-trips as the `null` miss sentinel, on every
+  transport.** `JSON.stringify` returns `undefined` — not a string — for
+  `undefined`, functions, and symbols, and `TextEncoder.encode(undefined)` falls
+  back to its `""` default. So a slot whose payload a node doesn't hold encoded
+  to _zero_ payload bytes, and `decodeOutputsFrame` then ran `JSON.parse("")`
+  and threw `Invalid JSON in fallback payload` — the encoder produced frames its
+  own decoder rejected, turning every read miss into a transport error for the
+  caller. Both halves now agree on `null`: `encodeOutputsFrame` normalizes an
+  unrepresentable payload, and a zero-length JSON-fallback slot decodes back to
+  `null`, so a reader picks the fix up by upgrading alone — no coordinated
+  redeploy of the writing side. An empty _raw-bytes_ payload is flag `1` and is
+  untouched; it still round-trips as a zero-length `Uint8Array`.
+- **gRPC and MCP agree with HTTP about a miss.** `grpc/proto/convert.ts` decoded
+  a zero-length non-binary payload as `undefined`, and the MCP codecs dropped an
+  unrepresentable payload entirely (`mcpTextJsonStringify` omitted the `payload`
+  key; `mcpResourcePerSlot` left the required `text` field `undefined`). The
+  same read miss therefore surfaced as a different value per transport. All
+  codecs now normalize to `null` on encode and read an absent slot as `null` on
+  decode. The shared conformance suites gained a `/__absent__/` case — the stub
+  PIN answers it with `undefined` — so the four move transports and all three
+  MCP surfaces are pinned to one sentinel.
 
 ### Changed
 
@@ -19,6 +43,8 @@ and this project adheres to
   test doubles) and forced `as any` casts in consumers like b3nd-cli. The
   parameter is named `pin` accordingly. Non-breaking: every `Rig` satisfies the
   PIN.
+- **`@bandeira-tech/b3nd-core` pin bumped to `^0.26.0`** (was `^0.25.0`), per
+  the release rule in the README.
 
 ## [0.20.0] — 2026-07-01
 

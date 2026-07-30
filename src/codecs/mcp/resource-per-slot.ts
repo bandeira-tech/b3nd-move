@@ -15,7 +15,7 @@
  *   One `{ type: "resource", resource: { uri, blob | text, mimeType } }` per slot.
  *   - `Uint8Array` → `blob: base64(bytes)`, `mimeType: "application/octet-stream"`
  *   - `string`     → `text: payload`,      `mimeType: "text/plain"`
- *   - `null/undefined/object` → `text: JSON.stringify(payload)`, `mimeType: "application/json"`
+ *   - `null/undefined/object` → `text: JSON.stringify(payload) ?? "null"`, `mimeType: "application/json"`
  *
  * **b3nd_receive tool response** (`CallToolResult.content`):
  *   One ResourceContent per slot; `text` holds `JSON.stringify({ accepted, error? })`,
@@ -77,12 +77,14 @@ function buildResourceContent(
       },
     };
   }
-  // null, undefined, object — JSON.stringify handles null → "null"
+  // null, undefined, object — `?? "null"` covers the values JSON.stringify
+  // returns `undefined` for (undefined, functions, symbols), which would
+  // otherwise leave `text` undefined on a required string field.
   return {
     type: "resource",
     resource: {
       uri,
-      text: JSON.stringify(payload),
+      text: JSON.stringify(payload) ?? "null",
       mimeType: "application/json",
     },
   };

@@ -46,6 +46,19 @@ export interface McpTextJsonStringifyOptions {
 }
 
 /**
+ * `JSON.stringify` renders `undefined`, functions, and symbols as an absent
+ * object key, which reconstructs as `undefined` on the far side. Normalize
+ * them to the `null` miss sentinel so an absent payload reads the same over
+ * every transport (see `../outputs-frame.ts`).
+ */
+function jsonPayload(payload: unknown): unknown {
+  return payload === undefined || typeof payload === "function" ||
+      typeof payload === "symbol"
+    ? null
+    : payload;
+}
+
+/**
  * Returns a `McpBatchCodec` that replicates today's baked MCP behavior.
  *
  * @param opts.scheduler  Fan-out policy for stream materialization.
@@ -74,7 +87,10 @@ export function mcpTextJsonStringify(
       const text: McpTextContent = {
         type: "text",
         text: JSON.stringify(
-          concrete.map(([uri, payload]) => ({ uri, payload })),
+          concrete.map(([uri, payload]) => ({
+            uri,
+            payload: jsonPayload(payload),
+          })),
           null,
           2,
         ),
@@ -127,7 +143,7 @@ export function mcpTextJsonStringify(
         resource: {
           uri: resourceUri,
           mimeType: "application/json",
-          text: JSON.stringify(payload, null, 2),
+          text: JSON.stringify(payload, null, 2) ?? "null",
         },
       };
       return [item];
@@ -180,7 +196,10 @@ export function mcpTextJsonStringify(
         uri: string;
         payload: unknown;
       }>;
-      return parsed.map((o) => [o.uri, o.payload] as Output);
+      // An absent `payload` key parses to `undefined` — normalize to the
+      // `null` miss sentinel, which also covers encoders predating
+      // `jsonPayload` above.
+      return parsed.map((o) => [o.uri, o.payload ?? null] as Output);
     },
 
     /**

@@ -6,6 +6,12 @@
  * - Uint8Array → raw bytes, flagged `payloadIsBinary: true`
  * - anything else → UTF-8 JSON bytes (handled transparently by
  *   @bufbuild/protobuf — base64 in JSON transport, raw in binary)
+ *
+ * A payload `JSON.stringify` cannot represent (`undefined`, a function, a
+ * symbol) encodes as the `null` miss sentinel, and a zero-length non-binary
+ * payload decodes back to `null` — the same normalization
+ * `../../codecs/outputs-frame.ts` applies, so a miss reads identically over
+ * gRPC and HTTP. See `tests/rigs/stub.ts` for why `null` is the sentinel.
  */
 
 import { create } from "@bufbuild/protobuf";
@@ -33,7 +39,7 @@ function encodePayload(
 ): { payload: Uint8Array; payloadIsBinary: boolean } {
   if (payload instanceof Uint8Array) return { payload, payloadIsBinary: true };
   return {
-    payload: enc.encode(JSON.stringify(payload)),
+    payload: enc.encode(JSON.stringify(payload) ?? "null"),
     payloadIsBinary: false,
   };
 }
@@ -41,7 +47,7 @@ function encodePayload(
 function decodePayload(bytes: Uint8Array, isBinary: boolean): unknown {
   if (isBinary) return bytes;
   const json = dec.decode(bytes);
-  return json.length > 0 ? JSON.parse(json) : undefined;
+  return json.length > 0 ? JSON.parse(json) : null;
 }
 
 // ── Output ↔ OutputProto ─────────────────────────────────────────────────
