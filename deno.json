@@ -75,10 +75,10 @@
     ]
   },
   "lint": {
-    "exclude": ["src/grpc/proto/gen/", "npm/"]
+    "exclude": ["src/grpc/proto/gen/", "npm/", "node_modules/", ".claude/"]
   },
   "fmt": {
-    "exclude": ["src/grpc/proto/gen/", "npm/"]
+    "exclude": ["src/grpc/proto/gen/", "npm/", "node_modules/", ".claude/"]
   },
   "publish": {
     "exclude": [
