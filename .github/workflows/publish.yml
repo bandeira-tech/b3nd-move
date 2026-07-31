@@ -11,8 +11,26 @@ on:
         default: false
 
 jobs:
+  # Publishing is irreversible — a bad version needs a follow-up release, not a
+  # retraction — and a dispatch publishes whatever is on the ref regardless of
+  # whether CI ever passed on it. Gate on the fast lane first. The browser
+  # integration matrix is left to CI; `deno task test` already covers every
+  # transport in-Deno via the conformance runs.
+  verify:
+    name: Verify before publishing
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: denoland/setup-deno@v2
+        with: { deno-version: v2.x }
+      - run: deno task check
+      - run: deno task test
+      - run: deno lint
+      - run: deno fmt --check
+
   jsr:
     name: Publish to JSR
+    needs: verify
     if: ${{ github.event.inputs.npm_only != 'true' }}
     runs-on: ubuntu-latest
     permissions:
@@ -26,8 +44,11 @@ jobs:
 
   npm:
     name: Publish universal slice to NPM
-    needs: jsr
-    if: ${{ always() && (needs.jsr.result == 'success' || needs.jsr.result == 'skipped') }}
+    needs: [verify, jsr]
+    # `always()` is needed so npm still runs when jsr is deliberately skipped
+    # (npm_only), but that also makes a *failed* verify look like a skipped
+    # jsr — hence the explicit verify success check.
+    if: ${{ always() && needs.verify.result == 'success' && (needs.jsr.result == 'success' || needs.jsr.result == 'skipped') }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
