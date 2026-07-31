@@ -10,6 +10,7 @@
  *
  *   • `./http/service`       — `httpApi(rig)` (pure fetch handler)
  *   • `./http/client`        — `HttpClient`
+ *   • `./ws/client`          — `WebSocketClient` (uses the WebSocket global)
  *   • `./grpc/http/service`  — `grpcHttpApi(rig)` (pure fetch handler)
  *   • `./grpc/http/client`   — `GrpcHttpClient`
  *   • `./grpc/proto/types`   — generated wire types + schemas
@@ -34,6 +35,7 @@ await build({
   entryPoints: [
     { name: "./http/service", path: "./src/http/service.ts" },
     { name: "./http/client", path: "./src/http/client.ts" },
+    { name: "./ws/client", path: "./src/ws/client.ts" },
     { name: "./grpc/http/service", path: "./src/grpc/http/service.ts" },
     { name: "./grpc/http/client", path: "./src/grpc/http/client.ts" },
     { name: "./grpc/proto/types", path: "./src/grpc/proto/gen/b3nd_pb.ts" },

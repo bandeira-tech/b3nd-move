@@ -8,6 +8,12 @@ and this project adheres to
 
 ## [0.21.0] — 2026-07-31
 
+### Added
+
+- **`./ws/client` in the npm slice.** `WebSocketClient` is now an npm entry
+  point alongside the HTTP and gRPC clients (it uses the `WebSocket` global, so
+  it belongs in the universal slice). JSR consumers already had it.
+
 ### Fixed
 
 - **An absent payload round-trips as the `null` miss sentinel, on every
